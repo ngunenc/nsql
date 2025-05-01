@@ -35,9 +35,20 @@ class nsql {
         $stmt->execute($params);
         return $stmt;
     }
+    public function get_results(string $sql, array $params = []): array {
+        $stmt = $this->query($sql, $params);
+        return $stmt->fetchAll(PDO::FETCH_OBJ);
+    }
+    
+    public function get_row(string $sql, array $params = []): object|false {
+        $stmt = $this->query($sql, $params);
+        return $stmt->fetch(PDO::FETCH_OBJ);
+    }
+    
 
     public function debug(): void {
         echo "🔍 Sorgu: " . $this->interpolateQuery($this->lastQuery, $this->lastParams) . PHP_EOL;
+        echo "<br>";
     }
 
     private function interpolateQuery(string $query, array $params): string {
