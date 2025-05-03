@@ -7,6 +7,7 @@ class nsql {
     private array $lastParams = [];
     private array $lastResults = [];
     private ?string $lastError = null;
+    private array $statementCache = [];
 
 
     public function __construct(
@@ -37,14 +38,135 @@ class nsql {
         $this->lastError = null;
     
         try {
-            $stmt = $this->pdo->prepare($sql);
+            // Statement cache kontrolü
+            if (!isset($this->statementCache[$sql])) {
+                $this->statementCache[$sql] = $this->pdo->prepare($sql);
+            }
+    
+            $stmt = $this->statementCache[$sql];
             $stmt->execute($params);
+    
             return $stmt;
+    
         } catch (PDOException $e) {
             $this->lastError = $e->getMessage();
-            return null; // ❗ Exception fırlatmıyoruz, debug() çalışabilsin diye null dönüyoruz
+            $this->lastResults = [];
+            $this->debug(); // Hatalı sorgu durumunda detaylı bilgi göster
+            return null;
         }
     }
+    private function prepareParamsFromSQL(string $sql): array {
+        $params = [];
+        $counter = 1;
+    
+        // Sayısal ve tırnaklı değerleri bul
+        $sql = preg_replace_callback(
+            "/(?<=\s|\=|\(|,)('(?:[^'\\\\]|\\\\.)*'|\d+(\.\d+)?)/",
+            function ($matches) use (&$params, &$counter) {
+                $placeholder = ":param$counter";
+                $value = $matches[1];
+    
+                // Sayı mı yoksa string mi?
+                if (is_numeric($value)) {
+                    $params["param$counter"] = $value + 0; // tip dönüşümü
+                } else {
+                    $params["param$counter"] = trim($value, "'");
+                }
+    
+                $counter++;
+                return " $placeholder";
+            },
+            $sql
+        );
+    
+        return ['sql' => $sql, 'params' => $params];
+    }
+    
+
+    public function insert(string $sql, array $params = []): bool {
+        $this->lastResults = [];
+    
+        // Parametre verilmediyse SQL içinden otomatik çıkar
+        if (empty($params)) {
+            $parsed = $this->prepareParamsFromSQL($sql);
+            $sql = $parsed['sql'];
+            $params = $parsed['params'];
+        }
+    
+        $stmt = $this->query($sql, $params);
+    
+        return $stmt !== null;
+    }
+    
+    
+    
+    public function get_row(string $sql, array $params = []): ?object {
+        if (empty($params)) {
+            $parsed = $this->prepareParamsFromSQL($sql);
+            $sql = $parsed['sql'];
+            $params = $parsed['params'];
+        }
+    
+        $stmt = $this->query($sql, $params);
+    
+        if ($stmt) {
+            $result = $stmt->fetch(PDO::FETCH_OBJ);
+            $this->lastResults = $result ? [$result] : [];
+            return $result ?: null;
+        } else {
+            $this->lastResults = [];
+            return null;
+        }
+    }
+    
+    public function get_results(string $sql, array $params = []): array {
+        if (empty($params)) {
+            $parsed = $this->prepareParamsFromSQL($sql);
+            $sql = $parsed['sql'];
+            $params = $parsed['params'];
+        }
+    
+        $stmt = $this->query($sql, $params);
+    
+        if ($stmt) {
+            $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+            $this->lastResults = $results;
+            return $results;
+        } else {
+            $this->lastResults = [];
+            return [];
+        }
+    }
+    
+    
+
+    public function update(string $sql, array $params = []): bool {
+        $this->lastResults = [];
+    
+        if (empty($params)) {
+            $parsed = $this->prepareParamsFromSQL($sql);
+            $sql = $parsed['sql'];
+            $params = $parsed['params'];
+        }
+    
+        $stmt = $this->query($sql, $params);
+        return $stmt !== null;
+    }
+    
+
+    public function delete(string $sql, array $params = []): bool {
+        $this->lastResults = [];
+    
+        if (empty($params)) {
+            $parsed = $this->prepareParamsFromSQL($sql);
+            $sql = $parsed['sql'];
+            $params = $parsed['params'];
+        }
+    
+        $stmt = $this->query($sql, $params);
+        return $stmt !== null;
+    }
+       
 
     private function printError(string $message): void {
         if (!$this->debugMode) return;
@@ -69,35 +191,6 @@ class nsql {
             public function fetchAll($mode = null, $fetch_argument = null, array $ctor_args = []): array { return []; }
         };
     }
-    
-    
-    public function get_results(string $sql, array $params = []): array {
-        $stmt = $this->query($sql, $params);
-    
-        if ($stmt) {
-            $results = $stmt->fetchAll(PDO::FETCH_OBJ);
-            $this->lastResults = $results;
-            return $results;
-        } else {
-            $this->lastResults = [];
-            return [];
-        }
-    }
-    
-    
-    public function get_row(string $sql, array $params = []): ?object {
-        $stmt = $this->query($sql, $params);
-    
-        if ($stmt) {
-            $result = $stmt->fetch(PDO::FETCH_OBJ);
-            $this->lastResults = $result ? [$result] : [];
-            return $result;
-        } else {
-            $this->lastResults = [];
-            return null;
-        }
-    }
-    
     
     public function debug(): void {
         $query = $this->interpolateQuery($this->lastQuery, $this->lastParams);
