@@ -1,6 +1,6 @@
-## 📚 **nsql - PHP PDO Veritabanı Kütüphanesi**
+## 📚 **NSql - PHP PDO Veritabanı Kütüphanesi**
 
-**nsql**, PHP ile veritabanı bağlantısı ve SQL işlemlerini güvenli, hızlı ve kolay bir şekilde yapmanıza olanak tanır. PDO kullanarak veritabanı işlemlerinizi optimize eder ve SQL enjeksiyonlarına karşı güvenliği artırır.
+**NSql**, PHP ile veritabanı bağlantısı ve SQL işlemlerini güvenli, hızlı ve kolay bir şekilde yapmanıza olanak tanır. PDO kullanarak veritabanı işlemlerinizi optimize eder ve SQL enjeksiyonlarına karşı güvenliği artırır.
 
 ---
 
