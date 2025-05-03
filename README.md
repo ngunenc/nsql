@@ -163,9 +163,3 @@ Bu proje MIT Lisansı ile lisanslanmıştır. Daha fazla bilgi için `LICENSE` d
 * Parametreli sorgular için otomatik güvenlik desteği.
 * SQL enjeksiyonlarına karşı koruma sağlayan PDO kullanımı.
 * Sorgu önbellekleme ile performans iyileştirmesi.
-
----
-
-Bu `README.md` dosyası, **nsql** projesinin doğru bir şekilde kurulması, kullanılması ve projenin sunduğu avantajların anlaşılması için oldukça faydalı olacaktır.
-
-Eğer başka eklemeler veya düzeltmeler yapmak isterseniz, lütfen belirtin!
