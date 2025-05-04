@@ -1,23 +1,42 @@
-Aşağıda `nsql` sınıfının yeni eklenen özelliklerini içeren örnek bir `README.md` içeriği yer alıyor. Bu belge hem kullanım örneklerini hem de tüm işlevleri özetler:
+## 📚 **nsql - PHP PDO Veritabanı Kütüphanesi**
+
+**nsql**, PHP ile veritabanı bağlantısı ve SQL işlemlerini güvenli, hızlı ve kolay bir şekilde yapmanıza olanak tanır. PDO kullanarak veritabanı işlemlerinizi optimize eder ve SQL enjeksiyonlarına karşı güvenliği artırır.
 
 ---
 
-````markdown
-# nsql - Basit ve Gelişmiş PDO Veritabanı Katmanı
+### 🔧 **Kurulum**
 
-`nsql`, PDO tabanlı bir veritabanı sınıfıdır. Basit, okunabilir ve güvenli bir şekilde veritabanı işlemleri yapmanızı sağlar. Ayrıca SQL içindeki sabit değerleri otomatik olarak parametreye çevirme ve hata ayıklama gibi gelişmiş özellikler sunar.
+#### 1. GitHub'dan Projeyi İndirin
 
-## 🚀 Özellikler
+Projeyi GitHub üzerinden indirebilir ya da kendi projelerinize `composer` kullanarak dahil edebilirsiniz.
 
-- Kolay kullanım
-- PDO üzerinde çalışır
-- SQL içindeki sabit değerleri otomatik parametreye çevirir
-- Hazır `insert`, `update`, `delete`, `get_row`, `get_results` metodları
-- SQL sorgu hatalarını detaylı şekilde gösteren `debug()` metodu
-- Hazırlanmış sorgu önbellekleme (statement cache)
-- Otomatik `lastInsertId` kaydı
+```bash
+git clone https://github.com/ngunenc/nsql.git
+```
 
-## 🔧 Kurulum
+#### 2. Gereksinimler
+
+* PHP 7.4+ (PHP 8.0 veya daha yeni sürümler de önerilir)
+* PDO (PHP Data Objects) desteği
+* MySQL, MariaDB ya da destekleyen herhangi bir veritabanı
+
+#### 3. Bağlantı Ayarları
+
+Projenin **`pdo.php`** dosyasındaki veritabanı bağlantı ayarlarını aşağıdaki gibi yapılandırın:
+
+```php
+$dsn = 'mysql:host=localhost;dbname=veritabani_adiniz';
+$username = 'kullanici_adiniz';
+$password = 'sifreniz';
+```
+
+---
+
+### ⚙️ **Kullanım**
+
+#### Veritabanı Bağlantısı
+
+`nsql` sınıfı ile veritabanı bağlantısı kurmak oldukça basittir:
 
 ```php
 require_once 'nsql.php';
@@ -92,5 +111,50 @@ MIT Lisansı.
 
 ---
 
-Bu dosyayı `README.md` olarak projenizin kök dizinine ekleyebilirsin. İstersen bu dosyayı senin için oluşturup içeriğini bir `.md` dosyası olarak da verebilirim. Hazırlamamı ister misin?
+### 🔍 **Hata Yönetimi ve Debug**
+
+`debug()` metodunu kullanarak son yapılan sorguyu, parametreleri ve sonucu detaylı bir şekilde görebilirsiniz:
+
+```php
+$db->debug();
 ```
+
+**Debug çıktısı** şunları içerir:
+
+* Son SQL sorgusu
+* Parametreler
+* Sonuç verisi (Varsa)
+* Hata mesajları (Varsa)
+
+---
+
+### ⚡ **Performans ve Güvenlik**
+
+* **Parametre Bağlama**: `nsql`, SQL sorgularını parametrelerle hazırlayarak SQL enjeksiyonlarına karşı korur.
+* **Hazırlıklı İfadeler (Prepared Statements)**: Tüm sorgular PDO'nun hazırlıklı ifadeleri kullanılarak yapılır, bu da güvenliği artırır ve performansı optimize eder.
+* **Otomatik Parametre Hazırlama**: SQL sorgusunu otomatik olarak analiz eder ve parametreleri güvenli şekilde bağlar.
+* **Sorgu Önbelleği**: Aynı sorgular için hazırlıklı ifadeler bir kez oluşturulur ve cache'den tekrar kullanılır, böylece sorguların veritabanına her defasında tekrar hazırlanmasını engeller.
+
+---
+
+### 🛠️ **Yardım ve Katkı**
+
+Eğer bu proje hakkında sorularınız varsa ya da katkı sağlamak isterseniz, [GitHub Repository'sine](https://github.com/ngunenc/nsql) göz atabilirsiniz.
+
+Pull request'ler her zaman memnuniyetle karşılanır! 😊
+
+---
+
+### 📄 **Lisans**
+
+Bu proje MIT Lisansı ile lisanslanmıştır. Daha fazla bilgi için `LICENSE` dosyasını inceleyebilirsiniz.
+
+---
+
+### 🎯 **Özellikler**
+
+* Veritabanı bağlantısı ve sorgu işlemleri için güvenlikli ve hızlı bir yapı.
+* Veritabanı hata yönetimi ve hata mesajları ile birlikte debug özellikleri.
+* Parametreli sorgular için otomatik güvenlik desteği.
+* SQL enjeksiyonlarına karşı koruma sağlayan PDO kullanımı.
+* Sorgu önbellekleme ile performans iyileştirmesi.
