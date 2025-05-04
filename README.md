@@ -1,165 +1,96 @@
-## 📚 **nsql - PHP PDO Veritabanı Kütüphanesi**
-
-**nsql**, PHP ile veritabanı bağlantısı ve SQL işlemlerini güvenli, hızlı ve kolay bir şekilde yapmanıza olanak tanır. PDO kullanarak veritabanı işlemlerinizi optimize eder ve SQL enjeksiyonlarına karşı güvenliği artırır.
+Aşağıda `nsql` sınıfının yeni eklenen özelliklerini içeren örnek bir `README.md` içeriği yer alıyor. Bu belge hem kullanım örneklerini hem de tüm işlevleri özetler:
 
 ---
 
-### 🔧 **Kurulum**
+````markdown
+# nsql - Basit ve Gelişmiş PDO Veritabanı Katmanı
 
-#### 1. GitHub'dan Projeyi İndirin
+`nsql`, PDO tabanlı bir veritabanı sınıfıdır. Basit, okunabilir ve güvenli bir şekilde veritabanı işlemleri yapmanızı sağlar. Ayrıca SQL içindeki sabit değerleri otomatik olarak parametreye çevirme ve hata ayıklama gibi gelişmiş özellikler sunar.
 
-Projeyi GitHub üzerinden indirebilir ya da kendi projelerinize `composer` kullanarak dahil edebilirsiniz.
+## 🚀 Özellikler
 
-```bash
-git clone https://github.com/ngunenc/nsql.git
-```
+- Kolay kullanım
+- PDO üzerinde çalışır
+- SQL içindeki sabit değerleri otomatik parametreye çevirir
+- Hazır `insert`, `update`, `delete`, `get_row`, `get_results` metodları
+- SQL sorgu hatalarını detaylı şekilde gösteren `debug()` metodu
+- Hazırlanmış sorgu önbellekleme (statement cache)
+- Otomatik `lastInsertId` kaydı
 
-#### 2. Gereksinimler
-
-* PHP 7.4+ (PHP 8.0 veya daha yeni sürümler de önerilir)
-* PDO (PHP Data Objects) desteği
-* MySQL, MariaDB ya da destekleyen herhangi bir veritabanı
-
-#### 3. Bağlantı Ayarları
-
-Projenin **`pdo.php`** dosyasındaki veritabanı bağlantı ayarlarını aşağıdaki gibi yapılandırın:
-
-```php
-$dsn = 'mysql:host=localhost;dbname=veritabani_adiniz';
-$username = 'kullanici_adiniz';
-$password = 'sifreniz';
-```
-
----
-
-### ⚙️ **Kullanım**
-
-#### Veritabanı Bağlantısı
-
-`nsql` sınıfı ile veritabanı bağlantısı kurmak oldukça basittir:
+## 🔧 Kurulum
 
 ```php
 require_once 'nsql.php';
+$db = new nsql('localhost', 'veritabani_adi', 'kullanici', 'sifre');
+````
 
-$db = new nsql();
-$db->connect(); // Veritabanı bağlantısını yapar.
-```
+## 📦 Temel Kullanım
 
-#### Veritabanı İşlemleri
-
-**Sorgu Çalıştırma**:
-Veritabanına herhangi bir sorgu göndermek için `query()` metodunu kullanabilirsiniz:
+### Satır Ekleme (Insert)
 
 ```php
-$sql = "SELECT * FROM kullanicilar WHERE id = :id";
-$params = ['id' => 1];
-$stmt = $db->query($sql, $params);
+$db->insert("INSERT INTO users (name, email) VALUES ('Ali', 'ali@example.com')");
+echo $db->insert_id(); // Son eklenen ID
 ```
 
-**Veri Çekme (Tekli Satır)**:
-Tek bir satır verisini almak için `get_row()` metodunu kullanabilirsiniz:
+### Satır Güncelleme (Update)
 
 ```php
-$result = $db->get_row("SELECT * FROM kullanicilar WHERE id = :id", ['id' => 1]);
-if ($result) {
-    echo $result->ad;
+$db->update("UPDATE users SET name = 'Mehmet' WHERE id = 1");
+```
+
+### Satır Silme (Delete)
+
+```php
+$db->delete("DELETE FROM users WHERE id = 3");
+```
+
+### Tek Satır Getir (get\_row)
+
+```php
+$user = $db->get_row("SELECT * FROM users WHERE id = 1");
+echo $user->name;
+```
+
+### Çoklu Satır Getir (get\_results)
+
+```php
+$users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
+foreach ($users as $user) {
+    echo $user->email;
 }
 ```
 
-**Veri Çekme (Çoklu Satırlar)**:
-Birden fazla veri almak için `get_results()` metodunu kullanabilirsiniz:
+## 🧠 Yeni Özellikler
+
+### SQL Sabitlerini Otomatik Parametreye Çevirme
 
 ```php
-$results = $db->get_results("SELECT * FROM kullanicilar WHERE durum = :durum", ['durum' => 'aktif']);
-foreach ($results as $row) {
-    echo $row->ad . "<br>";
-}
+// Otomatik olarak :param1 ve :param2 parametrelerine çevrilir
+$db->get_row("SELECT * FROM users WHERE id = 5 AND status = 'active'");
 ```
 
-**Tek Değer Alma (get\_var)**:
-Bir sorgudan tek bir değer çekmek için `get_var()` metodunu kullanabilirsiniz:
+Bu özellik sayesinde doğrudan SQL içerisine sabit veri yazabilir, `nsql` sınıfı bu değerleri otomatik olarak `PDO` parametrelerine çevirir.
+
+### Statement Cache Desteği
+
+Aynı SQL sorgusu birden fazla kez çalıştırıldığında `prepare()` işlemi tekrar yapılmaz, bu da performansı artırır.
+
+### Gelişmiş `debug()` Metodu
+
+Hata oluştuğunda sorguyu ve parametreleri detaylı biçimde HTML formatında gösterir.
 
 ```php
-$ad = $db->get_var("SELECT ad FROM kullanicilar WHERE id = :id", ['id' => 1]);
-echo $ad;
+$db->debug(); // Hatalı sorgularda otomatik olarak çalışır
 ```
 
-#### Veri Ekleme (Insert)
+## 📄 Lisans
 
-Veri eklemek için `insert()` metodunu kullanabilirsiniz:
+MIT Lisansı.
 
-```php
-$sql = "INSERT INTO kullanicilar (ad, soyad) VALUES (:ad, :soyad)";
-$params = ['ad' => 'Ahmet', 'soyad' => 'Yılmaz'];
-$db->insert($sql, $params);
-```
-
-#### Veri Güncelleme (Update)
-
-Veri güncellemek için `update()` metodunu kullanabilirsiniz:
-
-```php
-$sql = "UPDATE kullanicilar SET ad = :ad WHERE id = :id";
-$params = ['ad' => 'Mehmet', 'id' => 2];
-$db->update($sql, $params);
-```
-
-#### Veri Silme (Delete)
-
-Veri silmek için `delete()` metodunu kullanabilirsiniz:
-
-```php
-$sql = "DELETE FROM kullanicilar WHERE id = :id";
-$params = ['id' => 3];
-$db->delete($sql, $params);
 ```
 
 ---
 
-### 🔍 **Hata Yönetimi ve Debug**
-
-`debug()` metodunu kullanarak son yapılan sorguyu, parametreleri ve sonucu detaylı bir şekilde görebilirsiniz:
-
-```php
-$db->debug();
+Bu dosyayı `README.md` olarak projenizin kök dizinine ekleyebilirsin. İstersen bu dosyayı senin için oluşturup içeriğini bir `.md` dosyası olarak da verebilirim. Hazırlamamı ister misin?
 ```
-
-**Debug çıktısı** şunları içerir:
-
-* Son SQL sorgusu
-* Parametreler
-* Sonuç verisi (Varsa)
-* Hata mesajları (Varsa)
-
----
-
-### ⚡ **Performans ve Güvenlik**
-
-* **Parametre Bağlama**: `nsql`, SQL sorgularını parametrelerle hazırlayarak SQL enjeksiyonlarına karşı korur.
-* **Hazırlıklı İfadeler (Prepared Statements)**: Tüm sorgular PDO'nun hazırlıklı ifadeleri kullanılarak yapılır, bu da güvenliği artırır ve performansı optimize eder.
-* **Otomatik Parametre Hazırlama**: SQL sorgusunu otomatik olarak analiz eder ve parametreleri güvenli şekilde bağlar.
-* **Sorgu Önbelleği**: Aynı sorgular için hazırlıklı ifadeler bir kez oluşturulur ve cache'den tekrar kullanılır, böylece sorguların veritabanına her defasında tekrar hazırlanmasını engeller.
-
----
-
-### 🛠️ **Yardım ve Katkı**
-
-Eğer bu proje hakkında sorularınız varsa ya da katkı sağlamak isterseniz, [GitHub Repository'sine](https://github.com/ngunenc/nsql) göz atabilirsiniz.
-
-Pull request'ler her zaman memnuniyetle karşılanır! 😊
-
----
-
-### 📄 **Lisans**
-
-Bu proje MIT Lisansı ile lisanslanmıştır. Daha fazla bilgi için `LICENSE` dosyasını inceleyebilirsiniz.
-
----
-
-### 🎯 **Özellikler**
-
-* Veritabanı bağlantısı ve sorgu işlemleri için güvenlikli ve hızlı bir yapı.
-* Veritabanı hata yönetimi ve hata mesajları ile birlikte debug özellikleri.
-* Parametreli sorgular için otomatik güvenlik desteği.
-* SQL enjeksiyonlarına karşı koruma sağlayan PDO kullanımı.
-* Sorgu önbellekleme ile performans iyileştirmesi.

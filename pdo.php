@@ -8,6 +8,8 @@ class nsql {
     private array $lastResults = [];
     private ?string $lastError = null;
     private array $statementCache = [];
+    private int $lastInsertId = 0;
+
 
 
     public function __construct(
@@ -85,8 +87,8 @@ class nsql {
 
     public function insert(string $sql, array $params = []): bool {
         $this->lastResults = [];
+        $this->lastInsertId = 0;
     
-        // Parametre verilmediyse SQL içinden otomatik çıkar
         if (empty($params)) {
             $parsed = $this->prepareParamsFromSQL($sql);
             $sql = $parsed['sql'];
@@ -95,9 +97,14 @@ class nsql {
     
         $stmt = $this->query($sql, $params);
     
-        return $stmt !== null;
-    }
+        if ($stmt) {
+            $this->lastInsertId = (int)$this->pdo->lastInsertId();
+            return true;
+        }
     
+        return false;
+    }
+        
     
     
     public function get_row(string $sql, array $params = []): ?object {
@@ -166,7 +173,22 @@ class nsql {
         $stmt = $this->query($sql, $params);
         return $stmt !== null;
     }
-       
+    
+    public function insert_id(): int {
+        return $this->lastInsertId;
+    }
+
+    public function begin(): void {
+        $this->pdo->beginTransaction();
+    }
+
+    public function commit(): void {
+        $this->pdo->commit();
+    }
+
+    public function rollback(): void {
+        $this->pdo->rollBack();
+    }
 
     private function printError(string $message): void {
         if (!$this->debugMode) return;
