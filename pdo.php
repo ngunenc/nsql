@@ -1,5 +1,4 @@
-<?
-error_reporting(0);
+<?php
 
 class nsql {
     private PDO $pdo;
@@ -9,26 +8,37 @@ class nsql {
     private ?string $lastError = null;
     private array $statementCache = [];
     private int $lastInsertId = 0;
-
-
+    private string $dsn;
+    private string $user;
+    private string $pass;
+    private array $options;
+    private int $retryLimit = 2;
+    private bool $debugMode = false;
 
     public function __construct(
         string $host = 'localhost',
         string $db = 'etiyop',
         string $user = 'root',
         string $pass = '',
-        string $charset = 'utf8mb4'
+        string $charset = 'utf8mb4',
+        bool $debug = false
     ) {
-        $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-
-        $options = [
+        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->debugMode = $debug;
+        $this->options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
 
+        $this->connect();
+    }
+
+    private function connect(): void {
         try {
-            $this->pdo = new PDO($dsn, $user, $pass, $options);
+            $this->pdo = new PDO($this->dsn, $this->user, $this->pass, $this->options);
         } catch (PDOException $e) {
             throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
         }
@@ -39,141 +49,102 @@ class nsql {
         $this->lastParams = $params;
         $this->lastError = null;
     
-        try {
-            // Statement cache kontrolü
-            if (!isset($this->statementCache[$sql])) {
-                $this->statementCache[$sql] = $this->pdo->prepare($sql);
+        // IN (...) desteği için dizi parametrelerini genişlet
+        foreach ($params as $key => $value) {
+            if (is_array($value)) {
+                $placeholders = [];
+                foreach ($value as $i => $val) {
+                    $newKey = "{$key}_$i";
+                    $placeholders[] = ":$newKey";
+                    $params[$newKey] = $val;
+                }
+                unset($params[$key]);
+                $sql = preg_replace("/:$key\b/", implode(', ', $placeholders), $sql);
             }
-    
-            $stmt = $this->statementCache[$sql];
-            $stmt->execute($params);
-    
-            return $stmt;
-    
-        } catch (PDOException $e) {
-            $this->lastError = $e->getMessage();
-            $this->lastResults = [];
-            $this->debug(); // Hatalı sorgu durumunda detaylı bilgi göster
-            return null;
         }
-    }
-    private function prepareParamsFromSQL(string $sql): array {
-        $params = [];
-        $counter = 1;
     
-        // Sayısal ve tırnaklı değerleri bul
-        $sql = preg_replace_callback(
-            "/(?<=\s|\=|\(|,)('(?:[^'\\\\]|\\\\.)*'|\d+(\.\d+)?)/",
-            function ($matches) use (&$params, &$counter) {
-                $placeholder = ":param$counter";
-                $value = $matches[1];
-    
-                // Sayı mı yoksa string mi?
-                if (is_numeric($value)) {
-                    $params["param$counter"] = $value + 0; // tip dönüşümü
-                } else {
-                    $params["param$counter"] = trim($value, "'");
+        $attempts = 0;
+        do {
+            try {
+                // Statement cache
+                if (!isset($this->statementCache[$sql])) {
+                    $this->statementCache[$sql] = $this->pdo->prepare($sql);
                 }
     
-                $counter++;
-                return " $placeholder";
-            },
-            $sql
-        );
+                $stmt = $this->statementCache[$sql];
+                $stmt->execute($params);
+                return $stmt;
     
-        return ['sql' => $sql, 'params' => $params];
+            } catch (PDOException $e) {
+                $attempts++;
+    
+                $this->lastError = $e->getMessage();
+                $this->lastResults = [];
+    
+                $errorCode = $e->errorInfo[1] ?? null;
+                if (in_array($errorCode, [2006, 2013]) && $attempts <= $this->retryLimit) {
+                    $this->connect(); // yeniden bağlan
+                    continue;
+                }
+    
+                return null;
+            }
+        } while ($attempts <= $this->retryLimit);
+    
+        return null;
     }
     
 
-    public function insert(string $sql, array $params = []): bool {
+    public function insert(string $sql, array $params): bool {
         $this->lastResults = [];
         $this->lastInsertId = 0;
-    
-        if (empty($params)) {
-            $parsed = $this->prepareParamsFromSQL($sql);
-            $sql = $parsed['sql'];
-            $params = $parsed['params'];
-        }
-    
+
         $stmt = $this->query($sql, $params);
-    
+
         if ($stmt) {
             $this->lastInsertId = (int)$this->pdo->lastInsertId();
             return true;
         }
-    
+
         return false;
     }
-        
-    
-    
-    public function get_row(string $sql, array $params = []): ?object {
-        if (empty($params)) {
-            $parsed = $this->prepareParamsFromSQL($sql);
-            $sql = $parsed['sql'];
-            $params = $parsed['params'];
-        }
-    
+
+    public function get_row(string $sql, array $params): ?object {
         $stmt = $this->query($sql, $params);
-    
+
         if ($stmt) {
             $result = $stmt->fetch(PDO::FETCH_OBJ);
             $this->lastResults = $result ? [$result] : [];
             return $result ?: null;
-        } else {
-            $this->lastResults = [];
-            return null;
         }
+
+        $this->lastResults = [];
+        return null;
     }
-    
-    public function get_results(string $sql, array $params = []): array {
-        if (empty($params)) {
-            $parsed = $this->prepareParamsFromSQL($sql);
-            $sql = $parsed['sql'];
-            $params = $parsed['params'];
-        }
-    
+
+    public function get_results(string $sql, array $params): array {
         $stmt = $this->query($sql, $params);
-    
+
         if ($stmt) {
             $results = $stmt->fetchAll(PDO::FETCH_OBJ);
             $this->lastResults = $results;
             return $results;
-        } else {
-            $this->lastResults = [];
-            return [];
         }
-    }
-    
-    
 
-    public function update(string $sql, array $params = []): bool {
         $this->lastResults = [];
-    
-        if (empty($params)) {
-            $parsed = $this->prepareParamsFromSQL($sql);
-            $sql = $parsed['sql'];
-            $params = $parsed['params'];
-        }
-    
-        $stmt = $this->query($sql, $params);
-        return $stmt !== null;
+        return [];
     }
-    
 
-    public function delete(string $sql, array $params = []): bool {
+    public function update(string $sql, array $params): bool {
         $this->lastResults = [];
-    
-        if (empty($params)) {
-            $parsed = $this->prepareParamsFromSQL($sql);
-            $sql = $parsed['sql'];
-            $params = $parsed['params'];
-        }
-    
-        $stmt = $this->query($sql, $params);
-        return $stmt !== null;
+        return $this->query($sql, $params) !== null;
     }
-    
+
+    public function delete(string $sql, array $params): bool {
+        $this->lastResults = [];
+        return $this->query($sql, $params) !== null;
+    }
+
     public function insert_id(): int {
         return $this->lastInsertId;
     }
@@ -190,34 +161,10 @@ class nsql {
         $this->pdo->rollBack();
     }
 
-    private function printError(string $message): void {
-        if (!$this->debugMode) return;
-        echo <<<HTML
-    <div style="
-        background-color: #ffecec;
-        color: #c00;
-        border: 1px solid #ff5e5e;
-        padding: 10px;
-        margin: 16px 0;
-        font-family: monospace;
-        border-radius: 6px;
-    ">
-        <strong>⚠️ PDO Hatası:</strong> $message
-    </div>
-    HTML;
-    }
-    
-    private function emptyStatement(): PDOStatement {
-        return new class extends PDOStatement {
-            public function fetch($mode = null, $cursorOrientation = PDO::FETCH_ORI_NEXT, $cursorOffset = 0) { return false; }
-            public function fetchAll($mode = null, $fetch_argument = null, array $ctor_args = []): array { return []; }
-        };
-    }
-    
     public function debug(): void {
         $query = $this->interpolateQuery($this->lastQuery, $this->lastParams);
         $paramsJson = json_encode($this->lastParams, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    
+
         echo <<<HTML
         <style>
             .nsql-debug {
@@ -264,48 +211,35 @@ class nsql {
             }
         </style>
         <div class="nsql-debug">
-    HTML;
-    
-        // Eğer hata varsa en üstte göster
+HTML;
+
         if ($this->lastError) {
             echo "<div class='error'>⚠️ <strong>Hata:</strong> {$this->lastError}</div>";
         }
-    
-        echo <<<HTML
-            <h4>🧠 SQL Sorgusu:</h4>
-            <pre>{$query}</pre>
-    
-            <h4>📦 Parametreler:</h4>
-            <pre>{$paramsJson}</pre>
-    HTML;
-    
+
+        echo "<h4>🧠 SQL Sorgusu:</h4><pre>{$query}</pre>";
+        echo "<h4>📦 Parametreler:</h4><pre>{$paramsJson}</pre>";
+
         if (!empty($this->lastResults) && is_array($this->lastResults)) {
-            echo "<h4>📊 Sonuç Verisi:</h4>";
-            echo "<table><thead><tr>";
-    
-            // Başlıkları al
+            echo "<h4>📊 Sonuç Verisi:</h4><table><thead><tr>";
             foreach ((array)$this->lastResults[0] as $key => $_) {
                 echo "<th>" . htmlspecialchars((string)$key) . "</th>";
             }
-    
             echo "</tr></thead><tbody>";
-    
-            // Veriyi yaz
+
             foreach ($this->lastResults as $row) {
                 echo "<tr>";
                 foreach ($row as $val) {
-                    $val = htmlspecialchars((string)$val);
-                    echo "<td>{$val}</td>";
+                    echo "<td>" . htmlspecialchars((string)$val) . "</td>";
                 }
                 echo "</tr>";
             }
-    
+
             echo "</tbody></table>";
         }
-    
+
         echo "</div>";
     }
-    
 
     private function interpolateQuery(string $query, array $params): string {
         foreach ($params as $key => $value) {
