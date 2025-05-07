@@ -2,11 +2,11 @@
 
 require_once 'pdo.php';
 
-$db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4');
+//$db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4');
+$db = new nsql();
 
 $sorgu="select * from kullanicilar";
-$kullanicilar = $db->get_results( $sorgu);
-
+$kullanicilar = $db->get_results($sorgu);
 
 $db->debug();
 
