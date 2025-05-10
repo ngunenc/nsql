@@ -53,6 +53,21 @@ class nsql {
     }
 
     /**
+     * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
+     * @return void
+     */
+    public function ensureConnection(): void {
+        try {
+            $stmt = $this->pdo->query('SELECT 1');
+            if ($stmt === false) {
+                $this->connect();
+            }
+        } catch (PDOException $e) {
+            $this->connect();
+        }
+    }
+
+    /**
      * Güvenli oturum başlatma ve cookie ayarları
      */
     public static function secureSessionStart(): void {
@@ -122,6 +137,7 @@ class nsql {
      * @return PDOStatement|null Başarılıysa PDOStatement, aksi halde null döner.
      */
     public function query(string $sql, array $params = []): ?PDOStatement {
+        $this->ensureConnection();
         $this->lastQuery = $sql;
         $this->lastParams = $params;
         $this->lastError = null;

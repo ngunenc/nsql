@@ -158,6 +158,22 @@ Bu sayede formlarınızda CSRF saldırılarına karşı koruma sağlayabilirsini
 
 ---
 
+### 🔄 Veritabanı Bağlantı Güncelliği
+
+`nsql` sınıfı, her sorgudan önce veritabanı bağlantısının canlı olup olmadığını otomatik olarak kontrol eder. Eğer bağlantı kopmuşsa, otomatik olarak yeniden bağlanır.
+
+Bu özellik sayesinde uzun süreli çalışan uygulamalarda veya bağlantı kopmalarında veri kaybı ve hata riski en aza indirilir.
+
+Manuel olarak bağlantı kontrolü yapmak isterseniz:
+
+```php
+$db->ensureConnection(); // Bağlantı kopmuşsa otomatik olarak yeniden bağlanır
+```
+
+Her sorgudan önce bu kontrol otomatik olarak yapılır, ekstra bir işlem yapmanıza gerek yoktur.
+
+---
+
 ### 🔍 **Hata Yönetimi ve Debug**
 
 `debug()` metodunu kullanarak son yapılan sorguyu, parametreleri ve sonucu detaylı bir şekilde görebilirsiniz:
