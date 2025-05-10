@@ -53,6 +53,36 @@ class nsql {
     }
 
     /**
+     * XSS koruması için HTML çıktısı kaçışlama fonksiyonu
+     */
+    public static function escapeHtml($string): string {
+        return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Benzersiz CSRF token üretir ve oturuma kaydeder
+     */
+    public static function generateCsrfToken(): string {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        if (empty($_SESSION['csrf_token'])) {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf_token'];
+    }
+
+    /**
+     * CSRF token doğrulaması yapar
+     */
+    public static function validateCsrfToken($token): bool {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+        return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    }
+
+    /**
      * Verilen SQL sorgusunu çalıştırır ve PDOStatement döndürür.
      *
      * @param string $sql Çalıştırılacak SQL sorgusu.
