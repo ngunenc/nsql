@@ -103,11 +103,36 @@ Hata oluştuğunda sorguyu ve parametreleri detaylı biçimde HTML formatında g
 $db->debug(); // Hatalı sorgularda otomatik olarak çalışır
 ```
 
-## 📄 Lisans
+---
 
-MIT Lisansı.
+### 🛡️ XSS ve CSRF Koruması
 
+#### XSS (Cross-Site Scripting) Koruması
+
+Kütüphanede yer alan `nsql::escapeHtml()` fonksiyonu ile kullanıcıdan gelen verileri HTML'ye basmadan önce güvenle kaçışlayabilirsiniz:
+
+```php
+// HTML çıktısı için güvenli şekilde kullanın
+echo nsql::escapeHtml($kullanici->isim);
 ```
+
+#### CSRF (Cross-Site Request Forgery) Koruması
+
+Formlarınızda CSRF koruması için aşağıdaki fonksiyonları kullanabilirsiniz:
+
+**Token üretimi ve formda kullanımı:**
+```php
+<input type="hidden" name="csrf_token" value="<?= nsql::generateCsrfToken() ?>">
+```
+
+**Token doğrulama:**
+```php
+if (!nsql::validateCsrfToken($_POST['csrf_token'] ?? '')) {
+    die('Geçersiz CSRF token');
+}
+```
+
+Bu sayede formlarınızda CSRF saldırılarına karşı koruma sağlayabilirsiniz.
 
 ---
 
