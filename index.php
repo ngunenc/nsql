@@ -2,15 +2,18 @@
 
 require_once 'pdo.php';
 
-//$db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4');
-$db = new nsql();
+$db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4', true);
+//$db = new nsql();
 
+//Çoklu Satır Veri getirme
 $sorgu="select * from kullanicilar";
-$kullanicilar = $db->get_results($sorgu);
+$kullanicilar = $db->get_results($sorgu, []);
 
 $db->debug();
 
-$veri=$db->get_row("select * from kullanicilar where id = 1");
+//Tek Satır Veri getirme
+$sorgu="select * from kullanicilar where id = :id";
+$veri=$db->get_row($sorgu, ['id' => 1]);
 
 $db->debug();
 
