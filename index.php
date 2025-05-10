@@ -2,8 +2,8 @@
 
 require_once 'pdo.php';
 
-$db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4', true);
-//$db = new nsql();
+//db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4', true);
+$db = new nsql();
 
 //Çoklu Satır Veri getirme
 $sorgu="select * from kullanicilar";

@@ -53,6 +53,38 @@ class nsql {
     }
 
     /**
+     * Güvenli oturum başlatma ve cookie ayarları
+     */
+    public static function secureSessionStart(): void {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
+            session_set_cookie_params([
+                'lifetime' => 0,
+                'path' => '/',
+                'domain' => '',
+                'secure' => $secure,
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+            session_start();
+            // Session fixation önlemi: yeni oturumda ID yenile
+            if (!isset($_SESSION['initiated'])) {
+                session_regenerate_id(true);
+                $_SESSION['initiated'] = true;
+            }
+        }
+    }
+
+    /**
+     * Oturum ID'sini güvenli şekilde yenile (isteğe bağlı olarak kullanılabilir)
+     */
+    public static function regenerateSessionId(): void {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+    }
+
+    /**
      * XSS koruması için HTML çıktısı kaçışlama fonksiyonu
      */
     public static function escapeHtml($string): string {
