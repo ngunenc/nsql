@@ -105,6 +105,28 @@ $db->debug(); // Hatalı sorgularda otomatik olarak çalışır
 
 ---
 
+### 🔒 Oturum (Session) ve Cookie Güvenliği
+
+Oturum başlatırken ve cookie ayarlarında güvenlik için aşağıdaki fonksiyonu kullanabilirsiniz:
+
+```php
+// Oturum başlatmadan önce çağırın
+db::secureSessionStart(); // veya nsql::secureSessionStart();
+```
+
+Bu fonksiyon;
+- Oturum çerezini `HttpOnly`, `Secure` ve `SameSite=Lax` olarak ayarlar.
+- HTTPS kullanıyorsanız otomatik olarak `secure` flag'ini aktif eder.
+- Session fixation saldırılarına karşı ilk oturumda session ID'yi yeniler.
+
+Oturum ID'sini manuel olarak yenilemek için:
+
+```php
+nsql::regenerateSessionId();
+```
+
+---
+
 ### 🛡️ XSS ve CSRF Koruması
 
 #### XSS (Cross-Site Scripting) Koruması
