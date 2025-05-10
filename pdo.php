@@ -53,6 +53,61 @@ class nsql {
     }
 
     /**
+     * Üretim ortamında ayrıntılı hata mesajlarını gizler, sadece genel mesaj döndürür ve hatayı loglar.
+     * Geliştirme ortamında ise gerçek hatayı döndürür.
+     *
+     * @param Exception|Throwable $e
+     * @param string $genericMessage Kullanıcıya gösterilecek genel mesaj (örn: "Bir hata oluştu.")
+     * @return string Kullanıcıya gösterilecek mesaj
+     */
+    public function handleException($e, string $genericMessage = 'Bir hata oluştu.'): string {
+        $this->logError($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
+        if ($this->debugMode) {
+            return $e->getMessage();
+        } else {
+            return $genericMessage;
+        }
+    }
+
+    /**
+     * Uygulama genelinde güvenli try-catch örüntüsü için yardımcı fonksiyon.
+     * Kapatıcı (callable) fonksiyonu güvenli şekilde çalıştırır, hata olursa handleException ile işler.
+     *
+     * @param callable $fn
+     * @param string $genericMessage
+     * @return mixed
+     */
+    public function safeExecute(callable $fn, string $genericMessage = 'Bir hata oluştu.') {
+        try {
+            return $fn();
+        } catch (Exception $e) {
+            echo $this->handleException($e, $genericMessage);
+            return null;
+        } catch (Throwable $e) {
+            echo $this->handleException($e, $genericMessage);
+            return null;
+        }
+    }
+
+    /**
+     * Güvenli statement cache anahtarı oluşturucu
+     */
+    private function getStatementCacheKey(string $sql, array $params): string {
+        return md5($sql . '|' . serialize(array_keys($params)) . '|' . serialize(array_map('gettype', $params)));
+    }
+
+    /**
+     * Parametre tiplerini kontrol eder (sadece int, float, string, null kabul edilir)
+     */
+    private function validateParamTypes(array $params): void {
+        foreach ($params as $value) {
+            if (!is_int($value) && !is_float($value) && !is_string($value) && !is_null($value)) {
+                throw new InvalidArgumentException('Geçersiz parametre tipi: ' . gettype($value));
+            }
+        }
+    }
+
+    /**
      * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
      * @return void
      */
@@ -142,19 +197,23 @@ class nsql {
         $this->lastParams = $params;
         $this->lastError = null;
 
+        $this->validateParamTypes($params); // Parametre tip kontrolü
+        $cacheKey = $this->getStatementCacheKey($sql, $params);
+
         $attempts = 0;
         do {
             try {
-                // Statement cache
-                if (!isset($this->statementCache[$sql])) {
-                    $this->statementCache[$sql] = $this->pdo->prepare($sql);
+                // Statement cache (SQL + parametre yapısına göre anahtar)
+                if (!isset($this->statementCache[$cacheKey])) {
+                    $this->statementCache[$cacheKey] = $this->pdo->prepare($sql);
                 }
 
-                $stmt = $this->statementCache[$sql];
+                $stmt = $this->statementCache[$cacheKey];
 
                 // Bind parameters securely
                 foreach ($params as $key => $value) {
-                    $stmt->bindValue(is_int($key) ? $key + 1 : ":$key", $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+                    $paramType = is_int($value) ? PDO::PARAM_INT : (is_null($value) ? PDO::PARAM_NULL : PDO::PARAM_STR);
+                    $stmt->bindValue(is_int($key) ? $key + 1 : ":$key", $value, $paramType);
                 }
 
                 $stmt->execute();
