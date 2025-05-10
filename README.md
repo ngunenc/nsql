@@ -41,7 +41,7 @@ $password = 'sifreniz';
 ```php
 require_once 'nsql.php';
 $db = new nsql('localhost', 'veritabani_adi', 'kullanici', 'sifre');
-````
+```
 
 ## 📦 Temel Kullanım
 
@@ -80,7 +80,35 @@ foreach ($users as $user) {
 }
 ```
 
-## 🧠 Yeni Özellikler
+---
+
+### 📝 Parametreli Sorgu Kullanımı (Önerilen Güvenli Yöntem)
+
+Tüm sorgularda parametre bağlama kullanmanız önerilir. Aşağıda insert, update ve delete işlemleri için güvenli örnekler verilmiştir:
+
+```php
+// Güvenli INSERT
+$db->insert("INSERT INTO users (name, email) VALUES (:name, :email)", [
+    'name' => 'Ali',
+    'email' => 'ali@example.com'
+]);
+echo $db->insert_id();
+
+// Güvenli UPDATE
+$db->update("UPDATE users SET name = :name WHERE id = :id", [
+    'name' => 'Mehmet',
+    'id' => 1
+]);
+
+// Güvenli DELETE
+$db->delete("DELETE FROM users WHERE id = :id", [
+    'id' => 3
+]);
+```
+
+---
+
+### 🧠 Yeni Özellikler
 
 ### SQL Sabitlerini Otomatik Parametreye Çevirme
 
@@ -101,6 +129,98 @@ Hata oluştuğunda sorguyu ve parametreleri detaylı biçimde HTML formatında g
 
 ```php
 $db->debug(); // Hatalı sorgularda otomatik olarak çalışır
+```
+
+---
+
+### 🛡️ Hata Yönetimi: safeExecute ve handleException Kullanımı
+
+Hataları güvenli şekilde yönetmek için `safeExecute` fonksiyonunu kullanabilirsiniz. Bu fonksiyon, hataları otomatik olarak loglar ve kullanıcıya sadece genel bir mesaj gösterir:
+
+```php
+$result = $db->safeExecute(function() use ($db) {
+    return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
+}, 'Bir hata oluştu, lütfen tekrar deneyin.');
+
+if ($result) {
+    echo $result->name;
+}
+```
+
+Geliştirme ortamında ayrıntılı hata görmek için debug modunu açabilirsiniz:
+
+```php
+$db = new nsql('localhost', 'veritabani_adi', 'kullanici', 'sifre', 'utf8mb4', true); // Son parametre true ise debug mod açık
+```
+
+Ortam değişkenleri ile bağlantı bilgilerini güvenli şekilde yönetmek için:
+
+```php
+// .env dosyanıza veya sunucu ortam değişkenlerine aşağıdakileri ekleyin:
+// DB_DSN, DB_USER, DB_PASS
+// Kodda ise:
+$db = new nsql(); // Ortam değişkenleri otomatik kullanılır
+```
+
+---
+
+### 🔒 Tüm Güvenlik Fonksiyonlarının Birlikte Kullanımı (Örnek Akış)
+
+Aşağıda, CSRF, XSS, session güvenliği ve parametreli sorguların birlikte kullanıldığı örnek bir akış yer almaktadır:
+
+```php
+require_once 'pdo.php';
+
+nsql::secureSessionStart(); // Oturumu güvenli başlat
+
+// CSRF token üret ve formda kullan
+$csrfToken = nsql::generateCsrfToken();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!nsql::validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        die('Geçersiz CSRF token');
+    }
+    $db = new nsql();
+    $db->safeExecute(function() use ($db) {
+        $db->insert("INSERT INTO users (name, email) VALUES (:name, :email)", [
+            'name' => $_POST['name'],
+            'email' => $_POST['email']
+        ]);
+    }, 'Kayıt sırasında bir hata oluştu.');
+}
+?>
+<form method="post">
+    <input type="text" name="name" required>
+    <input type="email" name="email" required>
+    <input type="hidden" name="csrf_token" value="<?= nsql::escapeHtml($csrfToken) ?>">
+    <button type="submit">Kaydet</button>
+</form>
+```
+
+---
+
+### 🛡️ SQL Injection ve Parametre Güvenliği
+
+- Tüm sorgularda parametre bağlama (bind) zorunlu tutulur, doğrudan string birleştirme ile sorgu çalıştırılamaz.
+- Statement cache anahtarı, sadece SQL sorgusuna göre değil, parametrelerin yapısına ve tipine göre oluşturulur. Böylece farklı parametrelerle yapılan sorguların karışması ve güvenlik açığı oluşması engellenir.
+- Sadece int, float, string ve null tipinde parametreler kabul edilir. Dizi, obje veya beklenmeyen tipte parametreler kullanılırsa hata fırlatılır.
+- Parametre bağlama işlemi PDO'nun uygun tipleriyle otomatik olarak yapılır.
+
+Bu sayede SQL Injection riskleri minimize edilir ve parametre güvenliği üst düzeye çıkarılır.
+
+#### Kullanım Örneği
+
+```php
+// Güvenli parametreli sorgu örneği
+$sql = "SELECT * FROM users WHERE email = :email AND status = :status";
+$params = [
+    'email' => 'ali@example.com',
+    'status' => 'active'
+];
+$user = $db->get_row($sql, $params);
+if ($user) {
+    echo $user->name;
+}
 ```
 
 ---
@@ -171,6 +291,15 @@ $db->ensureConnection(); // Bağlantı kopmuşsa otomatik olarak yeniden bağlan
 ```
 
 Her sorgudan önce bu kontrol otomatik olarak yapılır, ekstra bir işlem yapmanıza gerek yoktur.
+
+---
+
+### 📦 Kütüphane ve Bağımlılık Güncelliği
+
+- Kütüphanenin ve kullandığınız tüm harici bağımlılıkların (ör. PDO, PHP sürümü, ek güvenlik kütüphaneleri) güncel tutulması önerilir.
+- Güvenlik açıklarını önlemek için düzenli olarak güncellemeleri ve güvenlik bültenlerini takip edin.
+
+- PHP sürümünüzü ve eklentilerinizi güncel tutmak için sunucu sağlayıcınızın veya kendi sisteminizin güncelleme araçlarını kullanın.
 
 ---
 
