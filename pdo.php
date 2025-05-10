@@ -14,6 +14,7 @@ class nsql {
     private array $options;
     private int $retryLimit = 2;
     private bool $debugMode = false;
+    private string $logFile = 'error_log.txt';
 
     public function __construct(
         string $host = 'localhost',
@@ -23,9 +24,10 @@ class nsql {
         string $charset = 'utf8mb4',
         bool $debug = false
     ) {
-        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-        $this->user = $user;
-        $this->pass = $pass;
+        // Ortam değişkenlerini kullanarak veritabanı kimlik bilgilerini güvence altına al
+        $this->dsn = getenv('DB_DSN') ?: "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = getenv('DB_USER') ?: $user;
+        $this->pass = getenv('DB_PASS') ?: $pass;
         $this->debugMode = $debug;
         $this->options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -44,25 +46,24 @@ class nsql {
         }
     }
 
+    private function logError(string $message): void {
+        $timestamp = date('Y-m-d H:i:s');
+        $logMessage = "[$timestamp] $message" . PHP_EOL;
+        file_put_contents($this->logFile, $logMessage, FILE_APPEND);
+    }
+
+    /**
+     * Verilen SQL sorgusunu çalıştırır ve PDOStatement döndürür.
+     *
+     * @param string $sql Çalıştırılacak SQL sorgusu.
+     * @param array $params Sorgu için kullanılacak parametreler.
+     * @return PDOStatement|null Başarılıysa PDOStatement, aksi halde null döner.
+     */
     public function query(string $sql, array $params = []): ?PDOStatement {
         $this->lastQuery = $sql;
         $this->lastParams = $params;
         $this->lastError = null;
-    
-        // IN (...) desteği için dizi parametrelerini genişlet
-        foreach ($params as $key => $value) {
-            if (is_array($value)) {
-                $placeholders = [];
-                foreach ($value as $i => $val) {
-                    $newKey = "{$key}_$i";
-                    $placeholders[] = ":$newKey";
-                    $params[$newKey] = $val;
-                }
-                unset($params[$key]);
-                $sql = preg_replace("/:$key\b/", implode(', ', $placeholders), $sql);
-            }
-        }
-    
+
         $attempts = 0;
         do {
             try {
@@ -70,31 +71,44 @@ class nsql {
                 if (!isset($this->statementCache[$sql])) {
                     $this->statementCache[$sql] = $this->pdo->prepare($sql);
                 }
-    
+
                 $stmt = $this->statementCache[$sql];
-                $stmt->execute($params);
+
+                // Bind parameters securely
+                foreach ($params as $key => $value) {
+                    $stmt->bindValue(is_int($key) ? $key + 1 : ":$key", $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+                }
+
+                $stmt->execute();
                 return $stmt;
-    
+
             } catch (PDOException $e) {
                 $attempts++;
-    
+
                 $this->lastError = $e->getMessage();
+                $this->logError($this->lastError); // Hata günlüğüne yaz
                 $this->lastResults = [];
-    
+
                 $errorCode = $e->errorInfo[1] ?? null;
                 if (in_array($errorCode, [2006, 2013]) && $attempts <= $this->retryLimit) {
                     $this->connect(); // yeniden bağlan
                     continue;
                 }
-    
+
                 return null;
             }
         } while ($attempts <= $this->retryLimit);
-    
+
         return null;
     }
     
-
+    /**
+     * Verilen SQL sorgusunu çalıştırarak bir kayıt ekler.
+     *
+     * @param string $sql Çalıştırılacak SQL sorgusu.
+     * @param array $params Sorgu için kullanılacak parametreler.
+     * @return bool Başarılıysa true, aksi halde false döner.
+     */
     public function insert(string $sql, array $params): bool {
         $this->lastResults = [];
         $this->lastInsertId = 0;
@@ -109,61 +123,117 @@ class nsql {
         return false;
     }
 
+    private function fetch(string $sql, array $params, bool $singleRow = false): mixed {
+        $stmt = $this->query($sql, $params);
+
+        if ($stmt) {
+            $results = $singleRow ? $stmt->fetch(PDO::FETCH_OBJ) : $stmt->fetchAll(PDO::FETCH_OBJ);
+            $this->lastResults = $singleRow ? ($results ? [$results] : []) : $results;
+            return $singleRow ? ($results ?: null) : $results;
+        }
+
+        $this->lastResults = [];
+        return $singleRow ? null : [];
+    }
+
+    /**
+     * Verilen SQL sorgusunu çalıştırarak tek bir satır döndürür.
+     *
+     * @param string $sql Çalıştırılacak SQL sorgusu.
+     * @param array $params Sorgu için kullanılacak parametreler.
+     * @return object|null Tek bir satır döner, eğer sonuç yoksa null döner.
+     */
     public function get_row(string $sql, array $params): ?object {
-        $stmt = $this->query($sql, $params);
-
-        if ($stmt) {
-            $result = $stmt->fetch(PDO::FETCH_OBJ);
-            $this->lastResults = $result ? [$result] : [];
-            return $result ?: null;
-        }
-
-        $this->lastResults = [];
-        return null;
+        return $this->fetch($sql, $params, true);
     }
 
+    /**
+     * Verilen SQL sorgusunu çalıştırarak birden fazla satır döndürür.
+     *
+     * @param string $sql Çalıştırılacak SQL sorgusu.
+     * @param array $params Sorgu için kullanılacak parametreler.
+     * @return array Sonuç olarak dönen satırların listesi.
+     */
     public function get_results(string $sql, array $params): array {
-        $stmt = $this->query($sql, $params);
-
-        if ($stmt) {
-            $results = $stmt->fetchAll(PDO::FETCH_OBJ);
-            $this->lastResults = $results;
-            return $results;
-        }
-
-        $this->lastResults = [];
-        return [];
+        return $this->fetch($sql, $params, false);
     }
 
+    /**
+     * Verilen SQL sorgusunu çalıştırarak bir güncelleme işlemi yapar.
+     *
+     * @param string $sql Çalıştırılacak SQL sorgusu.
+     * @param array $params Sorgu için kullanılacak parametreler.
+     * @return bool Başarılıysa true, aksi halde false döner.
+     */
     public function update(string $sql, array $params): bool {
         $this->lastResults = [];
         return $this->query($sql, $params) !== null;
     }
 
+    /**
+     * Verilen SQL sorgusunu çalıştırarak bir silme işlemi yapar.
+     *
+     * @param string $sql Çalıştırılacak SQL sorgusu.
+     * @param array $params Sorgu için kullanılacak parametreler.
+     * @return bool Başarılıysa true, aksi halde false döner.
+     */
     public function delete(string $sql, array $params): bool {
         $this->lastResults = [];
         return $this->query($sql, $params) !== null;
     }
 
+    /**
+     * Son eklenen kaydın ID değerini döndürür.
+     *
+     * @return int Son eklenen kaydın ID değeri.
+     */
     public function insert_id(): int {
         return $this->lastInsertId;
     }
 
+    /**
+     * Bir veritabanı işlemi başlatır.
+     *
+     * @return void
+     */
     public function begin(): void {
         $this->pdo->beginTransaction();
     }
 
+    /**
+     * Bir veritabanı işlemini tamamlar ve değişiklikleri kaydeder.
+     *
+     * @return void
+     */
     public function commit(): void {
         $this->pdo->commit();
     }
 
+    /**
+     * Bir veritabanı işlemini geri alır.
+     *
+     * @return void
+     */
     public function rollback(): void {
         $this->pdo->rollBack();
     }
 
+    /**
+     * Son çalıştırılan sorgunun detaylarını ve hata ayıklama bilgilerini gösterir.
+     *
+     * @return void
+     */
     public function debug(): void {
         $query = $this->interpolateQuery($this->lastQuery, $this->lastParams);
         $paramsJson = json_encode($this->lastParams, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+
+        $debugMessage = "SQL Sorgusu: $query\nParametreler: $paramsJson\n";
+
+        if ($this->lastError) {
+            $debugMessage .= "Hata: {$this->lastError}\n";
+        }
+
+        $this->logError($debugMessage); // Hata ayıklama bilgilerini log dosyasına yaz
 
         echo <<<HTML
         <style>
@@ -241,7 +311,19 @@ HTML;
         echo "</div>";
     }
 
+    /**
+     * Verilen sorguyu ve parametreleri birleştirerek hata ayıklama için kullanılabilir bir sorgu döndürür.
+     *
+     * @param string $query SQL sorgusu.
+     * @param array $params Sorgu parametreleri.
+     * @return string Birleştirilmiş sorgu.
+     * @throws RuntimeException Eğer debug modu kapalıysa.
+     */
     private function interpolateQuery(string $query, array $params): string {
+        if (!$this->debugMode) {
+            throw new RuntimeException("interpolateQuery metodu yalnızca debug modunda kullanılabilir.");
+        }
+
         foreach ($params as $key => $value) {
             $escaped = $this->pdo->quote((string) $value);
             if (is_string($key)) {
