@@ -3,12 +3,18 @@
 require_once 'pdo.php';
 
 //db = new nsql('localhost', 'etiyop', 'root', '', 'utf8mb4', true);
-$db = new nsql();
+$db = new nsql(debug: true);
 
 //Çoklu Satır Veri getirme
-$sorgu="select * from kullanicilar";
-$kullanicilar = $db->get_results($sorgu, []);
+$sorgu="select * from sayfalar";
+$kullanicilar = $db->get_results($sorgu, [], true);
 
+$db->debug();
+
+$buyuk=$db->get_yield($sorgu, [], true);
+foreach ($buyuk as $row) {
+    
+}
 $db->debug();
 
 //Tek Satır Veri getirme
