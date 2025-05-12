@@ -294,6 +294,47 @@ Her sorgudan önce bu kontrol otomatik olarak yapılır, ekstra bir işlem yapma
 
 ---
 
+## nsql Kullanımı ve Büyük Veri Desteği
+
+### Temel Veri Çekme
+
+```php
+$sonuclar = $db->get_results("SELECT * FROM kullanicilar", []);
+$db->debug(); // Sonuçlar tablo olarak gösterilir
+```
+
+### Büyük Veri Setleri İçin Memory Friendly Kullanım
+
+Çok fazla satırlı sorgularda belleği şişirmemek için generator tabanlı `get_yield` fonksiyonunu kullanın:
+
+```php
+foreach ($db->get_yield("SELECT * FROM cok_buyuk_tablo", []) as $row) {
+    // Her satırı tek tek işle
+}
+```
+
+> Not: `get_yield` fonksiyonu generator döndürür, debug() ile toplu sonuç göstermez. Sadece satır satır işleme için uygundur.
+
+### get_results vs get_yield: Hangi Durumda Hangisi Kullanılmalı?
+
+- **get_results()**: Tüm sorgu sonucunu dizi olarak belleğe yükler. Küçük ve orta ölçekli veri setleri (ör. 10.000 satır veya ~10 MB altı) için hızlı ve kullanışlıdır. Sonuçlar üzerinde toplu işlem yapmak ve debug() ile tablo halinde görmek için idealdir.
+- **get_yield()**: Sonuçları generator ile satır satır döndürür, belleği şişirmez. Çok büyük veri setlerinde (10.000+ satır veya 10 MB üzeri) kullanılması önerilir. Özellikle milyonlarca satırlık sorgularda PHP'nin memory_limit sınırına takılmadan güvenle çalışır.
+
+#### Pratik Sınır ve Tavsiye
+- 10.000 satıra kadar veya toplamda 10 MB altı veri için `get_results()` kullanabilirsiniz.
+- 10.000 satırdan fazla veya büyük veri setlerinde (50 MB ve üzeri) `get_yield()` kullanmak daha güvenlidir.
+- Sınır, sunucunuzun RAM kapasitesine ve PHP memory_limit ayarına göre değişebilir. Kendi ortamınızda test ederek en iyi sonucu bulabilirsiniz.
+
+> **Not:** `get_yield()` ile alınan sonuçlar debug() ile toplu olarak gösterilmez, sadece foreach ile satır satır işlenir. `get_results()` ise debug() ile tablo halinde gösterilir.
+
+---
+
+### Özet
+- Küçük/orta veri setleri için: `get_results` (dizi döner, debug ile tablo gösterir)
+- Çok büyük veri setleri için: `get_yield` (generator döner, foreach ile satır satır işlenir)
+
+---
+
 ### 📦 Kütüphane ve Bağımlılık Güncelliği
 
 - Kütüphanenin ve kullandığınız tüm harici bağımlılıkların (ör. PDO, PHP sürümü, ek güvenlik kütüphaneleri) güncel tutulması önerilir.

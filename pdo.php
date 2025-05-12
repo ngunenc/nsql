@@ -15,6 +15,8 @@ class nsql {
     private int $retryLimit = 2;
     private bool $debugMode = false;
     private string $logFile = 'error_log.txt';
+    private int $statementCacheLimit = 100; // Maksimum cache boyutu
+    private array $statementCacheUsage = []; // LRU için kullanım sırası
 
     public function __construct(
         string $host = 'localhost',
@@ -94,6 +96,20 @@ class nsql {
      */
     private function getStatementCacheKey(string $sql, array $params): string {
         return md5($sql . '|' . serialize(array_keys($params)) . '|' . serialize(array_map('gettype', $params)));
+    }
+
+    /**
+     * Statement cache'e yeni bir anahtar ekler ve LRU algoritması ile sınırı korur.
+     */
+    private function addToStatementCache(string $key, $stmt): void {
+        $this->statementCache[$key] = $stmt;
+        $this->statementCacheUsage[$key] = microtime(true);
+        if (count($this->statementCache) > $this->statementCacheLimit) {
+            // En eski kullanılanı bul ve sil
+            asort($this->statementCacheUsage);
+            $oldestKey = array_key_first($this->statementCacheUsage);
+            unset($this->statementCache[$oldestKey], $this->statementCacheUsage[$oldestKey]);
+        }
     }
 
     /**
@@ -205,10 +221,13 @@ class nsql {
             try {
                 // Statement cache (SQL + parametre yapısına göre anahtar)
                 if (!isset($this->statementCache[$cacheKey])) {
-                    $this->statementCache[$cacheKey] = $this->pdo->prepare($sql);
+                    $stmt = $this->pdo->prepare($sql);
+                    $this->addToStatementCache($cacheKey, $stmt);
+                } else {
+                    $stmt = $this->statementCache[$cacheKey];
                 }
-
-                $stmt = $this->statementCache[$cacheKey];
+                // LRU güncelle
+                $this->statementCacheUsage[$cacheKey] = microtime(true);
 
                 // Bind parameters securely
                 foreach ($params as $key => $value) {
@@ -281,6 +300,8 @@ class nsql {
      * @return object|null Tek bir satır döner, eğer sonuç yoksa null döner.
      */
     public function get_row(string $sql, array $params): ?object {
+        $this->lastQuery = $sql;
+        $this->lastParams = $params;
         return $this->fetch($sql, $params, true);
     }
 
@@ -292,7 +313,35 @@ class nsql {
      * @return array Sonuç olarak dönen satırların listesi.
      */
     public function get_results(string $sql, array $params): array {
-        return $this->fetch($sql, $params, false);
+        $this->lastQuery = $sql;
+        $this->lastParams = $params;
+        $this->lastResults = [];
+        $stmt = $this->query($sql, $params);
+        if (!$stmt) {
+            $this->lastResults = [];
+            return [];
+        }
+        $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+        $this->lastResults = $results;
+        return $results;
+    }
+
+    /**
+     * Çok büyük veri setleri için generator ile satır satır veri döndürür (memory friendly).
+     *
+     * @param string $sql
+     * @param array $params
+     * @return Generator
+     */
+    public function get_yield(string $sql, array $params): \Generator {
+        $this->lastQuery = $sql;
+        $this->lastParams = $params;
+        $stmt = $this->query($sql, $params);
+        if ($stmt) {
+            while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+                yield $row;
+            }
+        }
     }
 
     /**
@@ -361,6 +410,10 @@ class nsql {
      * @return void
      */
     public function debug(): void {
+        if (!$this->debugMode) {
+            echo '<div style="color:red;font-weight:bold;">Debug modu kapalı! Detaylı sorgu ve hata bilgisi için nsql nesnesini debug modda başlatın.</div>';
+            return;
+        }
         $query = $this->interpolateQuery($this->lastQuery, $this->lastParams);
         $paramsJson = json_encode($this->lastParams, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 
@@ -416,6 +469,14 @@ class nsql {
                 margin-bottom: 14px;
                 border-radius: 5px;
             }
+            .nsql-debug .info {
+                background: #e7f3fe;
+                border: 1px solid #b3d8fd;
+                color: #31708f;
+                padding: 10px;
+                margin-bottom: 14px;
+                border-radius: 5px;
+            }
         </style>
         <div class="nsql-debug">
 HTML;
@@ -427,22 +488,32 @@ HTML;
         echo "<h4>🧠 SQL Sorgusu:</h4><pre>{$query}</pre>";
         echo "<h4>📦 Parametreler:</h4><pre>{$paramsJson}</pre>";
 
-        if (!empty($this->lastResults) && is_array($this->lastResults)) {
-            echo "<h4>📊 Sonuç Verisi:</h4><table><thead><tr>";
-            foreach ((array)$this->lastResults[0] as $key => $_) {
-                echo "<th>" . htmlspecialchars((string)$key) . "</th>";
-            }
-            echo "</tr></thead><tbody>";
-
-            foreach ($this->lastResults as $row) {
-                echo "<tr>";
-                foreach ($row as $val) {
-                    echo "<td>" . htmlspecialchars((string)$val) . "</td>";
+        // Sonuç verisi kontrolü
+        if (is_array($this->lastResults)) {
+            if (count($this->lastResults) > 0) {
+                $firstRow = $this->lastResults[0];
+                if (is_object($firstRow) && count((array)$firstRow) > 0) {
+                    echo "<h4>📊 Sonuç Verisi:</h4><table><thead><tr>";
+                    foreach ((array)$firstRow as $key => $_) {
+                        echo "<th>" . htmlspecialchars((string)$key) . "</th>";
+                    }
+                    echo "</tr></thead><tbody>";
+                    foreach ($this->lastResults as $row) {
+                        echo "<tr>";
+                        foreach ($row as $val) {
+                            echo "<td>" . htmlspecialchars((string)$val) . "</td>";
+                        }
+                        echo "</tr>";
+                    }
+                    echo "</tbody></table>";
+                } else {
+                    echo "<div class='info'>Sonuç yok (Satırlar boş veya sadece başlık var).</div>";
                 }
-                echo "</tr>";
+            } else {
+                echo "<div class='info'>Sonuç yok (Hiç satır dönmedi).</div>";
             }
-
-            echo "</tbody></table>";
+        } else {
+            echo "<div class='info'>Sonuçlar dizi olarak gelmedi.</div>";
         }
 
         echo "</div>";
