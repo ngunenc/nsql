@@ -1,5 +1,7 @@
 <?php
 
+require_once 'Config.php';
+
 class nsql {
     private PDO $pdo;
     private string $lastQuery = '';
@@ -14,23 +16,32 @@ class nsql {
     private array $options;
     private int $retryLimit = 2;
     private bool $debugMode = false;
-    private string $logFile = 'error_log.txt';
-    private int $statementCacheLimit = 100; // Maksimum cache boyutu
+    private string $logFile;
+    private int $statementCacheLimit;
     private array $statementCacheUsage = []; // LRU için kullanım sırası
 
     public function __construct(
-        string $host = 'localhost',
-        string $db = 'etiyop',
-        string $user = 'root',
-        string $pass = '',
-        string $charset = 'utf8mb4',
-        bool $debug = false
+        ?string $host = null,
+        ?string $db = null,
+        ?string $user = null,
+        ?string $pass = null,
+        ?string $charset = null,
+        ?bool $debug = null
     ) {
-        // Ortam değişkenlerini kullanarak veritabanı kimlik bilgilerini güvence altına al
-        $this->dsn = getenv('DB_DSN') ?: "mysql:host=$host;dbname=$db;charset=$charset";
-        $this->user = getenv('DB_USER') ?: $user;
-        $this->pass = getenv('DB_PASS') ?: $pass;
-        $this->debugMode = $debug;
+        // Config sınıfından değerleri al
+        $host = $host ?? Config::get('DB_HOST', 'localhost');
+        $db = $db ?? Config::get('DB_NAME', 'etiyop');
+        $user = $user ?? Config::get('DB_USER', 'root');
+        $pass = $pass ?? Config::get('DB_PASS', '');
+        $charset = $charset ?? Config::get('DB_CHARSET', 'utf8mb4');
+        
+        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->debugMode = $debug ?? Config::get('DEBUG_MODE', false);
+        $this->logFile = Config::get('LOG_FILE', 'error_log.txt');
+        $this->statementCacheLimit = Config::get('STATEMENT_CACHE_LIMIT', 100);
+        
         $this->options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
