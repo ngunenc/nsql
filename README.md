@@ -1,6 +1,34 @@
-## 📚 **nsql - PHP PDO Veritabanı Kütüphanesi**
+## 📚 **nsql - Modern PHP PDO Veritabanı Kütüphanesi**
 
-**nsql**, PHP ile veritabanı bağlantısı ve SQL işlemlerini güvenli, hızlı ve kolay bir şekilde yapmanıza olanak tanır. PDO kullanarak veritabanı işlemlerinizi optimize eder ve SQL enjeksiyonlarına karşı güvenliği artırır.
+**nsql**, PHP 7.4+ için tasarlanmış, modern, güvenli ve performanslı bir veritabanı kütüphanesidir. PDO kullanarak veritabanı işlemlerinizi optimize eder, SQL enjeksiyonlarına karşı koruma sağlar ve büyük veri setleri için memory-friendly çözümler sunar. Yapılandırılabilir, genişletilebilir ve debug-friendly yapısıyla hem küçük hem de orta ölçekli projeler için mükemmel bir çözümdür.
+
+### 📑 İçindekiler
+
+- [Öne Çıkan Özellikler](#-öne-çıkan-özellikler)
+- [Kurulum](#-kurulum)
+- [Yapılandırma](#-yapılandırma)
+- [Temel Kullanım](#-temel-kullanım)
+- [Güvenlik Özellikleri](#-güvenlik-özellikleri)
+- [Performans Optimizasyonları](#-performans-özellikleri)
+- [Debug ve Hata Yönetimi](#-debug-ve-hata-yönetimi)
+- [Büyük Veri İşleme](#-büyük-veri-işleme)
+- [Mimari Özellikler](#-mimari-özellikler)
+- [Katkıda Bulunma](#-katkıda-bulunma)
+- [Test](#-test)
+- [Lisans](#-lisans)
+
+### 🌟 Öne Çıkan Özellikler
+
+- Modern PHP 7.4.0+ özellikleri (type hinting, null coalescing, named arguments)
+- .env tabanlı yapılandırma sistemi
+- Güvenli parametre bağlama ve SQL injection koruması
+- XSS ve CSRF güvenlik araçları
+- Session güvenliği ve cookie koruması
+- Statement cache ve LRU önbellekleme
+- Memory-friendly generator desteği (büyük veri setleri için)
+- Gelişmiş debug ve loglama sistemi
+- Transaction yönetimi
+- Otomatik bağlantı yenileme
 
 ---
 
@@ -16,18 +44,54 @@ git clone https://github.com/ngunenc/nsql.git
 
 #### 2. Gereksinimler
 
-* PHP 7.4+ (PHP 8.0 veya daha yeni sürümler de önerilir)
-* PDO (PHP Data Objects) desteği
-* MySQL, MariaDB ya da destekleyen herhangi bir veritabanı
+* PHP 7.4.0 veya daha yeni
+* PDO PHP eklentisi
+* MySQL 5.7.8+ veya MariaDB 10.2+
+* PHP Eklentileri:
+  * pdo_mysql
+  * mbstring
+  * json
+  * openssl (CSRF token üretimi için)
+* Composer (opsiyonel, önerilir)
 
-#### 3. Bağlantı Ayarları
+#### Composer ile Kurulum
 
-Projenin **`pdo.php`** dosyasındaki veritabanı bağlantı ayarlarını aşağıdaki gibi yapılandırın:
+```bash
+composer require ngunenc/nsql
+```
 
-```php
-$dsn = 'mysql:host=localhost;dbname=veritabani_adiniz';
-$username = 'kullanici_adiniz';
-$password = 'sifreniz';
+veya `composer.json` dosyanıza ekleyin:
+
+```json
+{
+    "require": {
+        "ngunenc/nsql": "^1.0"
+    }
+}
+```
+
+#### 3. Yapılandırma
+
+1. Örnek yapılandırma dosyasını kopyalayın:
+```bash
+copy .env.example .env
+```
+
+2. `.env` dosyasını düzenleyin:
+```ini
+# Veritabanı Ayarları
+DB_HOST=localhost
+DB_NAME=veritabani_adi
+DB_USER=kullanici_adi
+DB_PASS=sifre
+DB_CHARSET=utf8mb4
+
+# Debug modu (true/false)
+DEBUG_MODE=false
+
+# Loglama ayarları
+LOG_FILE=error_log.txt
+STATEMENT_CACHE_LIMIT=100
 ```
 
 ---
@@ -36,11 +100,21 @@ $password = 'sifreniz';
 
 #### Veritabanı Bağlantısı
 
-`nsql` sınıfı ile veritabanı bağlantısı kurmak oldukça basittir:
+nsql sınıfını yapılandırma dosyasından veya özel parametrelerle başlatabilirsiniz:
 
 ```php
-require_once 'nsql.php';
-$db = new nsql('localhost', 'veritabani_adi', 'kullanici', 'sifre');
+// .env dosyasından yapılandırma ile
+require_once 'pdo.php';
+$db = new nsql();
+
+// veya özel parametrelerle
+$db = new nsql(
+    host: 'localhost',
+    db: 'veritabani_adi',
+    user: 'kullanici',
+    pass: 'sifre',
+    debug: true // Debug modu için
+);
 ```
 
 ## 📦 Temel Kullanım
@@ -74,9 +148,102 @@ echo $user->name;
 ### Çoklu Satır Getir (get\_results)
 
 ```php
-$users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
+$users = $db->get_results("SELECT * FROM users WHERE status = :status", [
+    'status' => 'active'
+]);
 foreach ($users as $user) {
     echo $user->email;
+}
+```
+
+### Büyük Veri Setleri İçin Generator (get\_yield)
+
+Memory dostu yaklaşım ile büyük veri setlerini işlemek için:
+
+```php
+foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
+    // Her satır tek tek işlenir, bellek şişmez
+    process($row);
+}
+```
+
+### Debug ve Loglama
+
+```php
+// Debug modunda detaylı sorgu bilgilerini görüntüle
+$db->debug();
+
+// Güvenli hata yönetimi
+$result = $db->safeExecute(function() use ($db) {
+    return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
+});
+```
+
+### Güvenlik Fonksiyonları
+
+```php
+// Güvenli oturum başlatma
+nsql::secureSessionStart();
+
+// CSRF koruması
+$token = nsql::generateCsrfToken();
+if (nsql::validateCsrfToken($_POST['token'])) {
+    // Form işleme
+}
+
+// XSS koruması
+echo nsql::escapeHtml($userInput);
+```
+
+### Transaction İşlemleri
+
+```php
+try {
+    $db->begin();
+    
+    // Sipariş oluştur
+    $db->insert(
+        "INSERT INTO orders (user_id, total_amount, status) VALUES (:user_id, :total, :status)",
+        [
+            'user_id' => $userId,
+            'total' => $totalAmount,
+            'status' => 'pending'
+        ]
+    );
+    $orderId = $db->insert_id();
+    
+    // Sipariş ürünlerini ekle
+    foreach ($items as $item) {
+        $db->insert(
+            "INSERT INTO order_items (order_id, product_id, quantity, price) 
+             VALUES (:order_id, :product_id, :quantity, :price)",
+            [
+                'order_id' => $orderId,
+                'product_id' => $item->id,
+                'quantity' => $item->quantity,
+                'price' => $item->price
+            ]
+        );
+        
+        // Stok güncelle
+        $db->update(
+            "UPDATE products 
+             SET stock = stock - :quantity 
+             WHERE id = :id AND stock >= :quantity",
+            [
+                'id' => $item->id,
+                'quantity' => $item->quantity
+            ]
+        );
+    }
+    
+    // Tüm işlemler başarılı, kaydet
+    $db->commit();
+    
+} catch (Exception $e) {
+    // Hata durumunda geri al
+    $db->rollback();
+    throw $e;
 }
 ```
 
@@ -133,93 +300,305 @@ $db->debug(); // Hatalı sorgularda otomatik olarak çalışır
 
 ---
 
-### 🛡️ Hata Yönetimi: safeExecute ve handleException Kullanımı
+### 🔍 Debug ve Hata Yönetimi
 
-Hataları güvenli şekilde yönetmek için `safeExecute` fonksiyonunu kullanabilirsiniz. Bu fonksiyon, hataları otomatik olarak loglar ve kullanıcıya sadece genel bir mesaj gösterir:
+#### Hata Kodları ve Çözümleri
+
+| Hata Kodu | Açıklama | Çözüm |
+|-----------|----------|--------|
+| 2006 | MySQL server has gone away | Bağlantı otomatik yenilenir |
+| 2013 | Lost connection to MySQL server | Bağlantı otomatik yenilenir |
+| 1045 | Access denied | Veritabanı kimlik bilgilerini kontrol edin |
+| 1049 | Unknown database | Veritabanının varlığını kontrol edin |
+| 1146 | Table doesn't exist | Tablo adını ve veritabanını kontrol edin |
+| 1062 | Duplicate entry | Benzersiz alan çakışması |
+
+#### Debug Modu
+
+Debug modunda aşağıdaki bilgileri görüntüleyebilirsiniz:
 
 ```php
+// Debug modu ile başlatma
+$db = new nsql(debug: true);
+
+// veya .env dosyasında
+DEBUG_MODE=true
+
+// Sorgu detaylarını görüntüleme
+$db->debug();
+```
+
+Debug çıktısı şunları içerir:
+- SQL sorgusu ve parametreleri
+- Hata mesajları (varsa)
+- Sonuç verisi (tablo formatında)
+- Query execution detayları
+
+#### Güvenli Hata Yönetimi
+
+```php
+// Hata yönetimi için safeExecute kullanımı
 $result = $db->safeExecute(function() use ($db) {
-    return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
-}, 'Bir hata oluştu, lütfen tekrar deneyin.');
+    return $db->get_row(
+        "SELECT * FROM users WHERE id = :id",
+        ['id' => 1]
+    );
+}, 'Kullanıcı bilgileri alınamadı.');
 
-if ($result) {
-    echo $result->name;
-}
+// Üretim ortamında: Genel hata mesajı gösterir
+// Geliştirme ortamında: Detaylı hata mesajı gösterir
 ```
 
-Geliştirme ortamında ayrıntılı hata görmek için debug modunu açabilirsiniz:
+#### Otomatik Loglama
 
-```php
-$db = new nsql('localhost', 'veritabani_adi', 'kullanici', 'sifre', 'utf8mb4', true); // Son parametre true ise debug mod açık
+Tüm SQL sorguları ve hatalar otomatik olarak log dosyasına kaydedilir:
+
+```ini
+# .env dosyasında log yapılandırması
+LOG_FILE=error_log.txt
 ```
 
-Ortam değişkenleri ile bağlantı bilgilerini güvenli şekilde yönetmek için:
-
-```php
-// .env dosyanıza veya sunucu ortam değişkenlerine aşağıdakileri ekleyin:
-// DB_DSN, DB_USER, DB_PASS
-// Kodda ise:
-$db = new nsql(); // Ortam değişkenleri otomatik kullanılır
+Log formatı:
+```
+[2025-05-21 10:30:15] SQL Sorgusu: SELECT * FROM users WHERE id = '1'
+Parametreler: {"id": 1}
 ```
 
 ---
 
-### 🔒 Tüm Güvenlik Fonksiyonlarının Birlikte Kullanımı (Örnek Akış)
+### 🔒 Güvenlik Özellikleri
 
-Aşağıda, CSRF, XSS, session güvenliği ve parametreli sorguların birlikte kullanıldığı örnek bir akış yer almaktadır:
+#### 1. Oturum Güvenliği
 
 ```php
+// Güvenli oturum başlatma
+nsql::secureSessionStart();
+
+// Özellikler:
+// - HttpOnly flag
+// - Secure flag (HTTPS'de)
+// - SameSite=Lax
+// - Session fixation koruması
+// - Otomatik ID yenileme
+```
+
+#### 2. CSRF Koruması
+
+```php
+// Token üretimi
+$token = nsql::generateCsrfToken();
+
+// Form içinde
+<input type="hidden" name="csrf_token" value="<?= nsql::escapeHtml($token) ?>">
+
+// Doğrulama
+if (!nsql::validateCsrfToken($_POST['csrf_token'] ?? '')) {
+    die('Güvenlik doğrulaması başarısız');
+}
+```
+
+#### 3. XSS Koruması
+
+```php
+// Güvenli HTML çıktısı
+echo nsql::escapeHtml($userInput);
+
+// veya blade/twig benzeri template sistemleri ile
+{{ $userInput }} // Otomatik escape
+{!! $userInput !!} // Raw HTML (güvenilir içerik için)
+```
+
+#### 4. SQL Injection Koruması
+
+```php
+// Güvenli parametre bağlama
+$db->get_row(
+    "SELECT * FROM users WHERE email = :email",
+    ['email' => $userInput]
+);
+
+// Otomatik tip kontrolü
+// - string: PDO::PARAM_STR
+// - integer: PDO::PARAM_INT
+// - null: PDO::PARAM_NULL
+```
+
+#### Tam Güvenlik Örneği
+
+```php
+<?php
 require_once 'pdo.php';
 
-nsql::secureSessionStart(); // Oturumu güvenli başlat
+// 1. Güvenli oturum başlat
+nsql::secureSessionStart();
 
-// CSRF token üret ve formda kullan
-$csrfToken = nsql::generateCsrfToken();
+// 2. CSRF token üret
+$token = nsql::generateCsrfToken();
 
+// 3. Form işleme
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!nsql::validateCsrfToken($_POST['csrf_token'] ?? '')) {
-        die('Geçersiz CSRF token');
+    // CSRF kontrolü
+    if (!nsql::validateCsrfToken($_POST['token'] ?? '')) {
+        die('Güvenlik doğrulaması başarısız');
     }
-    $db = new nsql();
-    $db->safeExecute(function() use ($db) {
-        $db->insert("INSERT INTO users (name, email) VALUES (:name, :email)", [
-            'name' => $_POST['name'],
-            'email' => $_POST['email']
-        ]);
-    }, 'Kayıt sırasında bir hata oluştu.');
+    
+    // Güvenli veritabanı işlemi
+    $db = new nsql(debug: true);
+    $db->safeExecute(function() use ($db, $_POST) {
+        return $db->insert(
+            "INSERT INTO users (name, email) VALUES (:name, :email)",
+            [
+                'name' => $_POST['name'],
+                'email' => $_POST['email']
+            ]
+        );
+    }, 'Kayıt işlemi başarısız');
 }
 ?>
+
+<!-- 4. Güvenli form -->
 <form method="post">
-    <input type="text" name="name" required>
-    <input type="email" name="email" required>
-    <input type="hidden" name="csrf_token" value="<?= nsql::escapeHtml($csrfToken) ?>">
+    <input name="name" value="<?= nsql::escapeHtml($name ?? '') ?>">
+    <input name="email" type="email">
+    <input type="hidden" name="token" value="<?= nsql::escapeHtml($token) ?>">
     <button type="submit">Kaydet</button>
 </form>
 ```
 
 ---
 
-### 🛡️ SQL Injection ve Parametre Güvenliği
+### ⚡ Performans Özellikleri
 
-- Tüm sorgularda parametre bağlama (bind) zorunlu tutulur, doğrudan string birleştirme ile sorgu çalıştırılamaz.
-- Statement cache anahtarı, sadece SQL sorgusuna göre değil, parametrelerin yapısına ve tipine göre oluşturulur. Böylece farklı parametrelerle yapılan sorguların karışması ve güvenlik açığı oluşması engellenir.
-- Sadece int, float, string ve null tipinde parametreler kabul edilir. Dizi, obje veya beklenmeyen tipte parametreler kullanılırsa hata fırlatılır.
-- Parametre bağlama işlemi PDO'nun uygun tipleriyle otomatik olarak yapılır.
-
-Bu sayede SQL Injection riskleri minimize edilir ve parametre güvenliği üst düzeye çıkarılır.
-
-#### Kullanım Örneği
+#### 1. Statement Cache
 
 ```php
-// Güvenli parametreli sorgu örneği
-$sql = "SELECT * FROM users WHERE email = :email AND status = :status";
-$params = [
-    'email' => 'ali@example.com',
-    'status' => 'active'
-];
-$user = $db->get_row($sql, $params);
-if ($user) {
-    echo $user->name;
+# .env dosyasında cache limiti ayarı
+STATEMENT_CACHE_LIMIT=100
+
+# Cache nasıl çalışır:
+- SQL + parametre yapısı için benzersiz anahtar üretilir
+- Hazırlanmış sorgular önbelleklenir
+- LRU (Least Recently Used) algoritması ile cache yönetilir
+- Otomatik cache temizleme
+```
+
+#### 2. Memory-Friendly Veri İşleme
+
+```php
+// Büyük veri setleri için generator
+foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
+    // Her satır tek tek işlenir
+    // Bellek kullanımı sabit kalır
+}
+
+// vs. tüm veriyi belleğe yükleme
+$rows = $db->get_results("SELECT * FROM big_table", []); // Bellek şişebilir
+```
+
+#### 3. Bağlantı Yönetimi
+
+```php
+// Otomatik bağlantı kontrolü
+$db->ensureConnection();
+
+// Kopuk bağlantı tespiti
+// Yeniden bağlanma denemesi
+// Maximum yeniden deneme sayısı
+private int $retryLimit = 2;
+```
+
+#### 4. Transaction Optimizasyonu
+
+```php
+// Atomik işlemler için transaction
+$db->begin();
+try {
+    // Çoklu sorgu
+    $db->insert(...);
+    $db->update(...);
+    $db->commit();
+} catch (Exception $e) {
+    $db->rollback();
+}
+```
+
+### 🤝 Katkıda Bulunma
+
+1. Bu depoyu fork edin
+2. Feature branch'inizi oluşturun (`git checkout -b feature/AmazingFeature`)
+3. Değişikliklerinizi commit edin (`git commit -m 'Add some AmazingFeature'`)
+4. Branch'inizi push edin (`git push origin feature/AmazingFeature`)
+5. Bir Pull Request oluşturun
+
+#### Kod Standartları
+
+- PSR-12 kod standardını takip edin
+- Tüm yeni özellikler için PHPDoc yazın
+- Tüm yeni özellikler için test yazın
+- SOLID prensiplerini gözetin
+
+### 📝 Test
+
+```bash
+# Unit testleri çalıştır (henüz implement edilmedi)
+composer test
+
+# Kod stil kontrolü
+composer check-style
+
+# Statik analiz
+composer analyse
+```
+
+### 📄 Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+
+### 📦 Mimari Özellikler
+
+#### 1. Modern PHP Yapısı
+
+```php
+// Type hinting
+private PDO $pdo;
+private string $lastQuery;
+private ?string $lastError;
+
+// Named arguments
+$db = new nsql(
+    debug: true,
+    host: 'localhost'
+);
+
+// Nullable types
+public function get_row(string $sql, array $params): ?object
+```
+
+#### 2. Yapılandırılabilir Tasarım
+
+```php
+# .env ile yapılandırma
+DB_HOST=localhost
+DB_NAME=mydb
+DEBUG_MODE=true
+
+# veya constructor ile
+$db = new nsql(
+    host: getenv('DB_HOST'),
+    debug: true
+);
+```
+
+#### 3. Genişletilebilir Yapı
+
+```php
+class MyDB extends nsql {
+    public function findById($table, $id) {
+        return $this->get_row(
+            "SELECT * FROM $table WHERE id = :id",
+            ['id' => $id]
+        );
+    }
 }
 ```
 
