@@ -25,10 +25,12 @@
 - XSS ve CSRF güvenlik araçları
 - Session güvenliği ve cookie koruması
 - Statement cache ve LRU önbellekleme
+- Query cache ile sorgu sonuçları önbellekleme
+- Connection Pool ile bağlantı havuzu yönetimi
 - Memory-friendly generator desteği (büyük veri setleri için)
 - Gelişmiş debug ve loglama sistemi
 - Transaction yönetimi
-- Otomatik bağlantı yenileme
+- Otomatik bağlantı yenileme ve retry mekanizması
 
 ---
 
@@ -85,6 +87,16 @@ DB_NAME=veritabani_adi
 DB_USER=kullanici_adi
 DB_PASS=sifre
 DB_CHARSET=utf8mb4
+
+# Connection Pool Ayarları
+DB_MIN_CONNECTIONS=2
+DB_MAX_CONNECTIONS=10
+DB_HEALTH_CHECK_INTERVAL=60
+
+# Query Cache Ayarları
+QUERY_CACHE_ENABLED=true
+QUERY_CACHE_TIMEOUT=300
+QUERY_CACHE_SIZE_LIMIT=1000
 
 # Debug modu (true/false)
 DEBUG_MODE=false
@@ -165,6 +177,33 @@ foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
     // Her satır tek tek işlenir, bellek şişmez
     process($row);
 }
+```
+
+### Query Cache Kullanımı
+
+Query Cache özelliği, sık kullanılan sorguların sonuçlarını önbellekte tutarak performansı artırır:
+
+```php
+// Cache otomatik olarak aktiftir (.env'de QUERY_CACHE_ENABLED=true ise)
+$users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
+// İkinci çağrıda sonuç cache'den gelir
+$users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
+
+// Cache'i manuel temizleme
+$db->clearQueryCache();
+```
+
+### Connection Pool Kullanımı
+
+Connection Pool, veritabanı bağlantılarını yönetir ve performansı artırır:
+
+```php
+// Pool istatistiklerini görüntüleme
+$stats = nsql::getPoolStats();
+print_r($stats);
+
+// Pool otomatik olarak yönetilir, manuel müdahale gerekmez
+// Min ve max bağlantı sayıları .env dosyasından ayarlanır
 ```
 
 ### Debug ve Loglama
@@ -275,6 +314,62 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 
 ---
 
+## 🚀 Performans Özellikleri
+
+### Connection Pool
+- Verimli bağlantı yönetimi
+- Minimum ve maksimum bağlantı sayısı kontrolü
+- Otomatik bağlantı sağlığı kontrolü
+- İstatistik izleme ve raporlama
+
+### Query Cache
+- Sorgu sonuçları önbellekleme
+- Yapılandırılabilir önbellek süresi
+- Otomatik önbellek temizleme
+- Boyut limitli LRU önbellekleme
+
+### Statement Cache
+- Hazırlanmış sorguları önbellekleme
+- LRU (Least Recently Used) algoritması
+- Otomatik boyut yönetimi
+- Performans optimizasyonu
+
+### Memory Management
+- Generator kullanarak büyük veri setleri için bellek optimizasyonu
+- Önbellek boyut limitleri
+- Otomatik temizleme mekanizmaları
+
+## 🔒 Güvenlik Özellikleri
+
+### SQL Injection Koruması
+- PDO prepared statements
+- Parametre tip kontrolü
+- Güvenli parametre bağlama
+
+### XSS Koruması
+- HTML çıktı temizleme
+- escapeHtml() yardımcı fonksiyonu
+- Güvenli veri gösterimi
+
+### CSRF Koruması
+- Token tabanlı koruma
+- Otomatik token yenileme
+- Token doğrulama sistemi
+
+### Session Güvenliği
+- Güvenli session başlatma
+- Session fixation koruması
+- Güvenli cookie ayarları
+- Session ID yenileme
+
+### Hata Yönetimi
+- Üretim/Geliştirme modu ayrımı
+- Detaylı hata loglama
+- Güvenli hata mesajları
+- try-catch wrapper
+
+---
+
 ### 🧠 Yeni Özellikler
 
 ### SQL Sabitlerini Otomatik Parametreye Çevirme
@@ -366,297 +461,49 @@ Parametreler: {"id": 1}
 
 ---
 
-### 🔒 Güvenlik Özellikleri
+### 🧪 Test
 
-#### 1. Oturum Güvenliği
-
+### Unit Tests
 ```php
-// Güvenli oturum başlatma
-nsql::secureSessionStart();
+// tests/nsqlTest.php
+class nsqlTest extends PHPUnit\Framework\TestCase
+{
+    private $db;
 
-// Özellikler:
-// - HttpOnly flag
-// - Secure flag (HTTPS'de)
-// - SameSite=Lax
-// - Session fixation koruması
-// - Otomatik ID yenileme
-```
-
-#### 2. CSRF Koruması
-
-```php
-// Token üretimi
-$token = nsql::generateCsrfToken();
-
-// Form içinde
-<input type="hidden" name="csrf_token" value="<?= nsql::escapeHtml($token) ?>">
-
-// Doğrulama
-if (!nsql::validateCsrfToken($_POST['csrf_token'] ?? '')) {
-    die('Güvenlik doğrulaması başarısız');
-}
-```
-
-#### 3. XSS Koruması
-
-```php
-// Güvenli HTML çıktısı
-echo nsql::escapeHtml($userInput);
-
-// veya blade/twig benzeri template sistemleri ile
-{{ $userInput }} // Otomatik escape
-{!! $userInput !!} // Raw HTML (güvenilir içerik için)
-```
-
-#### 4. SQL Injection Koruması
-
-```php
-// Güvenli parametre bağlama
-$db->get_row(
-    "SELECT * FROM users WHERE email = :email",
-    ['email' => $userInput]
-);
-
-// Otomatik tip kontrolü
-// - string: PDO::PARAM_STR
-// - integer: PDO::PARAM_INT
-// - null: PDO::PARAM_NULL
-```
-
-#### Tam Güvenlik Örneği
-
-```php
-<?php
-require_once 'pdo.php';
-
-// 1. Güvenli oturum başlat
-nsql::secureSessionStart();
-
-// 2. CSRF token üret
-$token = nsql::generateCsrfToken();
-
-// 3. Form işleme
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // CSRF kontrolü
-    if (!nsql::validateCsrfToken($_POST['token'] ?? '')) {
-        die('Güvenlik doğrulaması başarısız');
-    }
-    
-    // Güvenli veritabanı işlemi
-    $db = new nsql(debug: true);
-    $db->safeExecute(function() use ($db, $_POST) {
-        return $db->insert(
-            "INSERT INTO users (name, email) VALUES (:name, :email)",
-            [
-                'name' => $_POST['name'],
-                'email' => $_POST['email']
-            ]
-        );
-    }, 'Kayıt işlemi başarısız');
-}
-?>
-
-<!-- 4. Güvenli form -->
-<form method="post">
-    <input name="name" value="<?= nsql::escapeHtml($name ?? '') ?>">
-    <input name="email" type="email">
-    <input type="hidden" name="token" value="<?= nsql::escapeHtml($token) ?>">
-    <button type="submit">Kaydet</button>
-</form>
-```
-
----
-
-### ⚡ Performans Özellikleri
-
-#### 1. Statement Cache
-
-```php
-# .env dosyasında cache limiti ayarı
-STATEMENT_CACHE_LIMIT=100
-
-# Cache nasıl çalışır:
-- SQL + parametre yapısı için benzersiz anahtar üretilir
-- Hazırlanmış sorgular önbelleklenir
-- LRU (Least Recently Used) algoritması ile cache yönetilir
-- Otomatik cache temizleme
-```
-
-#### 2. Memory-Friendly Veri İşleme
-
-```php
-// Büyük veri setleri için generator
-foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
-    // Her satır tek tek işlenir
-    // Bellek kullanımı sabit kalır
-}
-
-// vs. tüm veriyi belleğe yükleme
-$rows = $db->get_results("SELECT * FROM big_table", []); // Bellek şişebilir
-```
-
-#### 3. Connection Pool ve Bağlantı Yönetimi
-
-```php
-// Connection Pool yapılandırması (.env dosyasında)
-DB_MIN_CONNECTIONS=2              # Minimum bağlantı sayısı
-DB_MAX_CONNECTIONS=10            # Maximum bağlantı sayısı
-DB_HEALTH_CHECK_INTERVAL=60      # Sağlık kontrolü sıklığı (saniye)
-DB_CONNECTION_TIMEOUT=30         # Bağlantı zaman aşımı
-DB_READ_WRITE_SPLIT=true        # Read-Write ayrımı
-DB_POOL_LOG_FILE=pool_log.txt   # Bağlantı havuzu log dosyası
-
-// Read-Write Split kullanımı
-$db->getMasterConnection(); // Yazma işlemleri için
-$db->getSlaveConnection();  // Okuma işlemleri için
-
-// Bağlantı havuzu sağlık kontrolü
-$health = nsql::checkPoolHealth();
-/*
-Array(
-    'healthy' => 5,      // Sağlıklı bağlantı sayısı
-    'unhealthy' => 1,    // Sorunlu bağlantı sayısı
-    'total' => 6         // Toplam bağlantı sayısı
-)
-*/
-
-// Detaylı istatistikler
-$stats = nsql::getPoolDetailedStats();
-/*
-Array(
-    'write_pool' => [
-        'available' => 2,
-        'in_use' => 1,
-        'total' => 3
-    ],
-    'read_pool' => [
-        'available' => 3,
-        'in_use' => 2,
-        'total' => 5
-    ],
-    'health' => [
-        'last_check' => '2025-05-21 10:30:00',
-        'next_check' => '2025-05-21 10:31:00'
-    ],
-    'connection_age' => [
-        'oldest' => 3600,  // saniye
-        'newest' => 60,    // saniye
-        'average' => 1830  // saniye
-    ]
-)
-*/
-
-// Bağlantı havuzu istatistiklerini görüntüleme
-$stats = nsql::getPoolStats();
-/*
-Array(
-    'pool_size' => 3,    // Havuzdaki boş bağlantı sayısı
-    'in_use' => 2,       // Kullanımda olan bağlantı sayısı
-    'total' => 5,        // Toplam bağlantı sayısı
-    'max' => 10          // Maximum bağlantı limiti
-)
-*/
-
-// Otomatik bağlantı yönetimi
-- Bağlantılar otomatik havuzlanır
-- Kopuk bağlantılar tespit edilir
-- Eski bağlantılar temizlenir (30 dk kullanılmayan)
-- Minimum bağlantı sayısı korunur
-```
-
-#### 4. Transaction Optimizasyonu
-
-```php
-// Atomik işlemler için transaction
-$db->begin();
-try {
-    // Çoklu sorgu
-    $db->insert(...);
-    $db->update(...);
-    $db->commit();
-} catch (Exception $e) {
-    $db->rollback();
-}
-```
-
-### 🤝 Katkıda Bulunma
-
-1. Bu depoyu fork edin
-2. Feature branch'inizi oluşturun (`git checkout -b feature/AmazingFeature`)
-3. Değişikliklerinizi commit edin (`git commit -m 'Add some AmazingFeature'`)
-4. Branch'inizi push edin (`git push origin feature/AmazingFeature`)
-5. Bir Pull Request oluşturun
-
-#### Kod Standartları
-
-- PSR-12 kod standardını takip edin
-- Tüm yeni özellikler için PHPDoc yazın
-- Tüm yeni özellikler için test yazın
-- SOLID prensiplerini gözetin
-
-### 📝 Test
-
-```bash
-# Unit testleri çalıştır (henüz implement edilmedi)
-composer test
-
-# Kod stil kontrolü
-composer check-style
-
-# Statik analiz
-composer analyse
-```
-
-### 📄 Lisans
-
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
-
-### 📦 Mimari Özellikler
-
-#### 1. Modern PHP Yapısı
-
-```php
-// Type hinting
-private PDO $pdo;
-private string $lastQuery;
-private ?string $lastError;
-
-// Named arguments
-$db = new nsql(
-    debug: true,
-    host: 'localhost'
-);
-
-// Nullable types
-public function get_row(string $sql, array $params): ?object
-```
-
-#### 2. Yapılandırılabilir Tasarım
-
-```php
-# .env ile yapılandırma
-DB_HOST=localhost
-DB_NAME=mydb
-DEBUG_MODE=true
-
-# veya constructor ile
-$db = new nsql(
-    host: getenv('DB_HOST'),
-    debug: true
-);
-```
-
-#### 3. Genişletilebilir Yapı
-
-```php
-class MyDB extends nsql {
-    public function findById($table, $id) {
-        return $this->get_row(
-            "SELECT * FROM $table WHERE id = :id",
-            ['id' => $id]
+    protected function setUp(): void
+    {
+        $this->db = new nsql(
+            host: 'localhost',
+            db: 'test_db',
+            user: 'test_user',
+            pass: 'test_pass'
         );
     }
+
+    public function testQueryCache()
+    {
+        $result1 = $this->db->get_results("SELECT * FROM test_table");
+        $result2 = $this->db->get_results("SELECT * FROM test_table");
+        $this->assertEquals($result1, $result2);
+    }
+
+    public function testConnectionPool()
+    {
+        $stats = nsql::getPoolStats();
+        $this->assertArrayHasKey('active_connections', $stats);
+        $this->assertArrayHasKey('idle_connections', $stats);
+    }
 }
+```
+
+### Test Çalıştırma
+
+```powershell
+# PHPUnit ile testleri çalıştır
+./vendor/bin/phpunit tests/
+
+# Belirli bir test sınıfını çalıştır
+./vendor/bin/phpunit tests/nsqlTest.php
 ```
 
 ---
@@ -806,24 +653,45 @@ $db->debug();
 
 ---
 
-### 🛠️ **Yardım ve Katkı**
+## 👥 Katkıda Bulunma
 
-Eğer bu proje hakkında sorularınız varsa ya da katkı sağlamak isterseniz, [GitHub Repository'sine](https://github.com/ngunenc/nsql) göz atabilirsiniz.
+1. Bu depoyu fork edin
+2. Feature branch'inizi oluşturun (`git checkout -b feature/AmazingFeature`)
+3. Değişikliklerinizi commit edin (`git commit -m 'Add some AmazingFeature'`)
+4. Branch'inizi push edin (`git push origin feature/AmazingFeature`)
+5. Pull Request oluşturun
 
-Pull request'ler her zaman memnuniyetle karşılanır! 😊
+### Kod Standartları
+- PSR-12 kod standartlarına uyun
+- PHPDoc ile dökümantasyon ekleyin
+- Unit testler ekleyin
+- Performans ve güvenlik göz önünde bulundurun
+
+## 📝 Sürüm Geçmişi
+
+- v1.1.0
+  - Query Cache özelliği eklendi
+  - Connection Pool desteği eklendi
+  - Gelişmiş debug sistemi
+  - Performans iyileştirmeleri
+
+- v1.0.0
+  - İlk kararlı sürüm
+  - Temel PDO wrapper fonksiyonları
+  - Statement cache
+  - Güvenlik özellikleri
+
+## 📄 Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE](LICENSE) dosyasına bakın.
+
+## 🙏 Teşekkürler
+
+- PDO topluluğu
+- Katkıda bulunan tüm geliştiriciler
+- Bug report eden kullanıcılar
 
 ---
 
-### 📄 **Lisans**
-
-Bu proje MIT Lisansı ile lisanslanmıştır. Daha fazla bilgi için `LICENSE` dosyasını inceleyebilirsiniz.
-
----
-
-### 🎯 **Özellikler**
-
-* Veritabanı bağlantısı ve sorgu işlemleri için güvenlikli ve hızlı bir yapı.
-* Veritabanı hata yönetimi ve hata mesajları ile birlikte debug özellikleri.
-* Parametreli sorgular için otomatik güvenlik desteği.
-* SQL enjeksiyonlarına karşı koruma sağlayan PDO kullanımı.
-* Sorgu önbellekleme ile performans iyileştirmesi.
+Geliştirici: [Nurullah Günenç](https://github.com/ngunenc)
+Son Güncelleme: 22 Mayıs 2025
