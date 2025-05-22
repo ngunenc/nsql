@@ -619,7 +619,7 @@ HTML;
                 foreach ($this->lastResults as $row) {
                     echo "<tr>";
                     foreach ((array)$row as $value) {
-                        $displayValue = is_null($value) ? '<em>NULL</em>' : 
+                        $displayValue = is_null($value) ? '-' : 
                                     (is_array($value) || is_object($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value);
                         echo "<td>" . htmlspecialchars($displayValue) . "</td>";
                     }
