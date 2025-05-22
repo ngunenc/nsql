@@ -22,6 +22,7 @@ class nsql extends PDO {
     private array $statementCacheUsage = []; // LRU için kullanım sırası
     private static bool $poolInitialized = false;
     private static array $poolConfig = [];
+    private string $lastCalledMethod = '';
     
     /**
      * Sorgu önbelleği
@@ -277,6 +278,7 @@ class nsql extends PDO {
     }
 
     private function executeQuery(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->setLastCalledMethod();
         $this->ensureConnection();
         $this->lastQuery = $sql;
         $this->lastParams = $params;
@@ -347,10 +349,12 @@ class nsql extends PDO {
     }
 
     public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->setLastCalledMethod();
         return $this->executeQuery($query, [], $fetchMode, ...$fetchModeArgs);
     }
     
     public function insert(string $sql, array $params = []): bool {
+        $this->setLastCalledMethod();
         $this->lastResults = [];
         $this->lastInsertId = 0;
 
@@ -363,6 +367,7 @@ class nsql extends PDO {
     }
 
     public function get_row(string $query, array $params = []): ?object {
+        $this->setLastCalledMethod();
         $cacheKey = $this->generateQueryCacheKey($query, $params);
         
         $cached = $this->getFromQueryCache($cacheKey);
@@ -384,6 +389,7 @@ class nsql extends PDO {
     }
     
     public function get_results(string $query, array $params = []): array {
+        $this->setLastCalledMethod();
         $cacheKey = $this->generateQueryCacheKey($query, $params);
         
         $cached = $this->getFromQueryCache($cacheKey);
@@ -403,6 +409,7 @@ class nsql extends PDO {
     }
     
     public function get_yield(string $query, array $params = []): Generator {
+        $this->setLastCalledMethod();
         $stmt = $this->executeQuery($query, $params);
         if ($stmt === false) {
             return;
@@ -414,11 +421,13 @@ class nsql extends PDO {
     }
 
     public function update(string $sql, array $params = []): bool {
+        $this->setLastCalledMethod();
         $this->lastResults = [];
         return $this->executeQuery($sql, $params) !== false;
     }
 
     public function delete(string $sql, array $params = []): bool {
+        $this->setLastCalledMethod();
         $this->lastResults = [];
         return $this->executeQuery($sql, $params) !== false;
     }
@@ -463,6 +472,11 @@ class nsql extends PDO {
      *
      * @return void
      */
+    private function setLastCalledMethod(): void {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+        $this->lastCalledMethod = $trace[1]['function'] ?? 'unknown';
+    }
+
     public function debug(): void {
         if (!$this->debugMode) {
             echo '<div style="color:red;font-weight:bold;">Debug modu kapalı! Detaylı sorgu ve hata bilgisi için nsql nesnesini debug modda başlatın.</div>';
@@ -478,15 +492,14 @@ class nsql extends PDO {
         }
 
         $debugMessage = sprintf(
-            "SQL Sorgusu: %s\nParametreler: %s\n%s",
+            "Çalıştırılan Metod: %s\nSQL Sorgusu: %s\nParametreler: %s\n%s",
+            $this->lastCalledMethod,
             $query,
             $paramsJson,
             $this->lastError ? "Hata: {$this->lastError}\n" : ''
         );
 
-        $this->logError($debugMessage);
-
-        echo <<<HTML
+        $this->logError($debugMessage);        echo <<<HTML
         <style>
             .nsql-debug {
                 font-family: monospace;
@@ -497,6 +510,16 @@ class nsql extends PDO {
                 border-radius: 8px;
                 max-width: 100%;
                 overflow-x: auto;
+            }
+            .method-header {
+                background: #4a90e2;
+                color: white;
+                padding: 12px 16px;
+                border-radius: 6px;
+                margin-bottom: 16px;
+                font-size: 18px;
+                font-weight: bold;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             .nsql-debug h4 {
                 margin: 0 0 8px;
@@ -512,6 +535,15 @@ class nsql extends PDO {
                 overflow-x: auto;
                 white-space: pre-wrap;
                 word-wrap: break-word;
+            }
+            .nsql-debug .method-info {
+                background: #e8f5e9;
+                border: 1px solid #c8e6c9;
+                color: #2e7d32;
+                padding: 10px;
+                margin: 8px 0;
+                border-radius: 5px;
+                font-weight: bold;
             }
             .nsql-debug table {
                 border-collapse: collapse;
@@ -556,6 +588,7 @@ class nsql extends PDO {
             }
         </style>
         <div class="nsql-debug">
+        <div class="method-info">🔧 Çalıştırılan Metod: {$this->lastCalledMethod}</div>
 HTML;
 
         if ($this->lastError) {
