@@ -1,5 +1,11 @@
 <?php
 
+namespace Nsql\Database;
+
+use PDO;
+use PDOException;
+use RuntimeException;
+
 class ConnectionPool {
     private static array $pool = [];
     private static array $readPool = [];  // Sadece okuma için bağlantılar
