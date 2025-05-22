@@ -495,16 +495,73 @@ foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
 $rows = $db->get_results("SELECT * FROM big_table", []); // Bellek şişebilir
 ```
 
-#### 3. Bağlantı Yönetimi
+#### 3. Connection Pool ve Bağlantı Yönetimi
 
 ```php
-// Otomatik bağlantı kontrolü
-$db->ensureConnection();
+// Connection Pool yapılandırması (.env dosyasında)
+DB_MIN_CONNECTIONS=2              # Minimum bağlantı sayısı
+DB_MAX_CONNECTIONS=10            # Maximum bağlantı sayısı
+DB_HEALTH_CHECK_INTERVAL=60      # Sağlık kontrolü sıklığı (saniye)
+DB_CONNECTION_TIMEOUT=30         # Bağlantı zaman aşımı
+DB_READ_WRITE_SPLIT=true        # Read-Write ayrımı
+DB_POOL_LOG_FILE=pool_log.txt   # Bağlantı havuzu log dosyası
 
-// Kopuk bağlantı tespiti
-// Yeniden bağlanma denemesi
-// Maximum yeniden deneme sayısı
-private int $retryLimit = 2;
+// Read-Write Split kullanımı
+$db->getMasterConnection(); // Yazma işlemleri için
+$db->getSlaveConnection();  // Okuma işlemleri için
+
+// Bağlantı havuzu sağlık kontrolü
+$health = nsql::checkPoolHealth();
+/*
+Array(
+    'healthy' => 5,      // Sağlıklı bağlantı sayısı
+    'unhealthy' => 1,    // Sorunlu bağlantı sayısı
+    'total' => 6         // Toplam bağlantı sayısı
+)
+*/
+
+// Detaylı istatistikler
+$stats = nsql::getPoolDetailedStats();
+/*
+Array(
+    'write_pool' => [
+        'available' => 2,
+        'in_use' => 1,
+        'total' => 3
+    ],
+    'read_pool' => [
+        'available' => 3,
+        'in_use' => 2,
+        'total' => 5
+    ],
+    'health' => [
+        'last_check' => '2025-05-21 10:30:00',
+        'next_check' => '2025-05-21 10:31:00'
+    ],
+    'connection_age' => [
+        'oldest' => 3600,  // saniye
+        'newest' => 60,    // saniye
+        'average' => 1830  // saniye
+    ]
+)
+*/
+
+// Bağlantı havuzu istatistiklerini görüntüleme
+$stats = nsql::getPoolStats();
+/*
+Array(
+    'pool_size' => 3,    // Havuzdaki boş bağlantı sayısı
+    'in_use' => 2,       // Kullanımda olan bağlantı sayısı
+    'total' => 5,        // Toplam bağlantı sayısı
+    'max' => 10          // Maximum bağlantı limiti
+)
+*/
+
+// Otomatik bağlantı yönetimi
+- Bağlantılar otomatik havuzlanır
+- Kopuk bağlantılar tespit edilir
+- Eski bağlantılar temizlenir (30 dk kullanılmayan)
+- Minimum bağlantı sayısı korunur
 ```
 
 #### 4. Transaction Optimizasyonu

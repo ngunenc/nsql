@@ -1,9 +1,10 @@
 <?php
 
 require_once 'Config.php';
+require_once 'ConnectionPool.php';
 
 class nsql {
-    private PDO $pdo;
+    private ?PDO $pdo = null;
     private string $lastQuery = '';
     private array $lastParams = [];
     private array $lastResults = [];
@@ -19,7 +20,9 @@ class nsql {
     private string $logFile;
     private int $statementCacheLimit;
     private array $statementCacheUsage = []; // LRU için kullanım sırası
-
+    private static bool $poolInitialized = false;
+    private static array $poolConfig = [];
+    
     public function __construct(
         ?string $host = null,
         ?string $db = null,
@@ -48,15 +51,49 @@ class nsql {
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
 
+        // Connection Pool yapılandırması
+        if (!self::$poolInitialized) {
+            self::$poolConfig = [
+                'dsn' => $this->dsn,
+                'username' => $this->user,
+                'password' => $this->pass,
+                'options' => $this->options
+            ];
+            
+            ConnectionPool::initialize(
+                self::$poolConfig,
+                Config::get('DB_MIN_CONNECTIONS', 2),
+                Config::get('DB_MAX_CONNECTIONS', 10)
+            );
+            
+            self::$poolInitialized = true;
+        }
+
         $this->connect();
     }
 
     private function connect(): void {
         try {
-            $this->pdo = new PDO($this->dsn, $this->user, $this->pass, $this->options);
+            $this->pdo = ConnectionPool::getConnection();
         } catch (PDOException $e) {
             throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
         }
+    }
+    
+    private function disconnect(): void {
+        if ($this->pdo !== null) {
+            ConnectionPool::releaseConnection($this->pdo);
+            $this->pdo = null;
+        }
+    }
+    
+    public function __destruct() {
+        $this->disconnect();
+    }
+    
+    // Connection Pool istatistiklerini almak için yeni metod
+    public static function getPoolStats(): array {
+        return ConnectionPool::getStats();
     }
 
     private function logError(string $message): void {

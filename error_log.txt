@@ -78,3 +78,51 @@ Parametreler: {
     "id": 1
 }
 
+[2025-05-21 10:50:02] SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-21 10:50:02] SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-21 10:50:02] SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-21 10:50:02] SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-21 11:42:28] SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-21 11:42:28] SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-21 11:42:28] SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-21 11:42:28] SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-21 12:19:00] SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-21 12:19:00] SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-21 12:19:00] SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-21 12:19:00] SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
