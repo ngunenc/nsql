@@ -526,3 +526,143 @@ Parametreler: {
     "id": 1
 }
 
+[2025-05-22 20:48:41] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:41] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:41] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 20:48:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 20:48:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 21:35:59] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 21:35:59] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 21:35:59] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 21:35:59] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 21:36:00] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 21:36:00] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from sayfalar
+Parametreler: []
+
+[2025-05-22 21:36:00] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-22 21:36:00] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+

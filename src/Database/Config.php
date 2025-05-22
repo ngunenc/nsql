@@ -1,5 +1,9 @@
 <?php
 
+namespace Nsql\Database;
+
+use RuntimeException;
+
 class Config {
     private static array $config = [];
     private static bool $loaded = false;
@@ -16,7 +20,7 @@ class Config {
             return;
         }
 
-        $envFile = __DIR__ . '/.env';
+        $envFile = __DIR__ . '/../../.env';
         
         if (!file_exists($envFile)) {
             throw new RuntimeException('.env dosyası bulunamadı. Lütfen .env.example dosyasını .env olarak kopyalayın ve yapılandırın.');

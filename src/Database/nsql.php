@@ -1,7 +1,18 @@
 <?php
 
-require_once 'Config.php';
-require_once 'ConnectionPool.php';
+namespace Nsql\Database;
+
+require_once __DIR__ . '/Config.php';
+require_once __DIR__ . '/ConnectionPool.php';
+
+use PDO;
+use PDOException;
+use PDOStatement;
+use RuntimeException;
+use InvalidArgumentException;
+use Exception;
+use Throwable;
+use Generator;
 
 class nsql extends PDO {
     private ?PDO $pdo = null;
