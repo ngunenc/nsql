@@ -4,6 +4,13 @@ class Config {
     private static array $config = [];
     private static bool $loaded = false;
 
+    /**
+     * Sorgu önbelleği ayarları
+     */
+    const QUERY_CACHE_ENABLED = true;
+    const QUERY_CACHE_TIMEOUT = 300; // 5 dakika
+    const QUERY_CACHE_SIZE_LIMIT = 1000; // maksimum önbellekte tutulacak sorgu sayısı
+
     public static function load(): void {
         if (self::$loaded) {
             return;
