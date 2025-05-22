@@ -19,7 +19,7 @@
 
 ### 🌟 Öne Çıkan Özellikler
 
-- Modern PHP 7.4.0+ özellikleri (type hinting, null coalescing, named arguments)
+- Modern PHP 8.0+ özellikleri (type hinting, named arguments, attributes, union types)
 - .env tabanlı yapılandırma sistemi
 - Güvenli parametre bağlama ve SQL injection koruması
 - XSS ve CSRF güvenlik araçları
@@ -46,7 +46,7 @@ git clone https://github.com/ngunenc/nsql.git
 
 #### 2. Gereksinimler
 
-* PHP 7.4.0 veya daha yeni
+* PHP 8.0 veya daha yeni
 * PDO PHP eklentisi
 * MySQL 5.7.8+ veya MariaDB 10.2+
 * PHP Eklentileri:
@@ -54,7 +54,7 @@ git clone https://github.com/ngunenc/nsql.git
   * mbstring
   * json
   * openssl (CSRF token üretimi için)
-* Composer (opsiyonel, önerilir)
+* Composer (önerilir)
 
 #### Composer ile Kurulum
 
@@ -395,8 +395,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 ### PHP Sürüm Uyumluluğu
 | nsql Sürümü | PHP Minimum | PHP Maksimum | Notlar |
 |-------------|-------------|--------------|---------|
-| 1.0.x       | 7.4.0      | 8.3.x        | Tam destek |
-| 1.1.x       | 7.4.0      | 8.4.x        | Tam destek |
+| 1.0.x       | 8.0.0      | 8.3.x        | Tam destek |
+| 1.1.x       | 8.0.0      | 8.4.x        | Tam destek |
 
 ### Veritabanı Uyumluluğu
 | Veritabanı     | Minimum Sürüm | Önerilen Sürüm |
