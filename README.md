@@ -370,6 +370,42 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 
 ---
 
+## 🏗️ Mimari Özellikler
+
+### Katmanlı Mimari
+- **Config Katmanı**: Yapılandırma yönetimi (`Config.php`)
+- **Bağlantı Katmanı**: Veritabanı bağlantı havuzu yönetimi (`ConnectionPool.php`)
+- **Core Katmanı**: Ana veritabanı işlemleri (`pdo.php`)
+- **Güvenlik Katmanı**: XSS, CSRF ve Session güvenliği
+- **Cache Katmanı**: Query ve Statement önbellekleme
+
+### Tasarım Prensipleri
+- SOLID prensipleri
+- DRY (Don't Repeat Yourself)
+- KISS (Keep It Simple, Stupid)
+- Separation of Concerns
+
+### Genişletilebilirlik
+- Plugin sistemi desteği
+- Olay (Event) sistemi
+- Custom handler desteği
+
+## 📊 Sürüm Matrisi ve Uyumluluk
+
+### PHP Sürüm Uyumluluğu
+| nsql Sürümü | PHP Minimum | PHP Maksimum | Notlar |
+|-------------|-------------|--------------|---------|
+| 1.0.x       | 7.4.0      | 8.3.x        | Tam destek |
+| 1.1.x       | 7.4.0      | 8.4.x        | Tam destek |
+
+### Veritabanı Uyumluluğu
+| Veritabanı     | Minimum Sürüm | Önerilen Sürüm |
+|----------------|---------------|----------------|
+| MySQL          | 5.7.8        | 8.0+          |
+| MariaDB        | 10.2         | 10.6+         |
+
+---
+
 ### 🧠 Yeni Özellikler
 
 ### SQL Sabitlerini Otomatik Parametreye Çevirme
@@ -693,5 +729,5 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE
 
 ---
 
-Geliştirici: [Nurullah Günenç](https://github.com/ngunenc)
+Geliştirici: [Necip Günenç](https://github.com/ngunenc)
 Son Güncelleme: 22 Mayıs 2025
