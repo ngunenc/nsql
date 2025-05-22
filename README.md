@@ -1,6 +1,6 @@
-## 📚 **nsql - Modern PHP PDO Veritabanı Kütüphanesi**
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi
 
-**nsql**, PHP 7.4+ için tasarlanmış, modern, güvenli ve performanslı bir veritabanı kütüphanesidir. PDO kullanarak veritabanı işlemlerinizi optimize eder, SQL enjeksiyonlarına karşı koruma sağlar ve büyük veri setleri için memory-friendly çözümler sunar. Yapılandırılabilir, genişletilebilir ve debug-friendly yapısıyla hem küçük hem de orta ölçekli projeler için mükemmel bir çözümdür.
+**nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve performanslı bir veritabanı kütüphanesidir. PDO kullanarak veritabanı işlemlerinizi optimize eder, SQL enjeksiyonlarına karşı koruma sağlar ve büyük veri setleri için memory-friendly çözümler sunar.
 
 ### 📑 İçindekiler
 
