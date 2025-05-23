@@ -1,42 +1,43 @@
 # 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi
 
-**nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve performanslı bir veritabanı kütüphanesidir. PDO kullanarak veritabanı işlemlerinizi optimize eder, SQL enjeksiyonlarına karşı koruma sağlar ve büyük veri setleri için memory-friendly çözümler sunar.
+**nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve performanslı bir veritabanı kütüphanesidir. PDO kullanarak veritabanı işlemlerinizi optimize eder, SQL enjeksiyonlarına karşı koruma sağlar ve büyük veri setleri için hafıza dostu çözümler sunar.
 
-### 📑 İçindekiler
+## 📑 İçindekiler
 
-- [Öne Çıkan Özellikler](#-öne-çıkan-özellikler)
+- [Özellikler](#-özellikler)
 - [Kurulum](#-kurulum)
-- [Yapılandırma](#-yapılandırma)
-- [Temel Kullanım](#-temel-kullanım)
-- [Güvenlik Özellikleri](#-güvenlik-özellikleri)
-- [Performans Optimizasyonları](#-performans-özellikleri)
-- [Debug ve Hata Yönetimi](#-debug-ve-hata-yönetimi)
-- [Büyük Veri İşleme](#-büyük-veri-işleme)
-- [Mimari Özellikler](#-mimari-özellikler)
-- [Katkıda Bulunma](#-katkıda-bulunma)
-- [Test](#-test)
-- [Lisans](#-lisans)
+- [Kullanım](#-kullanım)
+- [Güvenlik](#-güvenlik)
+- [Performans](#-performans)
+- [Örnekler](#-örnekler)
 
-### 🌟 Öne Çıkan Özellikler
+## 🌟 Özellikler
 
-- Modern PHP 8.0+ özellikleri (type hinting, named arguments, attributes, union types)
-- .env tabanlı yapılandırma sistemi
-- Güvenli parametre bağlama ve SQL injection koruması
-- XSS ve CSRF güvenlik araçları
-- Session güvenliği ve cookie koruması
-- Statement cache ve LRU önbellekleme
-- Query cache ile sorgu sonuçları önbellekleme
-- Connection Pool ile bağlantı havuzu yönetimi
-- Memory-friendly generator desteği (büyük veri setleri için)
-- Gelişmiş debug ve loglama sistemi
-- Transaction yönetimi
-- Otomatik bağlantı yenileme ve retry mekanizması
+- **Güvenlik**
+  - SQL injection koruması
+  - XSS ve CSRF güvenlik önlemleri
+  - Güvenli oturum yönetimi
+  - Parametre tipi doğrulama
 
----
+- **Performans**
+  - Statement önbellekleme (LRU algoritması)
+  - Sorgu sonuçları önbellekleme
+  - Connection Pool ile bağlantı yönetimi
+  - Generator desteği ile düşük hafıza kullanımı
 
-### 🔧 **Kurulum**
+- **Kullanım Kolaylığı**
+  - Akıcı (fluent) arayüz tasarımı
+  - Otomatik bağlantı yönetimi
+  - Detaylı hata ayıklama araçları
+  - Kapsamlı loglama sistemi
 
-#### 1. GitHub'dan Projeyi İndirin
+## 🔧 Kurulum
+
+### Gereksinimler
+
+- PHP 8.0+
+- PDO PHP eklentisi
+- MySQL 5.7+ veya MariaDB 10+
 
 Projeyi GitHub üzerinden indirebilir ya da kendi projelerinize `composer` kullanarak dahil edebilirsiniz.
 
@@ -44,61 +45,148 @@ Projeyi GitHub üzerinden indirebilir ya da kendi projelerinize `composer` kulla
 git clone https://github.com/ngunenc/nsql.git
 ```
 
-#### 2. Gereksinimler
-
-* PHP 8.0 veya daha yeni
-* PDO PHP eklentisi
-* MySQL 5.7.8+ veya MariaDB 10.2+
-* PHP Eklentileri:
-  * pdo_mysql
-  * mbstring
-  * json
-  * openssl (CSRF token üretimi için)
-* Composer (önerilir)
-
-#### Composer ile Kurulum
+### Composer ile Kurulum
 
 ```bash
 composer require ngunenc/nsql
 ```
 
-veya `composer.json` dosyanıza ekleyin:
+## 📖 Kullanım
 
-```json
-{
-    "require": {
-        "ngunenc/nsql": "^1.0"
-    }
+### Temel Bağlantı
+
+```php
+use Nsql\Database\nsql;
+
+// Basit bağlantı
+$db = new nsql();
+
+// veya özel parametrelerle
+$db = new nsql(
+    host: 'localhost',
+    db: 'veritabani',
+    user: 'kullanici',
+    pass: 'sifre',
+    charset: 'utf8mb4',
+    debug: true
+);
+```
+
+### Veri Sorgulama
+
+```php
+// Tek satır getirme
+$kullanici = $db->get_row("SELECT * FROM kullanicilar WHERE id = :id", ['id' => 1]);
+
+// Çoklu satır getirme
+$kullanicilar = $db->get_results("SELECT * FROM kullanicilar");
+
+// Generator ile büyük veri setleri
+foreach ($db->get_yield("SELECT * FROM buyuk_tablo") as $row) {
+    // Hafıza dostu işlemler
 }
 ```
 
-#### 3. Yapılandırma
+### Veri Manipülasyonu
 
-1. Örnek yapılandırma dosyasını kopyalayın:
-```bash
-copy .env.example .env
+```php
+// Ekleme
+$db->insert("INSERT INTO kullanicilar (ad, email) VALUES (:ad, :email)", [
+    'ad' => 'Ahmet',
+    'email' => 'ahmet@ornek.com'
+]);
+$son_id = $db->insert_id();
+
+// Güncelleme
+$db->update("UPDATE kullanicilar SET ad = :ad WHERE id = :id", [
+    'ad' => 'Mehmet',
+    'id' => 1
+]);
+
+// Silme
+$db->delete("DELETE FROM kullanicilar WHERE id = :id", ['id' => 1]);
 ```
 
-2. `.env` dosyasını düzenleyin:
-```ini
-# Veritabanı Ayarları
-DB_HOST=localhost
-DB_NAME=veritabani_adi
-DB_USER=kullanici_adi
-DB_PASS=sifre
-DB_CHARSET=utf8mb4
+### Transaction Kullanımı
 
-# Connection Pool Ayarları
-DB_MIN_CONNECTIONS=2
-DB_MAX_CONNECTIONS=10
-DB_HEALTH_CHECK_INTERVAL=60
+```php
+try {
+    $db->begin();
+    
+    // İşlemler...
+    
+    $db->commit();
+} catch (Exception $e) {
+    $db->rollback();
+    // Hata yönetimi
+}
+```
 
-# Query Cache Ayarları
-QUERY_CACHE_ENABLED=true
-QUERY_CACHE_TIMEOUT=300
-QUERY_CACHE_SIZE_LIMIT=1000
+## 🛡️ Güvenlik
 
-# Debug modu (true/false)
+### CSRF Koruması
+
+```php
+// Token üretme
+$token = nsql::generateCsrfToken();
+
+// Token doğrulama
+if (nsql::validateCsrfToken($_POST['token'])) {
+    // Güvenli işlem
+}
+```
+
+### XSS Koruması
+
+```php
+$guvenli_metin = nsql::escapeHtml($kullanici_girisi);
+```
+
+## 🚀 Performans
+
+### Statement Cache
+
+Sık kullanılan sorgular için otomatik önbellekleme yapılır ve LRU (Least Recently Used) algoritması ile yönetilir.
+
+### Connection Pool
+
+Bağlantılar havuzda tutulur ve gerektiğinde yeniden kullanılır, böylece performans artışı sağlanır.
+
+### Debug Modu
+
+```php
+$db = new nsql(debug: true);
+
+// Sorgu çalıştır
+$db->get_results("SELECT * FROM tablo");
+
+// Debug bilgilerini görüntüle
+$db->debug();
+```
+
+## 📝 Örnekler
+
+### Güvenli Oturum Yönetimi
+
+```php
+// Güvenli oturum başlatma
+nsql::secureSessionStart();
+
+// Oturum ID'sini yenileme
+nsql::regenerateSessionId();
+```
+
+### Hata Yönetimi
+
+```php
+$db->safeExecute(function() use ($db) {
+    return $db->get_results("SELECT * FROM tablo");
+}, "Veriler alınırken bir hata oluştu");
+```
+
+## 📜 Lisans
+
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakınız.
 DEBUG_MODE=false
 
 # Loglama ayarları
