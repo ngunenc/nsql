@@ -1,6 +1,6 @@
 <?php
 
-namespace Nsql\nsql;
+namespace Nsql\Database;
 
 require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/ConnectionPool.php';
