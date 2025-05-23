@@ -43,6 +43,17 @@ class nsql extends PDO {
     private $queryCacheTimeout;
     private $queryCacheSizeLimit;
 
+    /**
+     * Query Builder oluşturur
+     * 
+     * @param string|null $table Tablo adı (opsiyonel)
+     * @return QueryBuilder
+     */
+    public function table(?string $table = null): QueryBuilder {
+        $builder = new QueryBuilder($this);
+        return $table ? $builder->table($table) : $builder;
+    }
+
     private function initializeConnection(): void {
         try {
             $this->pdo = ConnectionPool::getConnection();
@@ -599,7 +610,6 @@ class nsql extends PDO {
             }
         </style>
         <div class="nsql-debug">
-        <div class="method-info">🔧 Çalıştırılan Metod: {$this->lastCalledMethod}</div>
 HTML;
 
         if ($this->lastError) {
