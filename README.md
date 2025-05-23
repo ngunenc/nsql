@@ -1,15 +1,38 @@
 # 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi
 
-**nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve performanslı bir veritabanı kütüphanesidir. PDO kullanarak veritabanı işlemlerinizi optimize eder, SQL enjeksiyonlarına karşı koruma sağlar ve büyük veri setleri için hafıza dostu çözümler sunar.
+**nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
 ## 📑 İçindekiler
 
 - [Özellikler](#-özellikler)
+- [Proje Yapısı](#-proje-yapısı)
 - [Kurulum](#-kurulum)
 - [Kullanım](#-kullanım)
 - [Güvenlik](#-güvenlik)
 - [Performans](#-performans)
 - [Örnekler](#-örnekler)
+
+## 📂 Proje Yapısı
+
+```
+nsql/
+├── src/
+│   └── Database/
+│       ├── Config.php        # Yapılandırma yönetimi
+│       ├── ConnectionPool.php # Bağlantı havuzu yönetimi
+│       ├── nsql.php         # Ana PDO wrapper sınıfı
+│       └── QueryBuilder.php  # SQL sorgu oluşturucu
+├── vendor/                  # Composer bağımlılıkları
+├── composer.json           # Composer yapılandırması
+├── error_log.txt          # Hata logları
+└── README.md              # Dokümantasyon
+```
+
+### Sınıf Yapısı
+- **Config**: Yapılandırma yönetimi ve ortam değişkenleri
+- **ConnectionPool**: Veritabanı bağlantı havuzu ve optimizasyon
+- **nsql**: PDO wrapper ve temel veritabanı işlemleri
+- **QueryBuilder**: Akıcı arayüz ile SQL sorgu oluşturma
 
 ## 🌟 Özellikler
 
@@ -49,6 +72,25 @@ git clone https://github.com/ngunenc/nsql.git
 
 ```bash
 composer require ngunenc/nsql
+```
+
+veya `composer.json` dosyanıza ekleyin:
+
+```json
+{
+    "require": {
+        "ngunenc/nsql": "^1.1",
+        "php": ">=8.0",
+        "ext-pdo": "*",
+        "ext-json": "*"
+    }
+}
+```
+
+ve ardından:
+
+```bash
+composer install
 ```
 
 ## 📖 Kullanım
@@ -210,7 +252,7 @@ $db = new nsql();
 // veya özel parametrelerle
 $db = new nsql(
     host: 'localhost',
-    db: 'veritabani_adi',
+    db: 'veritabanı_adi',
     user: 'kullanici',
     pass: 'sifre',
     debug: true // Debug modu için
@@ -427,28 +469,36 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 - Önbellek boyut limitleri
 - Otomatik temizleme mekanizmaları
 
-## 🔒 Güvenlik Özellikleri
+## 🔒 Güvenlik ve Performans
 
-### SQL Injection Koruması
-- PDO prepared statements
-- Parametre tip kontrolü
-- Güvenli parametre bağlama
+### Güvenlik Özellikleri
+- **SQL Injection Koruması**
+  - PDO prepared statements
+  - Parametre tip kontrolü ve validasyonu
+  - Otomatik parametre bağlama
+- **XSS ve CSRF Koruması**
+  - HTML çıktı temizleme (`escapeHtml()`)
+  - Token tabanlı CSRF koruması
+  - Otomatik token yenileme
+- **Oturum Güvenliği**
+  - Güvenli session başlatma ve yönetimi
+  - Session fixation koruması
+  - HttpOnly, Secure ve SameSite cookie ayarları
+  - Otomatik session ID rotasyonu
 
-### XSS Koruması
-- HTML çıktı temizleme
-- escapeHtml() yardımcı fonksiyonu
-- Güvenli veri gösterimi
-
-### CSRF Koruması
-- Token tabanlı koruma
-- Otomatik token yenileme
-- Token doğrulama sistemi
-
-### Session Güvenliği
-- Güvenli session başlatma
-- Session fixation koruması
-- Güvenli cookie ayarları
-- Session ID yenileme
+### Performans Optimizasyonları
+- **Bağlantı Yönetimi**
+  - Connection Pool ile verimli kaynak kullanımı
+  - Otomatik bağlantı sağlığı kontrolü
+  - Bağlantı sayısı optimizasyonu
+- **Önbellekleme Sistemleri**
+  - Statement Cache (LRU algoritması)
+  - Query Cache ile sorgu sonuçları önbellekleme
+  - Otomatik önbellek temizleme
+- **Bellek Optimizasyonu**
+  - Generator desteği ile düşük bellek kullanımı
+  - Büyük veri setleri için streaming
+  - Otomatik garbage collection
 
 ### Hata Yönetimi
 - Üretim/Geliştirme modu ayrımı
@@ -483,8 +533,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 ### PHP Sürüm Uyumluluğu
 | nsql Sürümü | PHP Minimum | PHP Maksimum | Notlar |
 |-------------|-------------|--------------|---------|
-| 1.0.x       | 8.0.0      | 8.3.x        | Tam destek |
-| 1.1.x       | 8.0.0      | 8.4.x        | Tam destek |
+| 1.0.x       | 8.0.0      | 8.2.x        | Tam destek |
+| 1.1.x       | 8.0.0      | 8.3.x        | Tam destek |
 
 ### Veritabanı Uyumluluğu
 | Veritabanı     | Minimum Sürüm | Önerilen Sürüm |
@@ -588,11 +638,15 @@ Parametreler: {"id": 1}
 ### 🧪 Test
 
 ### Unit Tests
+
+Testler PHPUnit ile yazılmıştır. Test sınıfları `tests` dizini altında bulunmaktadır.
+
+#### Test Sınıfı Örneği
+
 ```php
-// tests/nsqlTest.php
-class nsqlTest extends PHPUnit\Framework\TestCase
+class NsqlTest extends TestCase
 {
-    private $db;
+    private ?nsql $db = null;
 
     protected function setUp(): void
     {
@@ -604,20 +658,36 @@ class nsqlTest extends PHPUnit\Framework\TestCase
         );
     }
 
-    public function testQueryCache()
+    public function testCRUD()
     {
-        $result1 = $this->db->get_results("SELECT * FROM test_table");
-        $result2 = $this->db->get_results("SELECT * FROM test_table");
-        $this->assertEquals($result1, $result2);
-    }
-
-    public function testConnectionPool()
-    {
-        $stats = nsql::getPoolStats();
-        $this->assertArrayHasKey('active_connections', $stats);
-        $this->assertArrayHasKey('idle_connections', $stats);
+        // Insert test
+        $id = $this->db->insert(
+            "INSERT INTO test_table (name) VALUES (:name)",
+            ['name' => 'Test Name']
+        );
+        $this->assertIsInt($id);
+        
+        // Read test
+        $row = $this->db->get_row(
+            "SELECT * FROM test_table WHERE id = :id",
+            ['id' => $id]
+        );
+        $this->assertEquals('Test Name', $row->name);
     }
 }
+```
+
+#### Test Çalıştırma
+
+```powershell
+# Tüm testleri çalıştır
+./vendor/bin/phpunit tests
+
+# Belirli bir test sınıfını çalıştır
+./vendor/bin/phpunit tests/NsqlTest.php
+
+# Belirli bir test metodunu çalıştır
+./vendor/bin/phpunit --filter testCRUD tests/NsqlTest.php
 ```
 
 ### Test Çalıştırma
@@ -728,8 +798,8 @@ foreach ($db->get_yield("SELECT * FROM cok_buyuk_tablo", []) as $row) {
 - **get_yield()**: Sonuçları generator ile satır satır döndürür, belleği şişirmez. Çok büyük veri setlerinde (10.000+ satır veya 10 MB üzeri) kullanılması önerilir. Özellikle milyonlarca satırlık sorgularda PHP'nin memory_limit sınırına takılmadan güvenle çalışır.
 
 #### Pratik Sınır ve Tavsiye
-- 10.000 satıra kadar veya toplamda 10 MB altı veri için `get_results()` kullanabilirsiniz.
-- 10.000 satırdan fazla veya büyük veri setlerinde (50 MB ve üzeri) `get_yield()` kullanmak daha güvenlidir.
+- 10.000 satıra kadar veya toplamda 10 MB altı veri için `get_results` kullanabilirsiniz.
+- 10.000 satırdan fazla veya büyük veri setlerinde (50 MB ve üzeri) `get_yield` kullanmak daha güvenlidir.
 - Sınır, sunucunuzun RAM kapasitesine ve PHP memory_limit ayarına göre değişebilir. Kendi ortamınızda test ederek en iyi sonucu bulabilirsiniz.
 
 > **Not:** `get_yield()` ile alınan sonuçlar debug() ile toplu olarak gösterilmez, sadece foreach ile satır satır işlenir. `get_results()` ise debug() ile tablo halinde gösterilir.
@@ -818,4 +888,27 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE
 ---
 
 Geliştirici: [Necip Günenç](https://github.com/ngunenc)
-Son Güncelleme: 22 Mayıs 2025
+Son Güncelleme: 24 Mayıs 2025
+
+## 🎯 Planlanan Özellikler
+
+### v1.2.0 - Q3 2025
+- PostgreSQL desteği
+- SQLite desteği
+- Query Builder geliştirmeleri
+
+### v1.3.0 - Q4 2025
+- Redis önbellek entegrasyonu
+- Migration sistemi
+- Şema validasyonu
+
+### v1.4.0 - Q1 2026
+- Otomatik backup sistemi
+- CLI araçları
+- Docker desteği
+
+### v2.0.0 - 2026
+- Tam ORM desteği
+- NoSQL adaptörleri
+- Event sistemi
+- Plugin sistemi
