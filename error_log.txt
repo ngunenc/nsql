@@ -991,3 +991,801 @@ Parametreler: {
     "id": 1
 }
 
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:18] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:53] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:30:54] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:42] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:43] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:44] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:45] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:46] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:40:48] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:28] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:29] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = 'Necip GÜNENÇ' LIMIT 1
+Parametreler: {
+    "tam_isim": "Necip GÜNENÇ"
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT * FROM kullanicilar
+Parametreler: []
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-24 16:42:30] Çalıştırılan Metod: executeQuery
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+

@@ -1,9 +1,9 @@
 <?php
 
-namespace Nsql\Database;
+namespace nsql\database;
 
-require_once __DIR__ . '/Config.php';
-require_once __DIR__ . '/ConnectionPool.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/connectionpool.php';
 
 use PDO;
 use PDOException;

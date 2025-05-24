@@ -1,6 +1,6 @@
 <?php
 
-namespace Nsql\Database;
+namespace nsql\database;
 
 use RuntimeException;
 
