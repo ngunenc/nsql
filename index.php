@@ -2,7 +2,7 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use Nsql\Database\nsql;
+use nsql\database\nsql;
 
 // Debug modu açık olarak veritabanı bağlantısı
 $db = new nsql(debug: true);

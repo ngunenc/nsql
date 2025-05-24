@@ -2,10 +2,10 @@
 
 namespace Tests;
 
-use Nsql\Database\nsql;
+use nsql\database\nsql;
 use PHPUnit\Framework\TestCase;
 
-class NsqlTest extends TestCase
+class nsqltest extends TestCase
 {
     private ?nsql $db = null;
 
