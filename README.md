@@ -17,11 +17,11 @@
 ```
 nsql/
 ├── src/
-│   └── Database/
-│       ├── Config.php        # Yapılandırma yönetimi
-│       ├── ConnectionPool.php # Bağlantı havuzu yönetimi
+│   └── database/
+│       ├── config.php        # Yapılandırma yönetimi
+│       ├── connectionpool.php # Bağlantı havuzu yönetimi
 │       ├── nsql.php         # Ana PDO wrapper sınıfı
-│       └── QueryBuilder.php  # SQL sorgu oluşturucu
+│       └── querybuilder.php  # SQL sorgu oluşturucu
 ├── vendor/                  # Composer bağımlılıkları
 ├── composer.json           # Composer yapılandırması
 ├── error_log.txt          # Hata logları
@@ -29,10 +29,10 @@ nsql/
 ```
 
 ### Sınıf Yapısı
-- **Config**: Yapılandırma yönetimi ve ortam değişkenleri
-- **ConnectionPool**: Veritabanı bağlantı havuzu ve optimizasyon
+- **config**: Yapılandırma yönetimi ve ortam değişkenleri
+- **connectionpool**: Veritabanı bağlantı havuzu ve optimizasyon
 - **nsql**: PDO wrapper ve temel veritabanı işlemleri
-- **QueryBuilder**: Akıcı arayüz ile SQL sorgu oluşturma
+- **querybuilder**: Akıcı arayüz ile SQL sorgu oluşturma
 
 ## 🌟 Özellikler
 
@@ -98,7 +98,7 @@ composer install
 ### Temel Bağlantı
 
 ```php
-use Nsql\Database\nsql;
+use nsql\database\nsql;
 
 // Basit bağlantı
 $db = new nsql();
