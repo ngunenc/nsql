@@ -3,3 +3,4 @@ error_log.txt
 vendor/
 .idea/
 .vscode/
+backup/
