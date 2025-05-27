@@ -5,23 +5,45 @@ namespace Tests;
 use nsql\database\nsql;
 use PHPUnit\Framework\TestCase;
 
-class nsqltest extends TestCase
+class nsql_test extends TestCase
 {
     private ?nsql $db = null;
+    private static bool $migrated = false;
 
     protected function setUp(): void
     {
+        // Test ortamı için .env.testing dosyasını kullan
+        putenv('ENV=testing');
+        
         $this->db = new nsql(
-            host: 'localhost',
-            db: 'test_db',
-            user: 'test_user',
-            pass: 'test_pass'
+            host: getenv('DB_HOST') ?: 'localhost',
+            db: getenv('DB_NAME') ?: 'nsql_test_db',
+            user: getenv('DB_USER') ?: 'root',
+            pass: getenv('DB_PASS') ?: ''
         );
+
+        if (!self::$migrated) {
+            $this->runMigrations();
+            self::$migrated = true;
+        }
+    }
+
+    private function runMigrations(): void
+    {
+        try {
+            $migration = new \nsql\database\migrations\create_users_table();
+            $migration->up();
+        } catch (\Exception $e) {
+            $this->markTestSkipped('Migration failed: ' . $e->getMessage());
+        }
     }
 
     protected function tearDown(): void
     {
-        $this->db = null;
+        if ($this->db) {
+            $this->db->query('TRUNCATE TABLE users');
+            $this->db = null;
+        }
     }
 
     public function testConnection()
@@ -72,5 +94,24 @@ class nsqltest extends TestCase
             ['id' => $id]
         );
         $this->assertTrue($result);
+    }
+
+    public function testSecurity()
+    {
+        // XSS koruması testi
+        $input = '<script>alert("xss")</script>';
+        $escaped = nsql::escapeHtml($input);
+        $this->assertNotEquals($input, $escaped);
+        
+        // CSRF token testi
+        $token = nsql::generateCsrfToken();
+        $this->assertTrue(nsql::validateCsrfToken($token));
+        
+        // Şifreleme testi
+        $encryption = new \nsql\database\security\encryption();
+        $data = 'sensitive_data';
+        $encrypted = $encryption->encrypt($data);
+        $decrypted = $encryption->decrypt($encrypted);
+        $this->assertEquals($data, $decrypted);
     }
 }
