@@ -18,55 +18,95 @@
 nsql/
 ├── src/
 │   └── database/
-│       ├── config.php        # Yapılandırma yönetimi
-│       ├── connectionpool.php # Bağlantı havuzu yönetimi
-│       ├── nsql.php         # Ana PDO wrapper sınıfı
-│       └── querybuilder.php  # SQL sorgu oluşturucu
-├── vendor/                  # Composer bağımlılıkları
-├── composer.json           # Composer yapılandırması
-├── error_log.txt          # Hata logları
-└── README.md              # Dokümantasyon
+│       ├── config.php               # Yapılandırma yönetimi
+│       ├── connection_pool.php      # Bağlantı havuzu yönetimi
+│       ├── migration.php           # Migration arayüzü
+│       ├── migration_manager.php   # Migration yönetimi
+│       ├── nsql.php               # Ana PDO wrapper sınıfı
+│       ├── query_builder.php      # SQL sorgu oluşturucu
+│       ├── migrations/            # Migration dosyaları
+│       ├── schema/               # Şema validasyonu (v1.3.0)
+│       ├── security/             # Güvenlik bileşenleri
+│       │   ├── audit_logger.php   # Güvenlik log sistemi
+│       │   ├── encryption.php     # Şifreleme işlemleri
+│       │   ├── rate_limiter.php   # İstek sınırlama
+│       │   ├── security_manager.php # Güvenlik yönetimi
+│       │   └── sensitive_data_filter.php # Hassas veri filtresi
+│       ├── seeds/                # Seed dosyaları
+│       ├── templates/            # View şablonları
+│       └── traits/               # Trait sınıfları
+│           ├── cache_trait.php    # Önbellekleme işlemleri
+│           ├── connection_trait.php # Bağlantı yönetimi
+│           ├── debug_trait.php     # Hata ayıklama
+│           ├── query_parameter_trait.php # Sorgu parametreleri
+│           ├── statement_cache_trait.php # Statement önbellekleme
+│           └── transaction_trait.php # Transaction yönetimi
+├── tests/                      # Test dosyaları
+├── vendor/                    # Composer bağımlılıkları
+├── composer.json             # Composer yapılandırması
+└── README.md                # Dokümantasyon
 ```
 
 ### Sınıf Yapısı
-- **config**: Yapılandırma yönetimi ve ortam değişkenleri
-- **connectionpool**: Veritabanı bağlantı havuzu ve optimizasyon
+
+#### Temel Bileşenler
 - **nsql**: PDO wrapper ve temel veritabanı işlemleri
-- **querybuilder**: Akıcı arayüz ile SQL sorgu oluşturma
+- **config**: Yapılandırma yönetimi ve ortam değişkenleri
+- **connection_pool**: Veritabanı bağlantı havuzu ve optimizasyon
+- **query_builder**: Akıcı arayüz ile SQL sorgu oluşturma
+
+#### Güvenlik Bileşenleri
+- **security_manager**: Merkezi güvenlik yönetimi
+- **encryption**: Veri şifreleme ve çözme işlemleri
+- **rate_limiter**: İstek sınırlama ve DDoS koruması
+- **audit_logger**: Güvenlik olayları loglama
+- **sensitive_data_filter**: Hassas veri filtreleme
+
+#### Veritabanı Yönetimi
+- **migration_manager**: Veritabanı şema yönetimi
+- **migration**: Migration arayüzü tanımı
+- **seeds**: Test ve başlangıç verisi yönetimi
 
 ## 🌟 Özellikler
 
-- **Güvenlik**
-  - SQL injection koruması
-  - XSS ve CSRF güvenlik önlemleri
-  - Güvenli oturum yönetimi
-  - Parametre tipi doğrulama
+### Core Özellikler
+- PDO tabanlı veritabanı soyutlama
+- Akıcı (fluent) sorgu arayüzü
+- Otomatik bağlantı yönetimi
+- Transaction desteği
+- Migration sistemi
 
-- **Performans**
-  - Statement önbellekleme (LRU algoritması)
-  - Sorgu sonuçları önbellekleme
-  - Connection Pool ile bağlantı yönetimi
-  - Generator desteği ile düşük hafıza kullanımı
+### Güvenlik
+- SQL injection koruması (PDO prepared statements)
+- XSS ve CSRF koruma mekanizmaları
+- Güvenli oturum yönetimi ve cookie kontrolü
+- Rate limiting ve DDoS koruması
+- Hassas veri filtreleme ve şifreleme
+- Güvenlik olay loglaması
 
-- **Kullanım Kolaylığı**
-  - Akıcı (fluent) arayüz tasarımı
-  - Otomatik bağlantı yönetimi
-  - Detaylı hata ayıklama araçları
-  - Kapsamlı loglama sistemi
+### Performans
+- Connection Pool ile bağlantı yönetimi
+- Statement Cache (LRU algoritması)
+- Query Cache sistemi
+- Generator desteği ile düşük bellek kullanımı
+- Otomatik garbage collection
+
+### Geliştirici Araçları
+- Detaylı debug sistemi
+- Kapsamlı hata yönetimi
+- Komut satırı araçları (planlanan)
+- PHPUnit test desteği
+- PSR-12 kod standardı uyumluluğu
 
 ## 🔧 Kurulum
 
-### Gereksinimler
+### Sistem Gereksinimleri
 
 - PHP 8.0+
-- PDO PHP eklentisi
-- MySQL 5.7+ veya MariaDB 10+
-
-Projeyi GitHub üzerinden indirebilir ya da kendi projelerinize `composer` kullanarak dahil edebilirsiniz.
-
-```bash
-git clone https://github.com/ngunenc/nsql.git
-```
+- PDO PHP Eklentisi
+- JSON PHP Eklentisi
+- OpenSSL PHP Eklentisi (şifreleme için)
+- MySQL 5.7.8+ veya MariaDB 10.2+
 
 ### Composer ile Kurulum
 
@@ -74,23 +114,38 @@ git clone https://github.com/ngunenc/nsql.git
 composer require ngunenc/nsql
 ```
 
-veya `composer.json` dosyanıza ekleyin:
+### Manuel Kurulum
 
-```json
-{
-    "require": {
-        "ngunenc/nsql": "^1.1",
-        "php": ">=8.0",
-        "ext-pdo": "*",
-        "ext-json": "*"
-    }
-}
+1. Projeyi klonlayın:
+```bash
+git clone https://github.com/ngunenc/nsql.git
 ```
 
-ve ardından:
-
+2. Bağımlılıkları yükleyin:
 ```bash
 composer install
+```
+
+3. Yapılandırma dosyasını oluşturun:
+```bash
+cp .env.example .env
+```
+
+4. Veritabanı ayarlarını yapılandırın:
+```ini
+DB_HOST=localhost
+DB_NAME=database_name
+DB_USER=database_user
+DB_PASS=database_password
+DB_CHARSET=utf8mb4
+
+# Cache ayarları
+QUERY_CACHE_ENABLED=true
+STATEMENT_CACHE_LIMIT=100
+
+# Güvenlik ayarları
+RATE_LIMIT_ENABLED=true
+ENCRYPTION_KEY=your-secure-key
 ```
 
 ## 📖 Kullanım

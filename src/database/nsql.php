@@ -2,9 +2,6 @@
 
 namespace nsql\database;
 
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/connectionpool.php';
-
 use PDO;
 use PDOException;
 use PDOStatement;
@@ -13,52 +10,100 @@ use InvalidArgumentException;
 use Exception;
 use Throwable;
 use Generator;
+use nsql\database\traits\{
+    query_parameter_trait,
+    cache_trait,
+    debug_trait,
+    statement_cache_trait,
+    connection_trait,
+    transaction_trait
+};
 
 class nsql extends PDO {
+    use query_parameter_trait;
+    use cache_trait;
+    use debug_trait;
+    use statement_cache_trait;
+    use connection_trait;
+    use transaction_trait;
+
+    // Debug özellikleri
+    protected ?string $last_error = null;
+    protected string $last_query = '';
+    protected array $last_params = [];
+    protected string $last_called_method = 'unknown';
+    protected bool $debug_mode = false;
+    protected string $log_file = 'error_log.txt';
+
+    // Database bağlantı özellikleri
     private ?PDO $pdo = null;
-    private string $lastQuery = '';
-    private array $lastParams = [];
-    private array $lastResults = [];
-    private ?string $lastError = null;
-    private array $statementCache = [];
-    private int $lastInsertId = 0;
-    private string $dsn;
-    private string $user;
-    private string $pass;
-    private array $options;
-    private int $retryLimit = 2;
-    private bool $debugMode = false;
-    private string $logFile;
-    private int $statementCacheLimit;
-    private array $statementCacheUsage = []; // LRU için kullanım sırası
-    private static bool $poolInitialized = false;
-    private static array $poolConfig = [];
-    private string $lastCalledMethod = '';
+    private int $last_insert_id = 0;
+    private array $options = [];
+    private string $dsn = '';
+    private ?string $user = null;
+    private ?string $pass = null;
+    private int $retry_limit = 2;
+    private static bool $pool_initialized = false;
+    private static array $pool_config = [];
     
-    /**
-     * Sorgu önbelleği
-     */
-    private $queryCache = [];
-    private $queryCacheEnabled;
-    private $queryCacheTimeout;
-    private $queryCacheSizeLimit;
+    // Cache özellikleri
+    private array $query_cache = [];
+    private array $query_cache_usage = [];
+    private bool $query_cache_enabled = false;
+    private int $query_cache_timeout = 3600;
+    private int $query_cache_size_limit = 100;
+    
+    // Statement cache özellikleri
+    private array $statement_cache = [];
+    private array $statement_cache_usage = [];
+    private int $statement_cache_limit = 100;
+    
+    // Sorgu sonuçları
+    private array $last_results = [];
+
+    private static ?int $last_memory_check = null;
+    private static int $current_chunk_size;
+    private static array $memory_stats = [
+        'peak_usage' => 0,
+        'warning_count' => 0,
+        'critical_count' => 0
+    ];
 
     /**
      * Query Builder oluşturur
      * 
      * @param string|null $table Tablo adı (opsiyonel)
-     * @return QueryBuilder
+     * @return query_builder
      */
-    public function table(?string $table = null): QueryBuilder {
-        $builder = new QueryBuilder($this);
+    public function table(?string $table = null): query_builder {
+        $builder = new query_builder($this);
         return $table ? $builder->table($table) : $builder;
     }
 
-    private function initializeConnection(): void {
+    private function initialize_connection(): void {
         try {
-            $this->pdo = ConnectionPool::getConnection();
+            $this->pdo = connection_pool::get_connection();
         } catch (PDOException $e) {
             throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
+        }
+    }
+
+    private function initialize_pool(): void {
+        if (!self::$pool_initialized) {
+            self::$pool_config = [
+                'dsn' => $this->dsn,
+                'username' => $this->user,
+                'password' => $this->pass,
+                'options' => $this->options
+            ];
+
+            connection_pool::initialize(
+                self::$pool_config,
+                Config::get('DB_MIN_CONNECTIONS', 2),
+                Config::get('DB_MAX_CONNECTIONS', 10)
+            );
+            
+            self::$pool_initialized = true;
         }
     }
 
@@ -80,9 +125,9 @@ class nsql extends PDO {
         $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
         $this->user = $user;
         $this->pass = $pass;
-        $this->debugMode = $debug ?? Config::get('DEBUG_MODE', false);
-        $this->logFile = Config::get('LOG_FILE', 'error_log.txt');
-        $this->statementCacheLimit = Config::get('STATEMENT_CACHE_LIMIT', 100);
+        $this->debug_mode = $debug ?? Config::get('DEBUG_MODE', false);
+        $this->log_file = Config::get('LOG_FILE', 'error_log.txt');
+        $this->statement_cache_limit = Config::get('STATEMENT_CACHE_LIMIT', 100);
         
         $this->options = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -90,50 +135,16 @@ class nsql extends PDO {
             PDO::ATTR_EMULATE_PREPARES   => false,
         ];
 
-        // Connection Pool yapılandırması
-        if (!self::$poolInitialized) {
-            self::$poolConfig = [
-                'dsn' => $this->dsn,
-                'username' => $this->user,
-                'password' => $this->pass,
-                'options' => $this->options
-            ];
-            
-            ConnectionPool::initialize(
-                self::$poolConfig,
-                Config::get('DB_MIN_CONNECTIONS', 2),
-                Config::get('DB_MAX_CONNECTIONS', 10)
-            );
-            
-            self::$poolInitialized = true;
-        }
-
-        $this->initializeConnection();
-        $this->loadCacheConfig();
+        $this->initialize_pool();
+        $this->initialize_connection();
+        $this->load_cache_config();
     }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
-        if (!self::$poolInitialized) {
-            self::$poolConfig = [
-                'dsn' => $dsn,
-                'username' => $username,
-                'password' => $password,
-                'options' => $options ?? []
-            ];
-            
-            ConnectionPool::initialize(
-                self::$poolConfig,
-                Config::get('DB_MIN_CONNECTIONS', 2),
-                Config::get('DB_MAX_CONNECTIONS', 10)
-            );
-            
-            self::$poolInitialized = true;
-        }
-        
-        return new static(parse_url($dsn, PHP_URL_HOST), parse_url($dsn, PHP_URL_PATH), $username, $password);
+        return new static($dsn, $username, $password, $options);
     }
 
     private function disconnect(): void {
         if ($this->pdo !== null) {
-            ConnectionPool::releaseConnection($this->pdo);
+            connection_pool::release_connection($this->pdo);
             $this->pdo = null;
         }
     }
@@ -143,14 +154,14 @@ class nsql extends PDO {
     }
     
     // Connection Pool istatistiklerini almak için yeni metod
-    public static function getPoolStats(): array {
-        return ConnectionPool::getStats();
+    public static function get_pool_stats(): array {
+        return connection_pool::get_stats();
     }
 
-    private function logError(string $message): void {
+    private function log_error(string $message): void {
         $timestamp = date('Y-m-d H:i:s');
-        $logMessage = "[$timestamp] $message" . PHP_EOL;
-        file_put_contents($this->logFile, $logMessage, FILE_APPEND);
+        $log_message = "[$timestamp] $message" . PHP_EOL;
+        file_put_contents($this->log_file, $log_message, FILE_APPEND);
     }
 
     /**
@@ -161,9 +172,9 @@ class nsql extends PDO {
      * @param string $genericMessage Kullanıcıya gösterilecek genel mesaj (örn: "Bir hata oluştu.")
      * @return string Kullanıcıya gösterilecek mesaj
      */
-    public function handleException($e, string $genericMessage = 'Bir hata oluştu.'): string {
-        $this->logError($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
-        if ($this->debugMode) {
+    public function handle_exception($e, string $genericMessage = 'Bir hata oluştu.'): string {
+        $this->log_error($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
+        if ($this->debug_mode) {
             return $e->getMessage();
         } else {
             return $genericMessage;
@@ -178,47 +189,15 @@ class nsql extends PDO {
      * @param string $genericMessage
      * @return mixed
      */
-    public function safeExecute(callable $fn, string $genericMessage = 'Bir hata oluştu.') {
+    public function safe_execute(callable $fn, string $genericMessage = 'Bir hata oluştu.') {
         try {
             return $fn();
         } catch (Exception $e) {
-            echo $this->handleException($e, $genericMessage);
+            echo $this->handle_exception($e, $genericMessage);
             return null;
         } catch (Throwable $e) {
-            echo $this->handleException($e, $genericMessage);
+            echo $this->handle_exception($e, $genericMessage);
             return null;
-        }
-    }
-
-    /**
-     * Güvenli statement cache anahtarı oluşturucu
-     */
-    private function getStatementCacheKey(string $sql, array $params): string {
-        return md5($sql . '|' . serialize(array_keys($params)) . '|' . serialize(array_map('gettype', $params)));
-    }
-
-    /**
-     * Statement cache'e yeni bir anahtar ekler ve LRU algoritması ile sınırı korur.
-     */
-    private function addToStatementCache(string $key, $stmt): void {
-        $this->statementCache[$key] = $stmt;
-        $this->statementCacheUsage[$key] = microtime(true);
-        if (count($this->statementCache) > $this->statementCacheLimit) {
-            // En eski kullanılanı bul ve sil
-            asort($this->statementCacheUsage);
-            $oldestKey = array_key_first($this->statementCacheUsage);
-            unset($this->statementCache[$oldestKey], $this->statementCacheUsage[$oldestKey]);
-        }
-    }
-
-    /**
-     * Parametre tiplerini kontrol eder (sadece int, float, string, null kabul edilir)
-     */
-    private function validateParamTypes(array $params): void {
-        foreach ($params as $value) {
-            if (!is_int($value) && !is_float($value) && !is_string($value) && !is_null($value)) {
-                throw new InvalidArgumentException('Geçersiz parametre tipi: ' . gettype($value));
-            }
         }
     }
 
@@ -226,7 +205,7 @@ class nsql extends PDO {
      * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
      * @return void
      */
-    public function ensureConnection(): void {
+    public function ensure_connection(): void {
         try {
             $stmt = $this->pdo->query('SELECT 1');
             if ($stmt === false) {
@@ -240,7 +219,7 @@ class nsql extends PDO {
     /**
      * Güvenli oturum başlatma ve cookie ayarları
      */
-    public static function secureSessionStart(): void {
+    public static function secure_session_start(): void {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
             session_set_cookie_params([
@@ -263,7 +242,7 @@ class nsql extends PDO {
     /**
      * Oturum ID'sini güvenli şekilde yenile (isteğe bağlı olarak kullanılabilir)
      */
-    public static function regenerateSessionId(): void {
+    public static function regenerate_session_id(): void {
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_regenerate_id(true);
         }
@@ -272,14 +251,14 @@ class nsql extends PDO {
     /**
      * XSS koruması için HTML çıktısı kaçışlama fonksiyonu
      */
-    public static function escapeHtml($string): string {
+    public static function escape_html($string): string {
         return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
     }
 
     /**
      * Benzersiz CSRF token üretir ve oturuma kaydeder
      */
-    public static function generateCsrfToken(): string {
+    public static function generate_csrf_token(): string {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
@@ -292,38 +271,47 @@ class nsql extends PDO {
     /**
      * CSRF token doğrulaması yapar
      */
-    public static function validateCsrfToken($token): bool {
+    public static function validate_csrf_token($token): bool {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
         return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
     }
 
-    private function executeQuery(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
-        $this->setLastCalledMethod();
-        $this->ensureConnection();
-        $this->lastQuery = $sql;
-        $this->lastParams = $params;
-        $this->lastError = null;
+    private function execute_query(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->set_last_called_method();
+        $this->ensure_connection();
+        $this->last_query = $sql;
+        $this->last_params = $params;
+        $this->last_error = null; // Artık nullable string olduğu için sorun olmayacak
 
-        $this->validateParamTypes($params);
-        $cacheKey = $this->getStatementCacheKey($sql, $params);
+        $this->validate_param_types($params);
+        $cache_key = $this->get_statement_cache_key($sql, $params);
 
         $attempts = 0;
         do {
             try {
-                if (!isset($this->statementCache[$cacheKey])) {
+                if (!isset($this->statement_cache[$cache_key])) {
                     $stmt = $this->pdo->prepare($sql);
-                    $this->addToStatementCache($cacheKey, $stmt);
+                    $this->add_to_statement_cache($cache_key, $stmt);
                 } else {
-                    $stmt = $this->statementCache[$cacheKey];
+                    $stmt = $this->statement_cache[$cache_key];
                 }
                 
-                $this->statementCacheUsage[$cacheKey] = microtime(true);
+                $this->statement_cache_usage[$cache_key] = microtime(true);
 
-                foreach ($params as $key => $value) {
-                    $paramType = is_int($value) ? PDO::PARAM_INT : (is_null($value) ? PDO::PARAM_NULL : PDO::PARAM_STR);
-                    $stmt->bindValue(is_int($key) ? $key + 1 : ":$key", $value, $paramType);
+                // Parametreleri bağla
+                foreach ($params as $key => $param) {
+                    $param_name = is_int($key) ? ($key + 1) : (strpos($key, ':') === 0 ? $key : ":{$key}");
+                    
+                    if (is_array($param) && isset($param['value'], $param['type'])) {
+                        // Query Builder'dan gelen yapılandırılmış parametre
+                        $stmt->bindValue($param_name, $param['value'], $param['type']);
+                    } else {
+                        // Doğrudan değer olarak gelen parametre
+                        $param_type = $this->determine_param_type($param);
+                        $stmt->bindValue($param_name, $param, $param_type);
+                    }
                 }
 
                 if ($fetchMode !== null) {
@@ -332,20 +320,10 @@ class nsql extends PDO {
 
                 $stmt->execute();
                 
-                // Sorgu sonuçlarını lastResults'a kaydet
+                // Sorgu sonuçlarını last_results'a kaydet
+                // Sorgu sonuçlarını last_results'a kaydet (null fetch mode için)
                 if ($fetchMode === null) {
-                    $this->lastResults = $stmt->fetchAll(PDO::FETCH_OBJ);
-                    $stmt->closeCursor(); // Yeni sorgu için hazırla
-                    $stmt = $this->pdo->prepare($sql); // Statement'ı yenile
-                    $this->addToStatementCache($cacheKey, $stmt);
-                    
-                    // Parametreleri tekrar bağla
-                    foreach ($params as $key => $value) {
-                        $paramType = is_int($value) ? PDO::PARAM_INT : (is_null($value) ? PDO::PARAM_NULL : PDO::PARAM_STR);
-                        $stmt->bindValue(is_int($key) ? $key + 1 : ":$key", $value, $paramType);
-                    }
-                    
-                    $stmt->execute(); // Yeniden çalıştır
+                    $this->last_results = $stmt->fetchAll(PDO::FETCH_OBJ);
                 }
                 
                 return $stmt;
@@ -353,105 +331,134 @@ class nsql extends PDO {
             } catch (PDOException $e) {
                 $attempts++;
 
-                $this->lastError = $e->getMessage();
-                $this->logError($this->lastError);
-                $this->lastResults = [];
+                $error_message = $e->getMessage();
+                $this->last_error = $error_message;
+                $this->log_error($error_message);
+                $this->last_results = [];
 
-                $errorCode = $e->errorInfo[1] ?? null;
-                if (in_array($errorCode, [2006, 2013]) && $attempts <= $this->retryLimit) {
-                    $this->initializeConnection();
+                $error_code = $e->errorInfo[1] ?? null;
+                if (in_array($error_code, [2006, 2013]) && $attempts <= $this->retry_limit) {
+                    $this->initialize_connection();
                     continue;
                 }
 
                 return false;
             }
-        } while ($attempts <= $this->retryLimit);
+        } while ($attempts <= $this->retry_limit);
 
         return false;
     }
 
     public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
-        $this->setLastCalledMethod();
-        return $this->executeQuery($query, [], $fetchMode, ...$fetchModeArgs);
+        $this->set_last_called_method();
+        return $this->execute_query($query, [], $fetchMode, ...$fetchModeArgs);
     }
     
     public function insert(string $sql, array $params = []): bool {
-        $this->setLastCalledMethod();
-        $this->lastResults = [];
-        $this->lastInsertId = 0;
+        $this->set_last_called_method();
+        $this->last_results = [];
+        $this->last_insert_id = 0;
 
-        $stmt = $this->executeQuery($sql, $params);
+        $stmt = $this->execute_query($sql, $params);
         if ($stmt !== false) {
-            $this->lastInsertId = (int)$this->pdo->lastInsertId();
+            $this->last_insert_id = (int)$this->pdo->lastInsertId();
             return true;
         }
         return false;
     }
 
     public function get_row(string $query, array $params = []): ?object {
-        $this->setLastCalledMethod();
-        $cacheKey = $this->generateQueryCacheKey($query, $params);
+        $this->set_last_called_method();
+        $cache_key = $this->generate_query_cache_key($query, $params);
         
-        $cached = $this->getFromQueryCache($cacheKey);
+        $cached = $this->get_from_query_cache($cache_key);
         if ($cached !== null) {
             return $cached;
         }
         
-        $stmt = $this->executeQuery($query, $params);
+        $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
             return null;
         }
         
         $result = $stmt->fetch(PDO::FETCH_OBJ);
         if ($result) {
-            $this->addToQueryCache($cacheKey, $result);
+            $this->add_to_query_cache($cache_key, $result);
         }
         
         return $result ?: null;
     }
     
     public function get_results(string $query, array $params = []): array {
-        $this->setLastCalledMethod();
-        $cacheKey = $this->generateQueryCacheKey($query, $params);
+        $this->set_last_called_method();
+        $cache_key = $this->generate_query_cache_key($query, $params);
         
-        $cached = $this->getFromQueryCache($cacheKey);
+        $cached = $this->get_from_query_cache($cache_key);
         if ($cached !== null) {
             return $cached;
         }
         
-        $stmt = $this->executeQuery($query, $params);
+        $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
             return [];
         }
         
         $results = $stmt->fetchAll(PDO::FETCH_OBJ);
-        $this->addToQueryCache($cacheKey, $results);
+        $this->add_to_query_cache($cache_key, $results);
         
         return $results;
     }
     
-    public function get_yield(string $query, array $params = []): Generator {
-        $this->setLastCalledMethod();
-        $stmt = $this->executeQuery($query, $params);
-        if ($stmt === false) {
-            return;
-        }
-        
-        while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
-            yield $row;
+    /**
+     * Büyük veri setlerini satır satır döndürür (Generator)
+     * 
+     * @param string $query SQL sorgusu
+     * @param array $params Sorgu parametreleri
+     * @return \Generator
+     */
+    public function get_yield(string $query, array $params = []): \Generator {
+        $this->set_last_called_method();
+        $offset = 0;
+        $chunk_size = config::DEFAULT_CHUNK_SIZE;
+
+        while (true) {
+            $this->check_memory_status();
+            
+            $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
+            $stmt = $this->execute_query($chunk_query, $params);
+            
+            if ($stmt === false) {
+                return;
+            }
+
+            $found_rows = false;
+            while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+                $found_rows = true;
+                yield $row;
+            }
+
+            if (!$found_rows) {
+                break;
+            }
+
+            $offset += $chunk_size;
+            
+            if ($offset >= config::MAX_RESULT_SET_SIZE) {
+                throw new \RuntimeException('Maksimum sonuç kümesi boyutu aşıldı!');
+            }
         }
     }
 
     public function update(string $sql, array $params = []): bool {
-        $this->setLastCalledMethod();
-        $this->lastResults = [];
-        return $this->executeQuery($sql, $params) !== false;
+        $this->set_last_called_method();
+        $this->last_results = [];
+        return $this->execute_query($sql, $params) !== false;
     }
 
     public function delete(string $sql, array $params = []): bool {
-        $this->setLastCalledMethod();
-        $this->lastResults = [];
-        return $this->executeQuery($sql, $params) !== false;
+        $this->set_last_called_method();
+        $this->last_results = [];
+        return $this->execute_query($sql, $params) !== false;
     }
 
     /**
@@ -460,7 +467,7 @@ class nsql extends PDO {
      * @return int Son eklenen kaydın ID değeri.
      */
     public function insert_id(): int {
-        return $this->lastInsertId;
+        return $this->last_insert_id;
     }
 
     /**
@@ -494,263 +501,107 @@ class nsql extends PDO {
      *
      * @return void
      */
-    private function setLastCalledMethod(): void {
+    private function set_last_called_method(): void {
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-        $this->lastCalledMethod = $trace[1]['function'] ?? 'unknown';
+        $this->last_called_method = $trace[1]['function'] ?? 'unknown';
     }
 
-    public function debug(): void {
-        if (!$this->debugMode) {
-            echo '<div style="color:red;font-weight:bold;">Debug modu kapalı! Detaylı sorgu ve hata bilgisi için nsql nesnesini debug modda başlatın.</div>';
+    /**
+     * Memory durumunu kontrol eder
+     */
+    private function check_memory_status(): void {
+        $now = time();
+        
+        if (self::$last_memory_check !== null && 
+            ($now - self::$last_memory_check) < config::MEMORY_CHECK_INTERVAL) {
+            return;
+        }
+        
+        self::$last_memory_check = $now;
+        $current_usage = memory_get_usage(true);
+        self::$memory_stats['peak_usage'] = memory_get_peak_usage(true);
+        
+        if ($current_usage > config::MEMORY_LIMIT_CRITICAL) {
+            self::$memory_stats['critical_count']++;
+            $this->cleanup_resources();
+            throw new \RuntimeException('Kritik bellek kullanımı aşıldı!');
+        }
+        
+        if ($current_usage > config::MEMORY_LIMIT_WARNING) {
+            self::$memory_stats['warning_count']++;
+            $this->cleanup_resources();
+        }
+    }
+
+    /**
+     * Kaynakları temizler
+     */
+    private function cleanup_resources(): void {
+        $this->clear_statement_cache();
+        $this->clear_query_cache();
+        gc_collect_cycles();
+    }
+
+    /**
+     * Chunk boyutunu bellek kullanımına göre ayarlar
+     */
+    private function adjust_chunk_size(): void {
+        if (!config::AUTO_ADJUST_CHUNK_SIZE) {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
             return;
         }
 
-        try {
-            $query = $this->interpolateQuery($this->lastQuery, $this->lastParams);
-            $paramsJson = json_encode($this->lastParams, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        } catch (Throwable $e) {
-            $query = $this->lastQuery . ' [Parametre dönüştürme hatası]';
-            $paramsJson = 'Parametreler görüntülenemedi: ' . $e->getMessage();
-        }
-
-        $debugMessage = sprintf(
-            "Çalıştırılan Metod: %s\nSQL Sorgusu: %s\nParametreler: %s\n%s",
-            $this->lastCalledMethod,
-            $query,
-            $paramsJson,
-            $this->lastError ? "Hata: {$this->lastError}\n" : ''
-        );
-
-        $this->logError($debugMessage);        echo <<<HTML
-        <style>
-            .nsql-debug {
-                font-family: monospace;
-                background: #f9f9f9;
-                border: 1px solid #ccc;
-                padding: 16px;
-                margin: 16px 0;
-                border-radius: 8px;
-                max-width: 100%;
-                overflow-x: auto;
-            }
-            .method-header {
-                background: #4a90e2;
-                color: white;
-                padding: 12px 16px;
-                border-radius: 6px;
-                margin-bottom: 16px;
-                font-size: 18px;
-                font-weight: bold;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .nsql-debug h4 {
-                margin: 0 0 8px;
-                font-size: 16px;
-                color: #333;
-            }
-            .nsql-debug pre {
-                background: #fff;
-                border: 1px solid #ddd;
-                padding: 10px;
-                margin: 8px 0;
-                border-radius: 5px;
-                overflow-x: auto;
-                white-space: pre-wrap;
-                word-wrap: break-word;
-            }
-            .nsql-debug .method-info {
-                background: #e8f5e9;
-                border: 1px solid #c8e6c9;
-                color: #2e7d32;
-                padding: 10px;
-                margin: 8px 0;
-                border-radius: 5px;
-                font-weight: bold;
-            }
-            .nsql-debug table {
-                border-collapse: collapse;
-                width: 100%;
-                margin: 8px 0;
-                background: #fff;
-            }
-            .nsql-debug table th,
-            .nsql-debug table td {
-                border: 1px solid #ddd;
-                padding: 8px;
-                text-align: left;
-                font-size: 13px;
-                word-break: break-word;
-            }
-            .nsql-debug table th {
-                background: #f5f5f5;
-                font-weight: bold;
-            }
-            .nsql-debug .error {
-                background: #ffecec;
-                border: 1px solid #f5aca6;
-                color: #cc0033;
-                padding: 10px;
-                margin: 8px 0;
-                border-radius: 5px;
-            }
-            .nsql-debug .info {
-                background: #e7f6ff;
-                border: 1px solid #b3e5fc;
-                color: #0288d1;
-                padding: 10px;
-                margin: 8px 0;
-                border-radius: 5px;
-            }
-            .nsql-debug .query-section {
-                margin: 16px 0;
-            }
-            .nsql-debug .no-results {
-                font-style: italic;
-                color: #666;
-            }
-        </style>
-        <div class="nsql-debug">
-HTML;
-
-        if ($this->lastError) {
-            echo "<div class='error'>⚠️ <strong>Hata:</strong> " . htmlspecialchars($this->lastError) . "</div>";
-        }
-
-        echo "<div class='query-section'>";
-        echo "<h4>🔍 SQL Sorgusu:</h4>";
-        echo "<pre>" . htmlspecialchars($query) . "</pre>";
+        $memory_usage = memory_get_usage(true);
+        $memory_limit = config::MEMORY_LIMIT_WARNING;
         
-        echo "<h4>📋 Parametreler:</h4>";
-        echo "<pre>" . htmlspecialchars($paramsJson) . "</pre>";
-        echo "</div>";
+        $usage_ratio = $memory_usage / $memory_limit;
+        
+        if ($usage_ratio > 0.8) {
+            self::$current_chunk_size = max(config::MIN_CHUNK_SIZE, self::$current_chunk_size / 2);
+        } elseif ($usage_ratio < 0.5) {
+            self::$current_chunk_size = min(config::MAX_CHUNK_SIZE, self::$current_chunk_size * 1.5);
+        }
+    }
 
-        if (!empty($this->lastResults)) {
-            echo "<div class='query-section'>";
-            echo "<h4>📊 Sonuç Verisi:</h4>";
+    /**
+     * Büyük veri setlerini chunk'lar halinde döndürür
+     * 
+     * @param string $query SQL sorgusu
+     * @param array $params Sorgu parametreleri
+     * @return \Generator Her chunk için bir array döndürür
+     */
+    public function get_chunk(string $query, array $params = []): \Generator {
+        $offset = 0;
+        self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+
+        while (true) {
+            $this->check_memory_status();
+            $this->adjust_chunk_size();
+
+            $chunk_query = $query . " LIMIT " . self::$current_chunk_size . " OFFSET " . $offset;
+            $results = $this->get_results($chunk_query, $params);
             
-            if (is_array($this->lastResults) && count($this->lastResults) > 0) {
-                $firstRow = is_object($this->lastResults[0]) ? (array)$this->lastResults[0] : $this->lastResults[0];
-                
-                echo "<table><thead><tr>";
-                foreach ($firstRow as $key => $_) {
-                    echo "<th>" . htmlspecialchars((string)$key) . "</th>";
-                }
-                echo "</tr></thead><tbody>";
-                
-                foreach ($this->lastResults as $row) {
-                    echo "<tr>";
-                    foreach ((array)$row as $value) {
-                        $displayValue = is_null($value) ? '-' : 
-                                    (is_array($value) || is_object($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value);
-                        echo "<td>" . htmlspecialchars($displayValue) . "</td>";
-                    }
-                    echo "</tr>";
-                }
-                echo "</tbody></table>";
-                
-                echo "<div class='info'>✓ Toplam " . count($this->lastResults) . " kayıt bulundu.</div>";
-            } else {
-                echo "<div class='info'>ℹ️ Sonuç bulunamadı.</div>";
+            if (empty($results)) {
+                break;
             }
-            echo "</div>";
-        } else {
-            if ($this->lastQuery) {
-                echo "<div class='info'>ℹ️ Bu sorgu herhangi bir sonuç döndürmedi veya sonuçlar henüz alınmadı.</div>";
+
+            yield $results;
+            $offset += self::$current_chunk_size;
+
+            if ($offset >= config::MAX_RESULT_SET_SIZE) {
+                throw new \RuntimeException('Maksimum sonuç kümesi boyutu aşıldı!');
             }
         }
-
-        echo "</div>";
     }
 
     /**
-     * Verilen sorguyu ve parametreleri birleştirerek hata ayıklama için kullanılabilir bir sorgu döndürür.
-     *
-     * @param string $query SQL sorgusu.
-     * @param array $params Sorgu parametreleri.
-     * @return string Birleştirilmiş sorgu.
-     * @throws RuntimeException Eğer debug modu kapalıysa.
+     * Memory istatistiklerini döndürür
      */
-    private function interpolateQuery(string $query, array $params): string {
-        if (!$this->debugMode) {
-            throw new RuntimeException("interpolateQuery metodu yalnızca debug modunda kullanılabilir.");
-        }
-
-        foreach ($params as $key => $value) {
-            $escaped = $this->pdo->quote((string) $value);
-            if (is_string($key)) {
-                $query = str_replace(":$key", $escaped, $query);
-            } else {
-                $query = preg_replace('/\?/', $escaped, $query, 1);
-            }
-        }
-        return $query;
-    }
-
-    /**
-     * Sorgudan benzersiz önbellek anahtarı oluşturur
-     */
-    private function generateQueryCacheKey($query, $params = []): string {
-        return md5($query . serialize($params));
-    }
-    
-    /**
-     * Sorgu sonucunu önbelleğe ekler
-     */
-    private function addToQueryCache(string $key, $data): void {
-        if (!$this->queryCacheEnabled) {
-            return;
-        }
-        
-        // Önbellek boyut limitini kontrol et
-        if (count($this->queryCache) >= $this->queryCacheSizeLimit) {
-            array_shift($this->queryCache); // En eski kaydı sil
-        }
-        
-        $this->queryCache[$key] = [
-            'data' => $data,
-            'time' => time()
-        ];
-    }
-    
-    /**
-     * Önbellekten sorgu sonucunu getirir
-     */
-    private function getFromQueryCache(string $key) {
-        if (!$this->queryCacheEnabled || !isset($this->queryCache[$key])) {
-            return null;
-        }
-        
-        $cached = $this->queryCache[$key];
-        
-        // Süre aşımını kontrol et
-        if (!$this->isValidCache($cached['time'])) {
-            unset($this->queryCache[$key]);
-            return null;
-        }
-        
-        return $cached['data'];
-    }
-    
-    /**
-     * Önbellek süre kontrolü
-     */
-    private function isValidCache(int $cacheTime): bool {
-        return (time() - $cacheTime) < $this->queryCacheTimeout;
-    }
-    
-    /**
-     * Önbelleği temizler
-     */
-    public function clearQueryCache(): void {
-        $this->queryCache = [];
-    }
-    
-    /**
-     * Yapılandırma ayarlarını yükle
-     */
-    private function loadCacheConfig(): void {
-        $this->queryCacheEnabled = Config::QUERY_CACHE_ENABLED;
-        $this->queryCacheTimeout = Config::QUERY_CACHE_TIMEOUT;
-        $this->queryCacheSizeLimit = Config::QUERY_CACHE_SIZE_LIMIT;
+    public function get_memory_stats(): array {
+        return array_merge(self::$memory_stats, [
+            'current_usage' => memory_get_usage(true),
+            'peak_usage' => memory_get_peak_usage(true),
+            'current_chunk_size' => self::$current_chunk_size ?? config::DEFAULT_CHUNK_SIZE
+        ]);
     }
 }
