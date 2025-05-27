@@ -17,7 +17,7 @@ $db->debug();
 
 // SELECT çoklu satır örneği
 $kullanicilar = $db->get_results(
-    "SELECT * FROM kullanicilar"
+    "SELECT * FROM sayfalar"
     );
 $db->debug();
 
@@ -26,18 +26,18 @@ echo "<h2>Query Builder Örnekleri</h2>";
 // Basit SELECT örneği
 $aktifKullanicilar = $db->table('kullanicilar')
     ->select('id', 'tam_isim', 'eposta')
-    ->orderBy('tam_isim', 'ASC')
+    ->order_by('tam_isim', 'ASC')
     ->get();
 $db->debug();
 
 // Tek kayıt getirme örneği
 $tekKullanici = $db->table('kullanicilar')
-    ->where('tam_isim', 'Necip GÜNENÇ')
+    ->where('tam_isim', '=', 'Necip GÜNENÇ')
     ->first();
 $db->debug();
 
 // Tüm kullanıcıları getir
-$sorgu = "SELECT * FROM kullanicilar";
+$sorgu = "SELECT * FROM sayfalar";
 $kullanicilar = $db->get_results($sorgu, []);
 $db->debug();
 
