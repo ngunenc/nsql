@@ -16,7 +16,8 @@ use nsql\database\traits\{
     debug_trait,
     statement_cache_trait,
     connection_trait,
-    transaction_trait
+    transaction_trait,
+    query_analyzer_trait
 };
 
 class nsql extends PDO {
@@ -26,6 +27,7 @@ class nsql extends PDO {
     use statement_cache_trait;
     use connection_trait;
     use transaction_trait;
+    use query_analyzer_trait;
 
     // Debug özellikleri
     protected ?string $last_error = null;
@@ -34,6 +36,8 @@ class nsql extends PDO {
     protected string $last_called_method = 'unknown';
     protected bool $debug_mode = false;
     protected string $log_file = 'error_log.txt';
+    
+    // Query analiz özellikleri trait içinde tanımlanmıştır
 
     // Database bağlantı özellikleri
     private ?PDO $pdo = null;
@@ -62,12 +66,24 @@ class nsql extends PDO {
     private array $last_results = [];
 
     private static ?int $last_memory_check = null;
-    private static int $current_chunk_size;
+    private static int $current_chunk_size = 1000; // Varsayılan değer
     private static array $memory_stats = [
         'peak_usage' => 0,
         'warning_count' => 0,
         'critical_count' => 0
     ];
+    
+    /**
+     * Static değişkenleri başlat
+     */
+    private static function initialize_static_vars(): void {
+        if (!isset(self::$current_chunk_size)) {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        }
+        if (!isset(self::$last_memory_check)) {
+            self::$last_memory_check = null;
+        }
+    }
 
     /**
      * Query Builder oluşturur
@@ -122,6 +138,16 @@ class nsql extends PDO {
         $pass = $pass ?? Config::get('DB_PASS', '');
         $charset = $charset ?? Config::get('DB_CHARSET', 'utf8mb4');
         
+        // PDO bağlantı seçeneklerini ayarla
+        $this->options = [
+            \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+            \PDO::ATTR_EMULATE_PREPARES   => false,
+            \PDO::ATTR_TIMEOUT            => Config::get('CONNECTION_TIMEOUT', 5),
+            \PDO::ATTR_PERSISTENT         => Config::get('PERSISTENT_CONNECTION', false)
+        ];
+        
+        // DSN ve diğer özellikleri ayarla
         $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
         $this->user = $user;
         $this->pass = $pass;
@@ -129,17 +155,24 @@ class nsql extends PDO {
         $this->log_file = Config::get('LOG_FILE', 'error_log.txt');
         $this->statement_cache_limit = Config::get('STATEMENT_CACHE_LIMIT', 100);
         
-        $this->options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-        ];
+        // Parent PDO constructor'ı çağır
+        parent::__construct($this->dsn, $this->user, $this->pass, $this->options);
 
+        self::initialize_static_vars();
         $this->initialize_pool();
         $this->initialize_connection();
         $this->load_cache_config();
     }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
-        return new static($dsn, $username, $password, $options);
+        // dsn'den host, db ve charset bilgilerini ayıkla
+        $pattern = '/mysql:host=([^;]+);dbname=([^;]+);charset=([^;]+)/';
+        if (preg_match($pattern, $dsn, $matches)) {
+            $host = $matches[1];
+            $db = $matches[2];
+            $charset = $matches[3];
+            return new static($host, $db, $username, $password, $charset);
+        }
+        
+        throw new InvalidArgumentException('Geçersiz DSN formatı. Beklenen format: mysql:host=HOST;dbname=DB;charset=CHARSET');
     }
 
     private function disconnect(): void {
@@ -216,35 +249,32 @@ class nsql extends PDO {
         }
     }
 
+    private static ?session_manager $session = null;
+
     /**
-     * Güvenli oturum başlatma ve cookie ayarları
+     * Session manager'ı başlatır veya mevcut instance'ı döndürür
      */
-    public static function secure_session_start(): void {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
-            session_set_cookie_params([
-                'lifetime' => 0,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $secure,
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]);
-            session_start();
-            // Session fixation önlemi: yeni oturumda ID yenile
-            if (!isset($_SESSION['initiated'])) {
-                session_regenerate_id(true);
-                $_SESSION['initiated'] = true;
-            }
+    public static function session(array $config = []): session_manager {
+        if (self::$session === null) {
+            self::$session = new session_manager($config);
         }
+        return self::$session;
     }
 
     /**
-     * Oturum ID'sini güvenli şekilde yenile (isteğe bağlı olarak kullanılabilir)
+     * Güvenli oturum başlatma ve cookie ayarları
      */
-    public static function regenerate_session_id(): void {
-        if (session_status() === PHP_SESSION_ACTIVE) {
-            session_regenerate_id(true);
+    public static function secure_session_start(array $config = []): void {
+        self::session($config)->start();
+    }
+
+    /**
+     * Session güvenli şekilde sonlandır
+     */
+    public static function end_session(): void {
+        if (self::$session !== null) {
+            self::$session->destroy();
+            self::$session = null;
         }
     }
 
@@ -256,26 +286,17 @@ class nsql extends PDO {
     }
 
     /**
-     * Benzersiz CSRF token üretir ve oturuma kaydeder
+     * CSRF token al veya oluştur
      */
-    public static function generate_csrf_token(): string {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
-        if (empty($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        }
-        return $_SESSION['csrf_token'];
+    public static function csrf_token(): string {
+        return self::session()->get_csrf_token();
     }
 
     /**
-     * CSRF token doğrulaması yapar
+     * CSRF token doğrulaması yap
      */
-    public static function validate_csrf_token($token): bool {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
-        return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    public static function validate_csrf($token): bool {
+        return self::session()->validate_csrf_token($token);
     }
 
     private function execute_query(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
@@ -369,20 +390,30 @@ class nsql extends PDO {
 
     public function get_row(string $query, array $params = []): ?object {
         $this->set_last_called_method();
-        $cache_key = $this->generate_query_cache_key($query, $params);
         
-        $cached = $this->get_from_query_cache($cache_key);
-        if ($cached !== null) {
-            return $cached;
+        // LIMIT 1 ekle eğer yoksa
+        if (!preg_match('/\bLIMIT\s+\d+(?:\s*,\s*\d+)?$/i', $query)) {
+            $query .= ' LIMIT 1';
         }
         
+        // Cache kontrolü
+        $cache_key = $this->generate_query_cache_key($query, $params);
+        if ($this->query_cache_enabled) {
+            $cached = $this->get_from_query_cache($cache_key);
+            if ($cached !== null) {
+                return is_array($cached) && !empty($cached) ? (object)$cached[0] : $cached;
+            }
+        }
+        
+        // Sorguyu çalıştır
         $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
             return null;
         }
         
+        // Sonucu al ve cache'le
         $result = $stmt->fetch(PDO::FETCH_OBJ);
-        if ($result) {
+        if ($result && $this->query_cache_enabled) {
             $this->add_to_query_cache($cache_key, $result);
         }
         
@@ -391,20 +422,39 @@ class nsql extends PDO {
     
     public function get_results(string $query, array $params = []): array {
         $this->set_last_called_method();
-        $cache_key = $this->generate_query_cache_key($query, $params);
         
-        $cached = $this->get_from_query_cache($cache_key);
-        if ($cached !== null) {
-            return $cached;
+        // Memory kontrolü
+        $this->check_memory_status();
+        
+        // Cache kontrolü
+        $cache_key = $this->generate_query_cache_key($query, $params);
+        if ($this->query_cache_enabled) {
+            $cached = $this->get_from_query_cache($cache_key);
+            if ($cached !== null) {
+                return $cached;
+            }
         }
         
+        // Sorguyu çalıştır
         $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
             return [];
         }
         
+        // Büyük veri setleri için optimizasyon
+        $result_count = $stmt->rowCount();
+        if ($result_count > config::LARGE_RESULT_WARNING) {
+            trigger_error(
+                "Büyük veri seti ($result_count satır). get_chunk() veya get_yield() kullanmayı düşünün.",
+                E_USER_NOTICE
+            );
+        }
+        
+        // Sonuçları al ve cache'le
         $results = $stmt->fetchAll(PDO::FETCH_OBJ);
-        $this->add_to_query_cache($cache_key, $results);
+        if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
+            $this->add_to_query_cache($cache_key, $results);
+        }
         
         return $results;
     }
@@ -418,33 +468,71 @@ class nsql extends PDO {
      */
     public function get_yield(string $query, array $params = []): \Generator {
         $this->set_last_called_method();
+        
+        // LIMIT ve OFFSET kontrolü
+        if (preg_match('/\b(LIMIT|OFFSET)\b/i', $query)) {
+            throw new \InvalidArgumentException('get_yield() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
+        }
+        
         $offset = 0;
         $chunk_size = config::DEFAULT_CHUNK_SIZE;
-
+        $total_rows = 0;
+        
+        // İlk sorgu için prepared statement oluştur
+        $base_stmt = $this->pdo->prepare($query);
+        if ($base_stmt === false) {
+            return;
+        }
+        
         while (true) {
             $this->check_memory_status();
+            $this->adjust_chunk_size();
             
+            // Chunk sorgusu oluştur ve çalıştır
             $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
             $stmt = $this->execute_query($chunk_query, $params);
             
             if ($stmt === false) {
                 return;
             }
-
+            
+            // Satırları yield et
             $found_rows = false;
             while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
                 $found_rows = true;
+                $total_rows++;
+                
+                // Memory optimizasyonu
+                if ($total_rows % 1000 === 0) {
+                    $this->cleanup_resources();
+                }
+                
                 yield $row;
             }
-
+            
+            // Tüm satırlar okunduysa çık
             if (!$found_rows) {
                 break;
             }
-
+            
             $offset += $chunk_size;
             
+            // Maksimum limit kontrolü
             if ($offset >= config::MAX_RESULT_SET_SIZE) {
-                throw new \RuntimeException('Maksimum sonuç kümesi boyutu aşıldı!');
+                throw new \RuntimeException(
+                    sprintf(
+                        'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
+                        config::MAX_RESULT_SET_SIZE
+                    )
+                );
+            }
+            
+            // Statement'ı temizle
+            $stmt = null;
+            
+            // GC çağır
+            if ($offset % (config::DEFAULT_CHUNK_SIZE * 10) === 0) {
+                gc_collect_cycles();
             }
         }
     }
@@ -546,6 +634,8 @@ class nsql extends PDO {
      * Chunk boyutunu bellek kullanımına göre ayarlar
      */
     private function adjust_chunk_size(): void {
+        self::initialize_static_vars();
+
         if (!config::AUTO_ADJUST_CHUNK_SIZE) {
             self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
             return;
@@ -557,9 +647,15 @@ class nsql extends PDO {
         $usage_ratio = $memory_usage / $memory_limit;
         
         if ($usage_ratio > 0.8) {
-            self::$current_chunk_size = max(config::MIN_CHUNK_SIZE, self::$current_chunk_size / 2);
+            self::$current_chunk_size = max(
+                config::MIN_CHUNK_SIZE,
+                (int)(self::$current_chunk_size / 2)
+            );
         } elseif ($usage_ratio < 0.5) {
-            self::$current_chunk_size = min(config::MAX_CHUNK_SIZE, self::$current_chunk_size * 1.5);
+            self::$current_chunk_size = min(
+                config::MAX_CHUNK_SIZE,
+                (int)(self::$current_chunk_size * 1.5)
+            );
         }
     }
 
@@ -571,26 +667,86 @@ class nsql extends PDO {
      * @return \Generator Her chunk için bir array döndürür
      */
     public function get_chunk(string $query, array $params = []): \Generator {
+        $this->set_last_called_method();
+        
+        // LIMIT ve OFFSET kontrolü
+        if (preg_match('/\b(LIMIT|OFFSET)\b/i', $query)) {
+            throw new \InvalidArgumentException('get_chunk() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
+        }
+        
         $offset = 0;
         self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
-
-        while (true) {
-            $this->check_memory_status();
-            $this->adjust_chunk_size();
-
-            $chunk_query = $query . " LIMIT " . self::$current_chunk_size . " OFFSET " . $offset;
-            $results = $this->get_results($chunk_query, $params);
-            
-            if (empty($results)) {
-                break;
+        $total_rows = 0;
+        
+        // Prepared statement hazırla
+        $base_stmt = $this->pdo->prepare($query);
+        if ($base_stmt === false) {
+            return;
+        }
+        
+        try {
+            while (true) {
+                // Memory ve chunk boyutu kontrolü
+                $this->check_memory_status();
+                $this->adjust_chunk_size();
+                
+                // Chunk sorgusu oluştur
+                $chunk_query = $query . " LIMIT " . self::$current_chunk_size . " OFFSET " . $offset;
+                
+                // Cache kontrolü ile birlikte sonuçları al
+                $cache_key = $this->generate_query_cache_key($chunk_query, $params);
+                $results = null;
+                
+                if ($this->query_cache_enabled) {
+                    $results = $this->get_from_query_cache($cache_key);
+                }
+                
+                if ($results === null) {
+                    $stmt = $this->execute_query($chunk_query, $params);
+                    if ($stmt === false) {
+                        return;
+                    }
+                    
+                    $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+                    
+                    // Küçük chunk'ları cache'le
+                    if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
+                        $this->add_to_query_cache($cache_key, $results);
+                    }
+                }
+                
+                // Sonuç yoksa döngüyü bitir
+                if (empty($results)) {
+                    break;
+                }
+                
+                // Sonuçları yield et
+                yield $results;
+                
+                // Sayaçları güncelle
+                $total_rows += count($results);
+                $offset += self::$current_chunk_size;
+                
+                // Maksimum limit kontrolü
+                if ($offset >= config::MAX_RESULT_SET_SIZE) {
+                    throw new \RuntimeException(
+                        sprintf(
+                            'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
+                            config::MAX_RESULT_SET_SIZE
+                        )
+                    );
+                }
+                
+                // Bellek optimizasyonu
+                if ($offset % (config::DEFAULT_CHUNK_SIZE * 10) === 0) {
+                    $this->cleanup_resources();
+                    gc_collect_cycles();
+                }
             }
-
-            yield $results;
-            $offset += self::$current_chunk_size;
-
-            if ($offset >= config::MAX_RESULT_SET_SIZE) {
-                throw new \RuntimeException('Maksimum sonuç kümesi boyutu aşıldı!');
-            }
+        } finally {
+            // Kaynakları temizle
+            $base_stmt = null;
+            gc_collect_cycles();
         }
     }
 
@@ -604,4 +760,6 @@ class nsql extends PDO {
             'current_chunk_size' => self::$current_chunk_size ?? config::DEFAULT_CHUNK_SIZE
         ]);
     }
+
+    // Query analyzer ilgili metodlar query_analyzer_trait içinde tanımlanmıştır
 }
