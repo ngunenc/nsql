@@ -5,17 +5,21 @@ namespace nsql\database\security;
 use nsql\database\nsql;
 
 class rate_limiter {
-    private ?nsql $db;
+    private nsql $db;
     private string $rate_limit_table = 'rate_limits';
-    private int $default_limit = 1000; // Varsayılan sorgu limiti
-    private int $window_size = 3600;   // Zaman penceresi (saniye)
-    private bool $is_processing = false; // İşlem kontrolü için flag
+    private float $token_rate = 1.0;
+    private int $burst_limit = 50;
+    private array $limit_types = ['api', 'auth', 'default'];
 
     public function __construct(?nsql $db = null) {
         $this->db = $db;
         if ($db !== null) {
             $this->init_rate_limit_table();
         }
+        
+        // Default değerleri config'den al
+        $this->token_rate = config::RATE_LIMIT_DECAY;
+        $this->burst_limit = config::RATE_LIMIT_BURST;
     }
 
     /**
@@ -25,99 +29,135 @@ class rate_limiter {
         $sql = "CREATE TABLE IF NOT EXISTS {$this->rate_limit_table} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             identifier VARCHAR(255) NOT NULL,
-            requests INT NOT NULL DEFAULT 0,
+            request_type VARCHAR(50) NOT NULL DEFAULT 'default',
+            tokens FLOAT NOT NULL DEFAULT 0,
+            last_update INT NOT NULL,
+            burst_count INT NOT NULL DEFAULT 0,
+            burst_start INT NOT NULL DEFAULT 0,
             window_start INT NOT NULL,
+            total_requests INT NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_identifier (identifier),
-            INDEX idx_window (window_start)
+            INDEX idx_type (request_type),
+            INDEX idx_window (window_start),
+            UNIQUE KEY uk_identifier_type (identifier, request_type)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
         $this->db->query($sql);
     }
 
     /**
-     * İstek sayısını kontrol eder ve limiti aşıp aşmadığını belirler
+     * Rate limit kontrolü yapar
      */
-    public function check_rate_limit(string $identifier, ?int $limit = null): bool {
-        if ($this->db === null) {
-            return true; // Veritabanı bağlantısı yoksa limiti kontrol etme
-        }
+    public function check_rate_limit(string $identifier, string $request_type = 'default'): bool {
+        $now = time();
+        $window_start = $now - config::RATE_LIMIT_WINDOW;
+        
+        // Mevcut tokenleri al
+        $limit = $this->db->get_row(
+            "SELECT * FROM {$this->rate_limit_table} 
+             WHERE identifier = :identifier AND request_type = :type",
+            ['identifier' => $identifier, 'type' => $request_type]
+        );
 
-        // Sonsuz döngüyü önlemek için işlem kontrolü
-        if ($this->is_processing) {
+        if (!$limit) {
+            // Yeni kayıt oluştur
+            $this->db->insert(
+                "INSERT INTO {$this->rate_limit_table}
+                 (identifier, request_type, tokens, last_update, window_start, total_requests)
+                 VALUES (:identifier, :type, :tokens, :now, :window, 0)",
+                [
+                    'identifier' => $identifier,
+                    'type' => $request_type,
+                    'tokens' => config::RATE_LIMIT_MAX_REQUESTS,
+                    'now' => $now,
+                    'window' => $window_start
+                ]
+            );
             return true;
         }
 
-        $this->is_processing = true;
-        try {
-            $limit = $limit ?? $this->default_limit;
-            $window_start = time() - $this->window_size;
-
-            // Eski kayıtları temizle
-            $this->cleanup_old_records($window_start);
-
-            // Mevcut istek sayısını kontrol et
-            $count = $this->get_request_count($identifier, $window_start);
+        // Zaman penceresi kontrolü
+        if ($limit->window_start < $window_start) {
+            // Yeni pencere başlat
+            $tokens = config::RATE_LIMIT_MAX_REQUESTS;
+            $burst_count = 0;
+            $burst_start = $now;
+        } else {
+            // Token yenileme
+            $elapsed = $now - $limit->last_update;
+            $new_tokens = min(
+                config::RATE_LIMIT_MAX_REQUESTS,
+                $limit->tokens + ($elapsed * $this->token_rate)
+            );
             
-            if ($count >= $limit) {
-                return false;
+            // Burst kontrolleri
+            $in_burst = ($now - $limit->burst_start) < 1;
+            if ($in_burst) {
+                if ($limit->burst_count >= $this->burst_limit) {
+                    return false;
+                }
+                $burst_count = $limit->burst_count + 1;
+                $burst_start = $limit->burst_start;
+            } else {
+                $burst_count = 1;
+                $burst_start = $now;
             }
-
-            // İstek sayısını artır
-            $this->increment_request_count($identifier, $window_start);
             
-            return true;
-        } finally {
-            $this->is_processing = false;
+            $tokens = $new_tokens - 1;
         }
-    }
 
-    /**
-     * Belirli bir tanımlayıcı için istek sayısını alır
-     */
-    private function get_request_count(string $identifier, int $window_start): int {
-        $result = $this->db->get_row(
-            "SELECT SUM(requests) as total FROM {$this->rate_limit_table} 
-            WHERE identifier = :identifier AND window_start >= :window_start",
-            ['identifier' => $identifier, 'window_start' => $window_start]
+        if ($tokens < 0) {
+            return false;
+        }
+
+        // Rate limit bilgilerini güncelle
+        $this->update_rate_limit(
+            $identifier,
+            $request_type,
+            $tokens,
+            $now,
+            $burst_count,
+            $burst_start,
+            $window_start,
+            $limit->total_requests + 1
         );
 
-        return (int)($result->total ?? 0);
+        return true;
     }
 
     /**
-     * İstek sayısını artırır
+     * Rate limit verilerini günceller
      */
-    private function increment_request_count(string $identifier, int $window_start): void {
-        $this->db->insert(
-            "INSERT INTO {$this->rate_limit_table} (identifier, requests, window_start)
-            VALUES (:identifier, 1, :window_start)
-            ON DUPLICATE KEY UPDATE requests = requests + 1",
-            ['identifier' => $identifier, 'window_start' => $window_start]
+    private function update_rate_limit(
+        string $identifier,
+        string $request_type,
+        float $tokens,
+        int $last_update,
+        int $burst_count,
+        int $burst_start,
+        int $window_start,
+        int $total_requests
+    ): void {
+        $this->db->update(
+            "UPDATE {$this->rate_limit_table}
+             SET tokens = :tokens,
+                 last_update = :last_update,
+                 burst_count = :burst_count,
+                 burst_start = :burst_start,
+                 window_start = :window_start,
+                 total_requests = :total_requests
+             WHERE identifier = :identifier AND request_type = :type",
+            [
+                'identifier' => $identifier,
+                'type' => $request_type,
+                'tokens' => $tokens,
+                'last_update' => $last_update,
+                'burst_count' => $burst_count,
+                'burst_start' => $burst_start,
+                'window_start' => $window_start,
+                'total_requests' => $total_requests
+            ]
         );
-    }
-
-    /**
-     * Eski kayıtları temizler
-     */
-    private function cleanup_old_records(int $window_start): void {
-        $this->db->delete(
-            "DELETE FROM {$this->rate_limit_table} WHERE window_start < :window_start",
-            ['window_start' => $window_start]
-        );
-    }
-
-    /**
-     * Varsayılan sorgu limitini ayarlar
-     */
-    public function set_default_limit(int $limit): void {
-        $this->default_limit = $limit;
-    }
-
-    /**
-     * Zaman penceresi boyutunu ayarlar (saniye cinsinden)
-     */
-    public function set_window_size(int $seconds): void {
-        $this->window_size = $seconds;
     }
 }

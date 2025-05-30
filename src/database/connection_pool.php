@@ -23,17 +23,16 @@ class connection_pool {
         'connection_timeouts' => 0,
         'connection_retries' => 0,
         'health_checks' => 0,
-        'failed_health_checks' => 0
+        'failed_health_checks' => 0,
+        'peak_connections' => 0,
+        'total_queries' => 0,
+        'slow_queries' => 0
     ];
 
     /**
      * Connection Pool'u başlatır
-     * 
-     * @param array $config Veritabanı yapılandırması
-     * @param int $minConnections Minimum bağlantı sayısı
-     * @param int $maxConnections Maksimum bağlantı sayısı
      */
-    public static function initialize(array $config, int $minConnections = 2, int $maxConnections = 10): void {
+    public static function initialize(array $config, int $minConnections = 5, int $maxConnections = 20): void {
         if (self::$initialized) {
             return;
         }
@@ -47,15 +46,15 @@ class connection_pool {
         }
 
         self::$initialized = true;
+        self::$last_health_check = time();
     }
 
     /**
-     * Periyodik sağlık kontrolü yapar
+     * Sağlık kontrolü yapar
      */
     private static function perform_health_check(): void {
         $now = time();
         
-        // Sağlık kontrolü aralığını kontrol et
         if (self::$last_health_check !== null && 
             ($now - self::$last_health_check) < config::HEALTH_CHECK_INTERVAL) {
             return;
@@ -63,7 +62,7 @@ class connection_pool {
         
         self::$last_health_check = $now;
         self::$stats['health_checks']++;
-        
+
         foreach (self::$connections as $key => $conn) {
             if (!self::is_connection_valid($conn)) {
                 self::$stats['failed_health_checks']++;
@@ -71,6 +70,12 @@ class connection_pool {
                 self::create_connection();
             }
         }
+
+        // Boşta kalan bağlantıları yönet
+        self::manage_idle_connections();
+        
+        // Timeout olan bağlantıları temizle
+        self::cleanup_stale_connections();
     }
 
     /**
@@ -95,6 +100,31 @@ class connection_pool {
     }
 
     /**
+     * Havuzdan bir bağlantı alır
+     * @throws RuntimeException Bağlantı alınamazsa
+     */
+    public static function get_connection(): \PDO {
+        if (!self::$initialized) {
+            throw new \RuntimeException('Connection pool başlatılmamış');
+        }
+
+        // Sağlık kontrolü yap
+        self::perform_health_check();
+
+        // Bağlantı almayı dene
+        $conn = self::try_get_connection();
+        
+        if ($conn === null) {
+            throw new \RuntimeException(
+                'Kullanılabilir bağlantı yok. Aktif: ' . count(self::$active_connections) . 
+                ', Toplam: ' . count(self::$connections)
+            );
+        }
+
+        return $conn;
+    }
+
+    /**
      * Bağlantı alma denemesi yapar
      */
     private static function try_get_connection(int $attempt = 0): ?\PDO {
@@ -116,110 +146,84 @@ class connection_pool {
                 return self::create_connection();
             }
 
+            // Tüm bağlantılar kullanımda, timeout kontrolü yap
+            self::cleanup_stale_connections();
+
             return null;
         } catch (\PDOException $e) {
             if ($attempt < config::MAX_RETRY_ATTEMPTS) {
                 self::$stats['connection_retries']++;
-                usleep(100000 * ($attempt + 1)); // Her denemede artan bekleme süresi
+                sleep(1); // Kısa bir bekleme
                 return self::try_get_connection($attempt + 1);
             }
-            throw new \RuntimeException('Maksimum bağlantı deneme sayısı aşıldı: ' . $e->getMessage());
+            throw new \RuntimeException('Bağlantı hatası: ' . $e->getMessage());
         }
     }
 
     /**
-     * Bağlantı havuzundan bir bağlantı alır
-     * 
-     * @return PDO
-     * @throws RuntimeException
-     */
-    public static function get_connection(): \PDO {
-        if (!self::$initialized) {
-            throw new \RuntimeException('Connection pool başlatılmamış.');
-        }
-
-        // Sağlık kontrolü yap
-        self::perform_health_check();
-        
-        // Boşta kalan bağlantıları yönet
-        self::manage_idle_connections();
-        
-        // Bağlantı almayı dene
-        $connection = self::try_get_connection();
-        
-        if ($connection) {
-            return $connection;
-        }
-
-        // Timeout kontrolü ve temizlik
-        self::cleanup_stale_connections();
-        
-        // Tekrar dene
-        $connection = self::try_get_connection();
-        
-        if ($connection) {
-            return $connection;
-        }
-
-        throw new \RuntimeException('Bağlantı havuzu dolu ve yeni bağlantı oluşturulamıyor.');
-    }
-
-    /**
-     * Bağlantıyı havuza iade eder
-     * 
-     * @param PDO $connection
-     */
-    public static function release_connection(\PDO $connection): void {
-        $key = array_search($connection, self::$connections, true);
-        if ($key !== false) {
-            unset(self::$active_connections[$key]);
-            self::$stats['active_connections']--;
-        }
-    }
-
-    /**
-     * Havuz istatistiklerini döndürür
-     * 
-     * @return array
-     */
-    public static function get_stats(): array {
-        return array_merge(self::$stats, [
-            'total_connections' => count(self::$connections),
-            'idle_connections' => count(self::$connections) - count(self::$active_connections)
-        ]);
-    }
-
-    /**
-     * Tüm bağlantıları kapatır
-     */
-    public static function close_all(): void {
-        foreach (self::$connections as $key => $conn) {
-            unset(self::$connections[$key]);
-            unset(self::$active_connections[$key]);
-        }
-        self::$stats['active_connections'] = 0;
-        self::$stats['idle_connections'] = 0;
-    }
-
-    /**
-     * Yeni bir veritabanı bağlantısı oluşturur
-     * 
-     * @return PDO
-     * @throws RuntimeException
+     * Yeni bağlantı oluşturur
      */
     private static function create_connection(): \PDO {
         try {
+            // Varsayılan PDO seçeneklerini ayarla
+            $default_options = [
+                \PDO::ATTR_ERRMODE            => \PDO::ERRMODE_EXCEPTION,
+                \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+                \PDO::ATTR_EMULATE_PREPARES   => false,
+                \PDO::ATTR_TIMEOUT            => config::CONNECTION_TIMEOUT,
+                \PDO::ATTR_PERSISTENT         => config::PERSISTENT_CONNECTION
+            ];
+
+            $final_options = $default_options;
+            
+            // Özel yapılandırma seçeneklerini ekle
+            if (isset(self::$configuration['options']) && is_array(self::$configuration['options'])) {
+                foreach (self::$configuration['options'] as $key => $value) {
+                    // PDO sabitlerini doğrula ve güvenli şekilde ayarla
+                    if (is_string($key) && strpos($key, 'ATTR_') === 0) {
+                        $attrName = substr($key, 5); // ATTR_ kısmını kaldır
+                        if (defined("\\PDO::ATTR_$attrName")) {
+                            $pdoKey = constant("\\PDO::ATTR_$attrName");
+                            $final_options[$pdoKey] = $value;
+                        }
+                    } else {
+                        // Sayısal anahtar veya doğrudan PDO sabiti
+                        if (is_int($key) && defined("\\PDO::ATTR_$value")) {
+                            $pdoKey = constant("\\PDO::ATTR_$value");
+                            $final_options[$pdoKey] = true;
+                        } else {
+                            $final_options[$key] = $value;
+                        }
+                    }
+                }
+            }
+
+            // PDO bağlantısını oluştur
             $conn = new \PDO(
                 self::$configuration['dsn'],
                 self::$configuration['username'],
                 self::$configuration['password'],
-                self::$configuration['options']
+                $final_options
             );
+
+            // Bağlantı başarılı olduğunda yapılandırmayı doğrula
+            $actualErrMode = $conn->getAttribute(\PDO::ATTR_ERRMODE);
+            if ($actualErrMode !== \PDO::ERRMODE_EXCEPTION) {
+                $conn->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            }
 
             $key = spl_object_hash($conn);
             self::$connections[$key] = $conn;
             self::$active_connections[$key] = time();
+            
+            self::$stats['total_connections']++;
             self::$stats['active_connections']++;
+            
+            // Peak bağlantı sayısını güncelle
+            self::$stats['peak_connections'] = max(
+                self::$stats['peak_connections'],
+                count(self::$connections)
+            );
             
             return $conn;
         } catch (\PDOException $e) {
@@ -230,9 +234,6 @@ class connection_pool {
 
     /**
      * Bağlantının geçerli olup olmadığını kontrol eder
-     * 
-     * @param PDO $connection
-     * @return bool
      */
     private static function is_connection_valid(\PDO $connection): bool {
         try {
@@ -251,8 +252,7 @@ class connection_pool {
 
         foreach (self::$active_connections as $key => $timestamp) {
             if (($now - $timestamp) > $timeout) {
-                unset(self::$connections[$key]);
-                unset(self::$active_connections[$key]);
+                unset(self::$connections[$key], self::$active_connections[$key]);
                 self::$stats['connection_timeouts']++;
                 self::$stats['active_connections']--;
             }
@@ -261,9 +261,6 @@ class connection_pool {
 
     /**
      * Yapılandırmayı doğrular
-     * 
-     * @param array $config
-     * @throws InvalidArgumentException
      */
     private static function validate_configuration(array $config): void {
         $required = ['dsn', 'username', 'password', 'options'];
@@ -273,5 +270,61 @@ class connection_pool {
                 throw new \InvalidArgumentException("Eksik yapılandırma parametresi: $key");
             }
         }
+    }
+
+    /**
+     * Pool istatistiklerini döndürür
+     */
+    public static function get_stats(): array {
+        return array_merge(self::$stats, [
+            'current_connections' => count(self::$connections),
+            'idle_connections' => count(self::$connections) - count(self::$active_connections),
+            'memory_usage' => memory_get_usage(true),
+            'peak_memory' => memory_get_peak_usage(true)
+        ]);
+    }
+
+    /**
+     * Bağlantıyı havuza geri bırakır
+     */
+    public static function release_connection(\PDO $connection): void {
+        $key = spl_object_hash($connection);
+        
+        // Bağlantı zaten havuzda değilse işlem yapma
+        if (!isset(self::$connections[$key])) {
+            return;
+        }
+        
+        // Bağlantının geçerli olduğunu kontrol et
+        if (!self::is_connection_valid($connection)) {
+            // Geçersiz bağlantıyı kaldır ve yerine yeni bir tane oluştur
+            unset(self::$connections[$key], self::$active_connections[$key]);
+            self::$stats['failed_health_checks']++;
+            self::create_connection();
+            return;
+        }
+        
+        // Bağlantıyı aktif listesinden çıkar
+        if (isset(self::$active_connections[$key])) {
+            unset(self::$active_connections[$key]);
+            self::$stats['active_connections']--;
+            
+            // Bağlantıyı boşta kalanlar listesine ekle
+            self::$idle_connections[$key] = time();
+            self::$stats['idle_connections']++;
+        }
+    }
+
+    /**
+     * Tüm bağlantıları kapatır
+     */
+    public static function close_all(): void {
+        foreach (self::$connections as $key => $conn) {
+            unset(self::$connections[$key]);
+            unset(self::$active_connections[$key]);
+            unset(self::$idle_connections[$key]);
+        }
+        self::$stats['active_connections'] = 0;
+        self::$stats['idle_connections'] = 0;
     }
 }
