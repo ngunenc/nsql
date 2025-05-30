@@ -2,15 +2,38 @@
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
-## 📑 İçindekiler
+## 🌟 Özellikler
 
-- [Özellikler](#-özellikler)
-- [Proje Yapısı](#-proje-yapısı)
-- [Kurulum](#-kurulum)
-- [Kullanım](#-kullanım)
-- [Güvenlik](#-güvenlik)
-- [Performans](#-performans)
-- [Örnekler](#-örnekler)
+### Core Özellikler
+- PDO tabanlı veritabanı soyutlama
+- Akıcı (fluent) sorgu arayüzü
+- Otomatik bağlantı yönetimi 
+- Transaction desteği
+- Migration sistemi
+
+### Güvenlik
+- SQL injection koruması (PDO prepared statements)
+- XSS ve CSRF koruma mekanizmaları
+- Güvenli oturum yönetimi
+- Rate limiting ve DDoS koruması 
+- Hassas veri filtreleme
+
+### Performans
+- Connection Pool ile bağlantı yönetimi
+- Statement Cache (LRU algoritması)
+- Query Cache sistemi
+- Generator desteği ile düşük bellek kullanımı
+- Otomatik garbage collection
+
+### Geliştirici Araçları
+- Detaylı debug sistemi
+- Kapsamlı hata yönetimi
+- PHPUnit test desteği
+- PSR-12 kod standardı uyumluluğu
+
+## 📋 Dokümantasyon
+
+Detaylı kullanım kılavuzu için [kullanim-klavuzu.md](docs/kullanim-klavuzu.md) dosyasını inceleyebilirsiniz.
 
 ## 📂 Proje Yapısı
 
