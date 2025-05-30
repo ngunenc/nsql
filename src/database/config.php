@@ -12,33 +12,52 @@ class config {
     // Cache yapılandırma sabitleri
     public const QUERY_CACHE_ENABLED = true;
     public const QUERY_CACHE_TIMEOUT = 300; // 5 dakika
-    public const QUERY_CACHE_SIZE_LIMIT = 1000; // maksimum önbellekte tutulacak sorgu sayısı
-    public const STATEMENT_CACHE_LIMIT = 100;
+    public const QUERY_CACHE_SIZE_LIMIT = 2000; // Cache limiti artırıldı
+    public const STATEMENT_CACHE_LIMIT = 200; // Statement cache limiti artırıldı
 
-    // Connection pool yapılandırma sabitleri
-    public const MIN_CONNECTIONS = 5; // Minimum bağlantı sayısı artırıldı
-    public const MAX_CONNECTIONS = 20; // Maksimum bağlantı sayısı artırıldı
-    public const CONNECTION_TIMEOUT = 15; // Timeout süresi kısaltıldı (saniye)
-    public const CONNECTION_LIFETIME = 1800; // Connection lifetime 30 dakikaya düşürüldü
-    public const CONNECTION_IDLE_TIMEOUT = 300; // Boşta kalan bağlantılar için timeout (5 dakika)
-    public const MAX_RETRY_ATTEMPTS = 3; // Bağlantı denemesi maksimum sayısı
-    public const HEALTH_CHECK_INTERVAL = 60; // Bağlantı sağlığı kontrol aralığı (saniye)
+    // Connection pool yapılandırma sabitleri  
+    public const MIN_CONNECTIONS = 5;
+    public const MAX_CONNECTIONS = 50; // Maksimum bağlantı sayısı artırıldı
+    public const CONNECTION_TIMEOUT = 10; // Timeout süresi optimize edildi
+    public const CONNECTION_LIFETIME = 1800; // 30 dakika
+    public const CONNECTION_IDLE_TIMEOUT = 180; // Boşta kalma süresi optimize edildi
+    public const MAX_RETRY_ATTEMPTS = 3;
+    public const HEALTH_CHECK_INTERVAL = 30; // Sağlık kontrolü sıklaştırıldı
+    public const PERSISTENT_CONNECTION = false; // Kalıcı bağlantı varsayılan olarak kapalı
 
     // Memory limitleri (bytes)
     public const MEMORY_LIMIT_WARNING = 134217728; // 128MB
-    public const MEMORY_LIMIT_CRITICAL = 268435456; // 256MB
-    public const MEMORY_CHECK_INTERVAL = 30; // 30 saniye
-    
+    public const MEMORY_LIMIT_CRITICAL = 268435456; // 256MB 
+    public const MEMORY_CHECK_INTERVAL = 20; // Memory kontrol sıklığı artırıldı
+
     // Chunk processing ayarları
-    public const DEFAULT_CHUNK_SIZE = 1000; // Varsayılan chunk boyutu
-    public const MAX_CHUNK_SIZE = 5000; // Maksimum chunk boyutu
-    public const MIN_CHUNK_SIZE = 100; // Minimum chunk boyutu
-    public const AUTO_ADJUST_CHUNK_SIZE = true; // Chunk boyutunu otomatik ayarla
+    public const DEFAULT_CHUNK_SIZE = 1000;
+    public const MAX_CHUNK_SIZE = 5000;
+    public const MIN_CHUNK_SIZE = 200; // Minimum chunk boyutu artırıldı
+    public const AUTO_ADJUST_CHUNK_SIZE = true;
     
     // Resource limitleri
     public const MAX_EXECUTION_TIME = 300; // 5 dakika
-    public const MAX_RESULT_SET_SIZE = 50000; // Maksimum sonuç kümesi boyutu
+    public const MAX_RESULT_SET_SIZE = 100000; // Sonuç seti limiti artırıldı
     public const ENABLE_RESOURCE_MONITORING = true;
+    public const LARGE_RESULT_WARNING = 5000; // Uyarı eşiği artırıldı
+
+    // Rate limiting sabitleri
+    public const RATE_LIMIT_WINDOW = 60; // 1 dakika
+    public const RATE_LIMIT_MAX_REQUESTS = 1000; // Dakikada maksimum istek
+    public const RATE_LIMIT_BURST = 50; // Burst istek limiti
+    public const RATE_LIMIT_DECAY = 2.0; // Token decay hızı
+    
+    // Sorgu performans sabitleri
+    public const SLOW_QUERY_THRESHOLD = 1.0; // 1 saniye üzeri yavaş sorgu sayılır
+    public const QUERY_TIMEOUT = 30; // Sorgu timeout süresi (saniye)
+    public const MAX_FAILED_ATTEMPTS = 3; // Maksimum başarısız sorgu denemesi
+
+    // Audit log sabitleri
+    public const AUDIT_LOG_FILE = 'audit_log.txt';
+    public const AUDIT_LOG_ROTATION = 'daily'; // Log rotasyon periyodu
+    public const AUDIT_LOG_MAX_SIZE = 104857600; // 100MB
+    public const AUDIT_LOG_MAX_FILES = 30; // Maksimum log dosyası sayısı
 
     /**
      * Yapılandırmayı yükler

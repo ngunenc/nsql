@@ -1,0 +1,1733 @@
+<?php
+
+namespace nsql\database;
+
+use PDO;
+use PDOException;
+use PDOStatement;
+use RuntimeException;
+use InvalidArgumentException;
+use Exception;
+use Throwable;
+use Generator;
+use nsql\database\traits\{
+    query_parameter_trait,
+    cache_trait,
+    debug_trait,
+    statement_cache_trait,
+    connection_trait,
+    transaction_trait,
+    query_analyzer_trait
+};
+
+class nsql extends PDO {
+    use connection_trait;
+    use query_parameter_trait;
+    use statement_cache_trait;
+    use transaction_trait;
+    use debug_trait;
+    use cache_trait;
+    use query_analyzer_trait;
+
+    // Debug özellikleri
+    protected ?string $last_error = null;
+    protected string $last_query = '';
+    protected array $last_params = [];
+    protected string $last_called_method = 'unknown';
+    protected bool $debug_mode = false;
+    protected string $log_file = 'error_log.txt';
+    
+    // Static özellikler
+    private static ?int $last_memory_check = null;
+    private static int $current_chunk_size = 1000; // Varsayılan değer
+    private static array $memory_stats = [
+        'peak_usage' => 0,
+        'warning_count' => 0,
+        'critical_count' => 0
+    ];
+    
+    // Database bağlantı özellikleri
+    private ?PDO $pdo = null;
+    private int $last_insert_id = 0;
+    private array $options = [];
+    private string $dsn = '';
+    private ?string $user = null;
+    private ?string $pass = null;
+    private int $retry_limit = 3;
+    private static bool $pool_initialized = false;
+    private static array $pool_config = [];
+    private array $query_stats = [];
+    private ?audit_logger $audit_logger = null;
+    private ?security_manager $security_manager = null;
+    
+    // Cache özellikleri
+    private array $query_cache = [];
+    private array $query_cache_usage = [];
+    private bool $query_cache_enabled = false;
+    private int $query_cache_timeout = 3600;
+    private int $query_cache_size_limit = 100;
+    
+    // Statement cache özellikleri
+    private array $statement_cache = [];
+    private array $statement_cache_usage = [];
+    private int $statement_cache_limit = 100;
+    
+    // Sorgu sonuçları
+    private array $last_results = [];
+    
+    // Session manager
+    private static ?session_manager $session = null;
+
+    /**
+     * Query Builder oluşturur
+     */
+    public function table(?string $table = null): query_builder {
+        $builder = new query_builder($this);
+        return $table ? $builder->table($table) : $builder;
+    }
+
+    private function initialize_connection(): void {
+        try {
+            $this->pdo = connection_pool::get_connection();
+        } catch (PDOException $e) {
+            throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
+        }
+    }
+
+    private function initialize_pool(): void {
+        if (!self::$pool_initialized) {
+            self::$pool_config = [
+                'dsn' => $this->dsn,
+                'username' => $this->user,
+                'password' => $this->pass,
+                'options' => $this->options
+            ];
+
+            connection_pool::initialize(
+                self::$pool_config,
+                Config::get('DB_MIN_CONNECTIONS', 2),
+                Config::get('DB_MAX_CONNECTIONS', 10)
+            );
+            
+            self::$pool_initialized = true;
+        }
+    }
+
+    public function __construct(
+        ?string $host = null,
+        ?string $db = null,
+        ?string $user = null,
+        ?string $pass = null,
+        ?string $charset = null,
+        ?bool $debug = null
+    ) {
+        // Bağımlılıkları başlat
+        $this->audit_logger = new audit_logger();
+        $this->security_manager = new security_manager();
+        
+        // Config değerlerini al
+        $host = $host ?? Config::get('DB_HOST', 'localhost');
+        $db = $db ?? Config::get('DB_NAME', 'etiyop');
+        $user = $user ?? Config::get('DB_USER', 'root');
+        $pass = $pass ?? Config::get('DB_PASS', '');
+        $charset = $charset ?? Config::get('DB_CHARSET', 'utf8mb4');
+        
+        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->debug_mode = $debug ?? Config::get('DEBUG_MODE', false);
+        $this->log_file = Config::get('LOG_FILE', 'error_log.txt');
+        $this->statement_cache_limit = Config::get('STATEMENT_CACHE_LIMIT', 100);
+        
+        $this->options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+
+        // Güvenlik kontrolleri
+        if (!$this->validate_connection_params($host, $db, $user)) {
+            throw new RuntimeException('Geçersiz bağlantı parametreleri');
+        }
+
+        $this->initialize_pool();
+        $this->initialize_connection();
+        $this->load_cache_config();
+    }
+
+    /**
+     * Bağlantı parametrelerini doğrular
+     */
+    private function validate_connection_params(
+        ?string $host,
+        ?string $db,
+        ?string $user
+    ): bool {
+        if (empty($host) || empty($db) || empty($user)) {
+            return false;
+        }
+
+        // Basit SQL injection kontrolü
+        $invalid_chars = ['--', ';', '/*', '*/', 'xp_'];
+        foreach ($invalid_chars as $char) {
+            if (strpos($host . $db . $user, $char) !== false) {
+                $this->audit_logger->log_sql_injection_attempt(
+                    'connection_params',
+                    ['host' => $host, 'db' => $db, 'user' => $user]
+                );
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Sorgu çalıştırır ve güvenlik kontrollerini yapar
+     */
+    public function query(string $query, array $params = []): PDOStatement {
+        // Rate limit kontrolü
+        if (!$this->security_manager->check_rate_limit($_SERVER['REMOTE_ADDR'])) {
+            $this->audit_logger->log_rate_limit_violation(
+                $_SERVER['REMOTE_ADDR'],
+                'query'
+            );
+            throw new RuntimeException('Rate limit aşıldı');
+        }
+
+        // Query analizi
+        if ($this->analyze_query($query) === false) {
+            throw new RuntimeException('Güvenlik kontrolünden geçemedi');
+        }
+
+        // Memory kontrolü
+        $this->check_memory_usage();
+
+        try {
+            $this->ensure_connection();
+            $start_time = microtime(true);
+            
+            $stmt = $this->prepare_and_execute($query, $params);
+            
+            // Sorgu istatistiklerini güncelle
+            $duration = microtime(true) - $start_time;
+            $this->update_query_stats($query, $duration);
+
+            return $stmt;
+        } catch (PDOException $e) {
+            $this->handle_query_error($e, $query, $params);
+            throw $e;
+        }
+    }
+
+    /**
+     * Query istatistiklerini günceller
+     */
+    private function update_query_stats(string $query, float $duration): void {
+        $type = strtoupper(strtok(trim($query), ' '));
+        
+        if (!isset($this->query_stats[$type])) {
+            $this->query_stats[$type] = [
+                'count' => 0,
+                'total_time' => 0,
+                'avg_time' => 0,
+                'max_time' => 0
+            ];
+        }
+
+        $this->query_stats[$type]['count']++;
+        $this->query_stats[$type]['total_time'] += $duration;
+        $this->query_stats[$type]['avg_time'] = 
+            $this->query_stats[$type]['total_time'] / $this->query_stats[$type]['count'];
+        $this->query_stats[$type]['max_time'] = 
+            max($this->query_stats[$type]['max_time'], $duration);
+
+        // Yavaş sorguları logla
+        if ($duration > config::SLOW_QUERY_THRESHOLD) {
+            $this->audit_logger->log_security_event(
+                'slow_query',
+                "Yavaş sorgu tespit edildi ($duration sn)",
+                ['query' => $query, 'type' => $type],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * Sorgu hatalarını yönetir
+     */
+    private function handle_query_error(
+        PDOException $e,
+        string $query,
+        array $params
+    ): void {
+        // SQL injection şüphesi varsa logla
+        if (strpos($e->getMessage(), 'syntax error') !== false) {
+            $this->audit_logger->log_sql_injection_attempt(
+                $query,
+                $params,
+                $e->getMessage()
+            );
+        }
+
+        // Kritik hataları logla
+        $this->audit_logger->log_security_event(
+            'query_error',
+            $e->getMessage(),
+            ['query' => $query, 'params' => $params],
+            'error'
+        );
+
+        // Connection pool istatistiklerini güncelle
+        connection_pool::get_stats()['connection_errors']++;
+    }
+
+    /**
+     * Memory kullanımını kontrol eder
+     */
+    private function check_memory_usage(): void {
+        $current_usage = memory_get_usage(true);
+        self::$memory_stats['peak_usage'] = memory_get_peak_usage(true);
+        
+        if ($current_usage > config::MEMORY_LIMIT_CRITICAL) {
+            self::$memory_stats['critical_count']++;
+            $this->cleanup_resources();
+            
+            $this->audit_logger->log_security_event(
+                'memory_critical',
+                'Kritik bellek kullanımı aşıldı',
+                ['usage' => $current_usage],
+                'critical'
+            );
+            
+            throw new RuntimeException('Kritik bellek kullanımı aşıldı!');
+        }
+        
+        if ($current_usage > config::MEMORY_LIMIT_WARNING) {
+            self::$memory_stats['warning_count']++;
+            $this->cleanup_resources();
+            
+            $this->audit_logger->log_security_event(
+                'memory_warning',
+                'Bellek kullanımı uyarı seviyesini aştı',
+                ['usage' => $current_usage],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * Static değişkenleri başlat
+     */
+    private static function initialize_static_vars(): void {
+        if (!isset(self::$current_chunk_size)) {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        }
+        if (!isset(self::$last_memory_check)) {
+            self::$last_memory_check = null;
+        }
+    }
+
+    /**
+     * Query Builder oluşturur
+     * 
+     * @param string|null $table Tablo adı (opsiyonel)
+     * @return query_builder
+     */
+    public function table(?string $table = null): query_builder {
+        $builder = new query_builder($this);
+        return $table ? $builder->table($table) : $builder;
+    }
+
+    private function initialize_connection(): void {
+        try {
+            $this->pdo = connection_pool::get_connection();
+        } catch (PDOException $e) {
+            throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
+        }
+    }
+
+    private function initialize_pool(): void {
+        if (!self::$pool_initialized) {
+            self::$pool_config = [
+                'dsn' => $this->dsn,
+                'username' => $this->user,
+                'password' => $this->pass,
+                'options' => $this->options
+            ];
+
+            connection_pool::initialize(
+                self::$pool_config,
+                Config::get('DB_MIN_CONNECTIONS', 2),
+                Config::get('DB_MAX_CONNECTIONS', 10)
+            );
+            
+            self::$pool_initialized = true;
+        }
+    }
+
+    public function __construct(
+        ?string $host = null,
+        ?string $db = null,
+        ?string $user = null,
+        ?string $pass = null,
+        ?string $charset = null,
+        ?bool $debug = null
+    ) {
+        // Bağımlılıkları başlat
+        $this->audit_logger = new audit_logger();
+        $this->security_manager = new security_manager();
+        
+        // Config değerlerini al
+        $host = $host ?? Config::get('DB_HOST', 'localhost');
+        $db = $db ?? Config::get('DB_NAME', 'etiyop');
+        $user = $user ?? Config::get('DB_USER', 'root');
+        $pass = $pass ?? Config::get('DB_PASS', '');
+        $charset = $charset ?? Config::get('DB_CHARSET', 'utf8mb4');
+        
+        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->debug_mode = $debug ?? Config::get('DEBUG_MODE', false);
+        $this->log_file = Config::get('LOG_FILE', 'error_log.txt');
+        $this->statement_cache_limit = Config::get('STATEMENT_CACHE_LIMIT', 100);
+        
+        $this->options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+
+        // Güvenlik kontrolleri
+        if (!$this->validate_connection_params($host, $db, $user)) {
+            throw new RuntimeException('Geçersiz bağlantı parametreleri');
+        }
+
+        $this->initialize_pool();
+        $this->initialize_connection();
+        $this->load_cache_config();
+    }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
+        return new static($dsn, $username, $password, $options);
+    }
+
+    private function disconnect(): void {
+        if ($this->pdo !== null) {
+            connection_pool::release_connection($this->pdo);
+            $this->pdo = null;
+        }
+    }
+    
+    public function __destruct() {
+        $this->disconnect();
+    }
+    
+    // Connection Pool istatistiklerini almak için yeni metod
+    public static function get_pool_stats(): array {
+        return connection_pool::get_stats();
+    }
+
+    private function log_error(string $message): void {
+        $timestamp = date('Y-m-d H:i:s');
+        $log_message = "[$timestamp] $message" . PHP_EOL;
+        file_put_contents($this->log_file, $log_message, FILE_APPEND);
+    }
+
+    /**
+     * Üretim ortamında ayrıntılı hata mesajlarını gizler, sadece genel mesaj döndürür ve hatayı loglar.
+     * Geliştirme ortamında ise gerçek hatayı döndürür.
+     *
+     * @param Exception|Throwable $e
+     * @param string $genericMessage Kullanıcıya gösterilecek genel mesaj (örn: "Bir hata oluştu.")
+     * @return string Kullanıcıya gösterilecek mesaj
+     */
+    public function handle_exception($e, string $genericMessage = 'Bir hata oluştu.'): string {
+        $this->log_error($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
+        if ($this->debug_mode) {
+            return $e->getMessage();
+        } else {
+            return $genericMessage;
+        }
+    }
+
+    /**
+     * Uygulama genelinde güvenli try-catch örüntüsü için yardımcı fonksiyon.
+     * Kapatıcı (callable) fonksiyonu güvenli şekilde çalıştırır, hata olursa handleException ile işler.
+     *
+     * @param callable $fn
+     * @param string $genericMessage
+     * @return mixed
+     */
+    public function safe_execute(callable $fn, string $genericMessage = 'Bir hata oluştu.') {
+        try {
+            return $fn();
+        } catch (Exception $e) {
+            echo $this->handle_exception($e, $genericMessage);
+            return null;
+        } catch (Throwable $e) {
+            echo $this->handle_exception($e, $genericMessage);
+            return null;
+        }
+    }
+
+    /**
+     * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
+     * @return void
+     */
+    public function ensure_connection(): void {
+        try {
+            $stmt = $this->pdo->query('SELECT 1');
+            if ($stmt === false) {
+                $this->connect();
+            }
+        } catch (PDOException $e) {
+            $this->connect();
+        }
+    }
+
+    /**
+     * Session manager'ı başlatır veya mevcut instance'ı döndürür
+     */
+    public static function session(array $config = []): session_manager {
+        if (self::$session === null) {
+            self::$session = new session_manager($config);
+        }
+        return self::$session;
+    }
+
+    /**
+     * Güvenli oturum başlatma ve cookie ayarları
+     */
+    public static function secure_session_start(array $config = []): void {
+        self::session($config)->start();
+    }
+
+    /**
+     * Session güvenli şekilde sonlandır
+     */
+    public static function end_session(): void {
+        if (self::$session !== null) {
+            self::$session->destroy();
+            self::$session = null;
+        }
+    }
+
+    /**
+     * XSS koruması için HTML çıktısı kaçışlama fonksiyonu
+     */
+    public static function escape_html($string): string {
+        return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * CSRF token al veya oluştur
+     */
+    public static function csrf_token(): string {
+        return self::session()->get_csrf_token();
+    }
+
+    /**
+     * CSRF token doğrulaması yap
+     */
+    public static function validate_csrf($token): bool {
+        return self::session()->validate_csrf_token($token);
+    }
+
+    private function execute_query(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->set_last_called_method();
+        $this->ensure_connection();
+        $this->last_query = $sql;
+        $this->last_params = $params;
+        $this->last_error = null; // Artık nullable string olduğu için sorun olmayacak
+
+        $this->validate_param_types($params);
+        $cache_key = $this->get_statement_cache_key($sql, $params);
+
+        $attempts = 0;
+        do {
+            try {
+                if (!isset($this->statement_cache[$cache_key])) {
+                    $stmt = $this->pdo->prepare($sql);
+                    $this->add_to_statement_cache($cache_key, $stmt);
+                } else {
+                    $stmt = $this->statement_cache[$cache_key];
+                }
+                
+                $this->statement_cache_usage[$cache_key] = microtime(true);
+
+                // Parametreleri bağla
+                foreach ($params as $key => $param) {
+                    $param_name = is_int($key) ? ($key + 1) : (strpos($key, ':') === 0 ? $key : ":{$key}");
+                    
+                    if (is_array($param) && isset($param['value'], $param['type'])) {
+                        // Query Builder'dan gelen yapılandırılmış parametre
+                        $stmt->bindValue($param_name, $param['value'], $param['type']);
+                    } else {
+                        // Doğrudan değer olarak gelen parametre
+                        $param_type = $this->determine_param_type($param);
+                        $stmt->bindValue($param_name, $param, $param_type);
+                    }
+                }
+
+                if ($fetchMode !== null) {
+                    $stmt->setFetchMode($fetchMode, ...$fetchModeArgs);
+                }
+
+                $stmt->execute();
+                
+                // Sorgu sonuçlarını last_results'a kaydet
+                // Sorgu sonuçlarını last_results'a kaydet (null fetch mode için)
+                if ($fetchMode === null) {
+                    $this->last_results = $stmt->fetchAll(PDO::FETCH_OBJ);
+                }
+                
+                return $stmt;
+
+            } catch (PDOException $e) {
+                $attempts++;
+
+                $error_message = $e->getMessage();
+                $this->last_error = $error_message;
+                $this->log_error($error_message);
+                $this->last_results = [];
+
+                $error_code = $e->errorInfo[1] ?? null;
+                if (in_array($error_code, [2006, 2013]) && $attempts <= $this->retry_limit) {
+                    $this->initialize_connection();
+                    continue;
+                }
+
+                return false;
+            }
+        } while ($attempts <= $this->retry_limit);
+
+        return false;
+    }
+
+    /**
+     * Sorgu çalıştırır ve güvenlik kontrollerini yapar
+     */
+    public function query(string $query, array $params = []): PDOStatement {
+        // Rate limit kontrolü
+        if (!$this->security_manager->check_rate_limit($_SERVER['REMOTE_ADDR'])) {
+            $this->audit_logger->log_rate_limit_violation(
+                $_SERVER['REMOTE_ADDR'],
+                'query'
+            );
+            throw new RuntimeException('Rate limit aşıldı');
+        }
+
+        // Query analizi
+        if ($this->analyze_query($query) === false) {
+            throw new RuntimeException('Güvenlik kontrolünden geçemedi');
+        }
+
+        // Memory kontrolü
+        $this->check_memory_usage();
+
+        try {
+            $this->ensure_connection();
+            $start_time = microtime(true);
+            
+            $stmt = $this->prepare_and_execute($query, $params);
+            
+            // Sorgu istatistiklerini güncelle
+            $duration = microtime(true) - $start_time;
+            $this->update_query_stats($query, $duration);
+
+            return $stmt;
+        } catch (PDOException $e) {
+            $this->handle_query_error($e, $query, $params);
+            throw $e;
+        }
+    }
+
+    /**
+     * Query istatistiklerini günceller
+     */
+    private function update_query_stats(string $query, float $duration): void {
+        $type = strtoupper(strtok(trim($query), ' '));
+        
+        if (!isset($this->query_stats[$type])) {
+            $this->query_stats[$type] = [
+                'count' => 0,
+                'total_time' => 0,
+                'avg_time' => 0,
+                'max_time' => 0
+            ];
+        }
+
+        $this->query_stats[$type]['count']++;
+        $this->query_stats[$type]['total_time'] += $duration;
+        $this->query_stats[$type]['avg_time'] = 
+            $this->query_stats[$type]['total_time'] / $this->query_stats[$type]['count'];
+        $this->query_stats[$type]['max_time'] = 
+            max($this->query_stats[$type]['max_time'], $duration);
+
+        // Yavaş sorguları logla
+        if ($duration > config::SLOW_QUERY_THRESHOLD) {
+            $this->audit_logger->log_security_event(
+                'slow_query',
+                "Yavaş sorgu tespit edildi ($duration sn)",
+                ['query' => $query, 'type' => $type],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * Sorgu hatalarını yönetir
+     */
+    private function handle_query_error(
+        PDOException $e,
+        string $query,
+        array $params
+    ): void {
+        // SQL injection şüphesi varsa logla
+        if (strpos($e->getMessage(), 'syntax error') !== false) {
+            $this->audit_logger->log_sql_injection_attempt(
+                $query,
+                $params,
+                $e->getMessage()
+            );
+        }
+
+        // Kritik hataları logla
+        $this->audit_logger->log_security_event(
+            'query_error',
+            $e->getMessage(),
+            ['query' => $query, 'params' => $params],
+            'error'
+        );
+
+        // Connection pool istatistiklerini güncelle
+        connection_pool::get_stats()['connection_errors']++;
+    }
+
+    /**
+     * Memory kullanımını kontrol eder
+     */
+    private function check_memory_usage(): void {
+        $current_usage = memory_get_usage(true);
+        self::$memory_stats['peak_usage'] = memory_get_peak_usage(true);
+        
+        if ($current_usage > config::MEMORY_LIMIT_CRITICAL) {
+            self::$memory_stats['critical_count']++;
+            $this->cleanup_resources();
+            
+            $this->audit_logger->log_security_event(
+                'memory_critical',
+                'Kritik bellek kullanımı aşıldı',
+                ['usage' => $current_usage],
+                'critical'
+            );
+            
+            throw new RuntimeException('Kritik bellek kullanımı aşıldı!');
+        }
+        
+        if ($current_usage > config::MEMORY_LIMIT_WARNING) {
+            self::$memory_stats['warning_count']++;
+            $this->cleanup_resources();
+            
+            $this->audit_logger->log_security_event(
+                'memory_warning',
+                'Bellek kullanımı uyarı seviyesini aştı',
+                ['usage' => $current_usage],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * Static değişkenleri başlat
+     */
+    private static function initialize_static_vars(): void {
+        if (!isset(self::$current_chunk_size)) {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        }
+        if (!isset(self::$last_memory_check)) {
+            self::$last_memory_check = null;
+        }
+    }
+
+    /**
+     * Query Builder oluşturur
+     * 
+     * @param string|null $table Tablo adı (opsiyonel)
+     * @return query_builder
+     */
+    public function table(?string $table = null): query_builder {
+        $builder = new query_builder($this);
+        return $table ? $builder->table($table) : $builder;
+    }
+
+    private function initialize_connection(): void {
+        try {
+            $this->pdo = connection_pool::get_connection();
+        } catch (PDOException $e) {
+            throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
+        }
+    }
+
+    private function initialize_pool(): void {
+        if (!self::$pool_initialized) {
+            self::$pool_config = [
+                'dsn' => $this->dsn,
+                'username' => $this->user,
+                'password' => $this->pass,
+                'options' => $this->options
+            ];
+
+            connection_pool::initialize(
+                self::$pool_config,
+                Config::get('DB_MIN_CONNECTIONS', 2),
+                Config::get('DB_MAX_CONNECTIONS', 10)
+            );
+            
+            self::$pool_initialized = true;
+        }
+    }
+
+    public function __construct(
+        ?string $host = null,
+        ?string $db = null,
+        ?string $user = null,
+        ?string $pass = null,
+        ?string $charset = null,
+        ?bool $debug = null
+    ) {
+        // Bağımlılıkları başlat
+        $this->audit_logger = new audit_logger();
+        $this->security_manager = new security_manager();
+        
+        // Config değerlerini al
+        $host = $host ?? Config::get('DB_HOST', 'localhost');
+        $db = $db ?? Config::get('DB_NAME', 'etiyop');
+        $user = $user ?? Config::get('DB_USER', 'root');
+        $pass = $pass ?? Config::get('DB_PASS', '');
+        $charset = $charset ?? Config::get('DB_CHARSET', 'utf8mb4');
+        
+        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->debug_mode = $debug ?? Config::get('DEBUG_MODE', false);
+        $this->log_file = Config::get('LOG_FILE', 'error_log.txt');
+        $this->statement_cache_limit = Config::get('STATEMENT_CACHE_LIMIT', 100);
+        
+        $this->options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+
+        // Güvenlik kontrolleri
+        if (!$this->validate_connection_params($host, $db, $user)) {
+            throw new RuntimeException('Geçersiz bağlantı parametreleri');
+        }
+
+        $this->initialize_pool();
+        $this->initialize_connection();
+        $this->load_cache_config();
+    }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
+        return new static($dsn, $username, $password, $options);
+    }
+
+    private function disconnect(): void {
+        if ($this->pdo !== null) {
+            connection_pool::release_connection($this->pdo);
+            $this->pdo = null;
+        }
+    }
+    
+    public function __destruct() {
+        $this->disconnect();
+    }
+    
+    // Connection Pool istatistiklerini almak için yeni metod
+    public static function get_pool_stats(): array {
+        return connection_pool::get_stats();
+    }
+
+    private function log_error(string $message): void {
+        $timestamp = date('Y-m-d H:i:s');
+        $log_message = "[$timestamp] $message" . PHP_EOL;
+        file_put_contents($this->log_file, $log_message, FILE_APPEND);
+    }
+
+    /**
+     * Üretim ortamında ayrıntılı hata mesajlarını gizler, sadece genel mesaj döndürür ve hatayı loglar.
+     * Geliştirme ortamında ise gerçek hatayı döndürür.
+     *
+     * @param Exception|Throwable $e
+     * @param string $genericMessage Kullanıcıya gösterilecek genel mesaj (örn: "Bir hata oluştu.")
+     * @return string Kullanıcıya gösterilecek mesaj
+     */
+    public function handle_exception($e, string $genericMessage = 'Bir hata oluştu.'): string {
+        $this->log_error($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
+        if ($this->debug_mode) {
+            return $e->getMessage();
+        } else {
+            return $genericMessage;
+        }
+    }
+
+    /**
+     * Uygulama genelinde güvenli try-catch örüntüsü için yardımcı fonksiyon.
+     * Kapatıcı (callable) fonksiyonu güvenli şekilde çalıştırır, hata olursa handleException ile işler.
+     *
+     * @param callable $fn
+     * @param string $genericMessage
+     * @return mixed
+     */
+    public function safe_execute(callable $fn, string $genericMessage = 'Bir hata oluştu.') {
+        try {
+            return $fn();
+        } catch (Exception $e) {
+            echo $this->handle_exception($e, $genericMessage);
+            return null;
+        } catch (Throwable $e) {
+            echo $this->handle_exception($e, $genericMessage);
+            return null;
+        }
+    }
+
+    /**
+     * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
+     * @return void
+     */
+    public function ensure_connection(): void {
+        try {
+            $stmt = $this->pdo->query('SELECT 1');
+            if ($stmt === false) {
+                $this->connect();
+            }
+        } catch (PDOException $e) {
+            $this->connect();
+        }
+    }
+
+    /**
+     * Session manager'ı başlatır veya mevcut instance'ı döndürür
+     */
+    public static function session(array $config = []): session_manager {
+        if (self::$session === null) {
+            self::$session = new session_manager($config);
+        }
+        return self::$session;
+    }
+
+    /**
+     * Güvenli oturum başlatma ve cookie ayarları
+     */
+    public static function secure_session_start(array $config = []): void {
+        self::session($config)->start();
+    }
+
+    /**
+     * Session güvenli şekilde sonlandır
+     */
+    public static function end_session(): void {
+        if (self::$session !== null) {
+            self::$session->destroy();
+            self::$session = null;
+        }
+    }
+
+    /**
+     * XSS koruması için HTML çıktısı kaçışlama fonksiyonu
+     */
+    public static function escape_html($string): string {
+        return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * CSRF token al veya oluştur
+     */
+    public static function csrf_token(): string {
+        return self::session()->get_csrf_token();
+    }
+
+    /**
+     * CSRF token doğrulaması yap
+     */
+    public static function validate_csrf($token): bool {
+        return self::session()->validate_csrf_token($token);
+    }
+
+    private function execute_query(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->set_last_called_method();
+        $this->ensure_connection();
+        $this->last_query = $sql;
+        $this->last_params = $params;
+        $this->last_error = null; // Artık nullable string olduğu için sorun olmayacak
+
+        $this->validate_param_types($params);
+        $cache_key = $this->get_statement_cache_key($sql, $params);
+
+        $attempts = 0;
+        do {
+            try {
+                if (!isset($this->statement_cache[$cache_key])) {
+                    $stmt = $this->pdo->prepare($sql);
+                    $this->add_to_statement_cache($cache_key, $stmt);
+                } else {
+                    $stmt = $this->statement_cache[$cache_key];
+                }
+                
+                $this->statement_cache_usage[$cache_key] = microtime(true);
+
+                // Parametreleri bağla
+                foreach ($params as $key => $param) {
+                    $param_name = is_int($key) ? ($key + 1) : (strpos($key, ':') === 0 ? $key : ":{$key}");
+                    
+                    if (is_array($param) && isset($param['value'], $param['type'])) {
+                        // Query Builder'dan gelen yapılandırılmış parametre
+                        $stmt->bindValue($param_name, $param['value'], $param['type']);
+                    } else {
+                        // Doğrudan değer olarak gelen parametre
+                        $param_type = $this->determine_param_type($param);
+                        $stmt->bindValue($param_name, $param, $param_type);
+                    }
+                }
+
+                if ($fetchMode !== null) {
+                    $stmt->setFetchMode($fetchMode, ...$fetchModeArgs);
+                }
+
+                $stmt->execute();
+                
+                // Sorgu sonuçlarını last_results'a kaydet
+                // Sorgu sonuçlarını last_results'a kaydet (null fetch mode için)
+                if ($fetchMode === null) {
+                    $this->last_results = $stmt->fetchAll(PDO::FETCH_OBJ);
+                }
+                
+                return $stmt;
+
+            } catch (PDOException $e) {
+                $attempts++;
+
+                $error_message = $e->getMessage();
+                $this->last_error = $error_message;
+                $this->log_error($error_message);
+                $this->last_results = [];
+
+                $error_code = $e->errorInfo[1] ?? null;
+                if (in_array($error_code, [2006, 2013]) && $attempts <= $this->retry_limit) {
+                    $this->initialize_connection();
+                    continue;
+                }
+
+                return false;
+            }
+        } while ($attempts <= $this->retry_limit);
+
+        return false;
+    }
+
+    /**
+     * Sorgu çalıştırır ve güvenlik kontrollerini yapar
+     */
+    public function query(string $query, array $params = []): PDOStatement {
+        // Rate limit kontrolü
+        if (!$this->security_manager->check_rate_limit($_SERVER['REMOTE_ADDR'])) {
+            $this->audit_logger->log_rate_limit_violation(
+                $_SERVER['REMOTE_ADDR'],
+                'query'
+            );
+            throw new RuntimeException('Rate limit aşıldı');
+        }
+
+        // Query analizi
+        if ($this->analyze_query($query) === false) {
+            throw new RuntimeException('Güvenlik kontrolünden geçemedi');
+        }
+
+        // Memory kontrolü
+        $this->check_memory_usage();
+
+        try {
+            $this->ensure_connection();
+            $start_time = microtime(true);
+            
+            $stmt = $this->prepare_and_execute($query, $params);
+            
+            // Sorgu istatistiklerini güncelle
+            $duration = microtime(true) - $start_time;
+            $this->update_query_stats($query, $duration);
+
+            return $stmt;
+        } catch (PDOException $e) {
+            $this->handle_query_error($e, $query, $params);
+            throw $e;
+        }
+    }
+
+    /**
+     * Query istatistiklerini günceller
+     */
+    private function update_query_stats(string $query, float $duration): void {
+        $type = strtoupper(strtok(trim($query), ' '));
+        
+        if (!isset($this->query_stats[$type])) {
+            $this->query_stats[$type] = [
+                'count' => 0,
+                'total_time' => 0,
+                'avg_time' => 0,
+                'max_time' => 0
+            ];
+        }
+
+        $this->query_stats[$type]['count']++;
+        $this->query_stats[$type]['total_time'] += $duration;
+        $this->query_stats[$type]['avg_time'] = 
+            $this->query_stats[$type]['total_time'] / $this->query_stats[$type]['count'];
+        $this->query_stats[$type]['max_time'] = 
+            max($this->query_stats[$type]['max_time'], $duration);
+
+        // Yavaş sorguları logla
+        if ($duration > config::SLOW_QUERY_THRESHOLD) {
+            $this->audit_logger->log_security_event(
+                'slow_query',
+                "Yavaş sorgu tespit edildi ($duration sn)",
+                ['query' => $query, 'type' => $type],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * Sorgu hatalarını yönetir
+     */
+    private function handle_query_error(
+        PDOException $e,
+        string $query,
+        array $params
+    ): void {
+        // SQL injection şüphesi varsa logla
+        if (strpos($e->getMessage(), 'syntax error') !== false) {
+            $this->audit_logger->log_sql_injection_attempt(
+                $query,
+                $params,
+                $e->getMessage()
+            );
+        }
+
+        // Kritik hataları logla
+        $this->audit_logger->log_security_event(
+            'query_error',
+            $e->getMessage(),
+            ['query' => $query, 'params' => $params],
+            'error'
+        );
+
+        // Connection pool istatistiklerini güncelle
+        connection_pool::get_stats()['connection_errors']++;
+    }
+
+    /**
+     * Memory kullanımını kontrol eder
+     */
+    private function check_memory_usage(): void {
+        $current_usage = memory_get_usage(true);
+        self::$memory_stats['peak_usage'] = memory_get_peak_usage(true);
+        
+        if ($current_usage > config::MEMORY_LIMIT_CRITICAL) {
+            self::$memory_stats['critical_count']++;
+            $this->cleanup_resources();
+            
+            $this->audit_logger->log_security_event(
+                'memory_critical',
+                'Kritik bellek kullanımı aşıldı',
+                ['usage' => $current_usage],
+                'critical'
+            );
+            
+            throw new RuntimeException('Kritik bellek kullanımı aşıldı!');
+        }
+        
+        if ($current_usage > config::MEMORY_LIMIT_WARNING) {
+            self::$memory_stats['warning_count']++;
+            $this->cleanup_resources();
+            
+            $this->audit_logger->log_security_event(
+                'memory_warning',
+                'Bellek kullanımı uyarı seviyesini aştı',
+                ['usage' => $current_usage],
+                'warning'
+            );
+        }
+    }
+
+    /**
+     * Static değişkenleri başlat
+     */
+    private static function initialize_static_vars(): void {
+        if (!isset(self::$current_chunk_size)) {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        }
+        if (!isset(self::$last_memory_check)) {
+            self::$last_memory_check = null;
+        }
+    }
+
+    /**
+     * Query Builder oluşturur
+     * 
+     * @param string|null $table Tablo adı (opsiyonel)
+     * @return query_builder
+     */
+    public function table(?string $table = null): query_builder {
+        $builder = new query_builder($this);
+        return $table ? $builder->table($table) : $builder;
+    }
+
+    private function initialize_connection(): void {
+        try {
+            $this->pdo = connection_pool::get_connection();
+        } catch (PDOException $e) {
+            throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
+        }
+    }
+
+    private function initialize_pool(): void {
+        if (!self::$pool_initialized) {
+            self::$pool_config = [
+                'dsn' => $this->dsn,
+                'username' => $this->user,
+                'password' => $this->pass,
+                'options' => $this->options
+            ];
+
+            connection_pool::initialize(
+                self::$pool_config,
+                Config::get('DB_MIN_CONNECTIONS', 2),
+                Config::get('DB_MAX_CONNECTIONS', 10)
+            );
+            
+            self::$pool_initialized = true;
+        }
+    }
+
+    public function __construct(
+        ?string $host = null,
+        ?string $db = null,
+        ?string $user = null,
+        ?string $pass = null,
+        ?string $charset = null,
+        ?bool $debug = null
+    ) {
+        // Bağımlılıkları başlat
+        $this->audit_logger = new audit_logger();
+        $this->security_manager = new security_manager();
+        
+        // Config değerlerini al
+        $host = $host ?? Config::get('DB_HOST', 'localhost');
+        $db = $db ?? Config::get('DB_NAME', 'etiyop');
+        $user = $user ?? Config::get('DB_USER', 'root');
+        $pass = $pass ?? Config::get('DB_PASS', '');
+        $charset = $charset ?? Config::get('DB_CHARSET', 'utf8mb4');
+        
+        $this->dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+        $this->user = $user;
+        $this->pass = $pass;
+        $this->debug_mode = $debug ?? Config::get('DEBUG_MODE', false);
+        $this->log_file = Config::get('LOG_FILE', 'error_log.txt');
+        $this->statement_cache_limit = Config::get('STATEMENT_CACHE_LIMIT', 100);
+        
+        $this->options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+        ];
+
+        // Güvenlik kontrolleri
+        if (!$this->validate_connection_params($host, $db, $user)) {
+            throw new RuntimeException('Geçersiz bağlantı parametreleri');
+        }
+
+        $this->initialize_pool();
+        $this->initialize_connection();
+        $this->load_cache_config();
+    }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
+        return new static($dsn, $username, $password, $options);
+    }
+
+    private function disconnect(): void {
+        if ($this->pdo !== null) {
+            connection_pool::release_connection($this->pdo);
+            $this->pdo = null;
+        }
+    }
+    
+    public function __destruct() {
+        $this->disconnect();
+    }
+    
+    // Connection Pool istatistiklerini almak için yeni metod
+    public static function get_pool_stats(): array {
+        return connection_pool::get_stats();
+    }
+
+    private function log_error(string $message): void {
+        $timestamp = date('Y-m-d H:i:s');
+        $log_message = "[$timestamp] $message" . PHP_EOL;
+        file_put_contents($this->log_file, $log_message, FILE_APPEND);
+    }
+
+    /**
+     * Üretim ortamında ayrıntılı hata mesajlarını gizler, sadece genel mesaj döndürür ve hatayı loglar.
+     * Geliştirme ortamında ise gerçek hatayı döndürür.
+     *
+     * @param Exception|Throwable $e
+     * @param string $genericMessage Kullanıcıya gösterilecek genel mesaj (örn: "Bir hata oluştu.")
+     * @return string Kullanıcıya gösterilecek mesaj
+     */
+    public function handle_exception($e, string $genericMessage = 'Bir hata oluştu.'): string {
+        $this->log_error($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
+        if ($this->debug_mode) {
+            return $e->getMessage();
+        } else {
+            return $genericMessage;
+        }
+    }
+
+    /**
+     * Uygulama genelinde güvenli try-catch örüntüsü için yardımcı fonksiyon.
+     * Kapatıcı (callable) fonksiyonu güvenli şekilde çalıştırır, hata olursa handleException ile işler.
+     *
+     * @param callable $fn
+     * @param string $genericMessage
+     * @return mixed
+     */
+    public function safe_execute(callable $fn, string $genericMessage = 'Bir hata oluştu.') {
+        try {
+            return $fn();
+        } catch (Exception $e) {
+            echo $this->handle_exception($e, $genericMessage);
+            return null;
+        } catch (Throwable $e) {
+            echo $this->handle_exception($e, $genericMessage);
+            return null;
+        }
+    }
+
+    /**
+     * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
+     * @return void
+     */
+    public function ensure_connection(): void {
+        try {
+            $stmt = $this->pdo->query('SELECT 1');
+            if ($stmt === false) {
+                $this->connect();
+            }
+        } catch (PDOException $e) {
+            $this->connect();
+        }
+    }
+
+    /**
+     * Session manager'ı başlatır veya mevcut instance'ı döndürür
+     */
+    public static function session(array $config = []): session_manager {
+        if (self::$session === null) {
+            self::$session = new session_manager($config);
+        }
+        return self::$session;
+    }
+
+    /**
+     * Güvenli oturum başlatma ve cookie ayarları
+     */
+    public static function secure_session_start(array $config = []): void {
+        self::session($config)->start();
+    }
+
+    /**
+     * Session güvenli şekilde sonlandır
+     */
+    public static function end_session(): void {
+        if (self::$session !== null) {
+            self::$session->destroy();
+            self::$session = null;
+        }
+    }
+
+    /**
+     * XSS koruması için HTML çıktısı kaçışlama fonksiyonu
+     */
+    public static function escape_html($string): string {
+        return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * CSRF token al veya oluştur
+     */
+    public static function csrf_token(): string {
+        return self::session()->get_csrf_token();
+    }
+
+    /**
+     * CSRF token doğrulaması yap
+     */
+    public static function validate_csrf($token): bool {
+        return self::session()->validate_csrf_token($token);
+    }
+
+    private function execute_query(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->set_last_called_method();
+        $this->ensure_connection();
+        $this->last_query = $sql;
+        $this->last_params = $params;
+        $this->last_error = null; // Artık nullable string olduğu için sorun olmayacak
+
+        $this->validate_param_types($params);
+        $cache_key = $this->get_statement_cache_key($sql, $params);
+
+        $attempts = 0;
+        do {
+            try {
+                if (!isset($this->statement_cache[$cache_key])) {
+                    $stmt = $this->pdo->prepare($sql);
+                    $this->add_to_statement_cache($cache_key, $stmt);
+                } else {
+                    $stmt = $this->statement_cache[$cache_key];
+                }
+                
+                $this->statement_cache_usage[$cache_key] = microtime(true);
+
+                // Parametreleri bağla
+                foreach ($params as $key => $param) {
+                    $param_name = is_int($key) ? ($key + 1) : (strpos($key, ':') === 0 ? $key : ":{$key}");
+                    
+                    if (is_array($param) && isset($param['value'], $param['type'])) {
+                        // Query Builder'dan gelen yapılandırılmış parametre
+                        $stmt->bindValue($param_name, $param['value'], $param['type']);
+                    } else {
+                        // Doğrudan değer olarak gelen parametre
+                        $param_type = $this->determine_param_type($param);
+                        $stmt->bindValue($param_name, $param, $param_type);
+                    }
+                }
+
+                if ($fetchMode !== null) {
+                    $stmt->setFetchMode($fetchMode, ...$fetchModeArgs);
+                }
+
+                $stmt->execute();
+                
+                // Sorgu sonuçlarını last_results'a kaydet
+                // Sorgu sonuçlarını last_results'a kaydet (null fetch mode için)
+                if ($fetchMode === null) {
+                    $this->last_results = $stmt->fetchAll(PDO::FETCH_OBJ);
+                }
+                
+                return $stmt;
+
+            } catch (PDOException $e) {
+                $attempts++;
+
+                $error_message = $e->getMessage();
+                $this->last_error = $error_message;
+                $this->log_error($error_message);
+                $this->last_results = [];
+
+                $error_code = $e->errorInfo[1] ?? null;
+                if (in_array($error_code, [2006, 2013]) && $attempts <= $this->retry_limit) {
+                    $this->initialize_connection();
+                    continue;
+                }
+
+                return false;
+            }
+        } while ($attempts <= $this->retry_limit);
+
+        return false;
+    }
+
+    public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
+        $this->set_last_called_method();
+        return $this->execute_query($query, [], $fetchMode, ...$fetchModeArgs);
+    }
+    
+    public function insert(string $sql, array $params = []): bool {
+        $this->set_last_called_method();
+        $this->last_results = [];
+        $this->last_insert_id = 0;
+
+        $stmt = $this->execute_query($sql, $params);
+        if ($stmt !== false) {
+            $this->last_insert_id = (int)$this->pdo->lastInsertId();
+            return true;
+        }
+        return false;
+    }
+
+    public function get_row(string $query, array $params = []): ?object {
+        $this->set_last_called_method();
+        
+        // LIMIT 1 ekle eğer yoksa
+        if (!preg_match('/\bLIMIT\s+\d+(?:\s*,\s*\d+)?$/i', $query)) {
+            $query .= ' LIMIT 1';
+        }
+        
+        // Cache kontrolü
+        $cache_key = $this->generate_query_cache_key($query, $params);
+        if ($this->query_cache_enabled) {
+            $cached = $this->get_from_query_cache($cache_key);
+            if ($cached !== null) {
+                return is_array($cached) && !empty($cached) ? (object)$cached[0] : $cached;
+            }
+        }
+        
+        // Sorguyu çalıştır
+        $stmt = $this->execute_query($query, $params);
+        if ($stmt === false) {
+            return null;
+        }
+        
+        // Sonucu al ve cache'le
+        $result = $stmt->fetch(PDO::FETCH_OBJ);
+        if ($result && $this->query_cache_enabled) {
+            $this->add_to_query_cache($cache_key, $result);
+        }
+        
+        return $result ?: null;
+    }
+    
+    public function get_results(string $query, array $params = []): array {
+        $this->set_last_called_method();
+        
+        // Memory kontrolü
+        $this->check_memory_status();
+        
+        // Cache kontrolü
+        $cache_key = $this->generate_query_cache_key($query, $params);
+        if ($this->query_cache_enabled) {
+            $cached = $this->get_from_query_cache($cache_key);
+            if ($cached !== null) {
+                return $cached;
+            }
+        }
+        
+        // Sorguyu çalıştır
+        $stmt = $this->execute_query($query, $params);
+        if ($stmt === false) {
+            return [];
+        }
+        
+        // Büyük veri setleri için optimizasyon
+        $result_count = $stmt->rowCount();
+        if ($result_count > config::LARGE_RESULT_WARNING) {
+            trigger_error(
+                "Büyük veri seti ($result_count satır). get_chunk() veya get_yield() kullanmayı düşünün.",
+                E_USER_NOTICE
+            );
+        }
+        
+        // Sonuçları al ve cache'le
+        $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+        if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
+            $this->add_to_query_cache($cache_key, $results);
+        }
+        
+        return $results;
+    }
+    
+    /**
+     * Büyük veri setlerini satır satır döndürür (Generator)
+     * 
+     * @param string $query SQL sorgusu
+     * @param array $params Sorgu parametreleri
+     * @return \Generator
+     */
+    public function get_yield(string $query, array $params = []): \Generator {
+        $this->set_last_called_method();
+        
+        // LIMIT ve OFFSET kontrolü
+        if (preg_match('/\b(LIMIT|OFFSET)\b/i', $query)) {
+            throw new \InvalidArgumentException('get_yield() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
+        }
+        
+        $offset = 0;
+        $chunk_size = config::DEFAULT_CHUNK_SIZE;
+        $total_rows = 0;
+        
+        // İlk sorgu için prepared statement oluştur
+        $base_stmt = $this->pdo->prepare($query);
+        if ($base_stmt === false) {
+            return;
+        }
+        
+        while (true) {
+            $this->check_memory_status();
+            $this->adjust_chunk_size();
+            
+            // Chunk sorgusu oluştur ve çalıştır
+            $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
+            $stmt = $this->execute_query($chunk_query, $params);
+            
+            if ($stmt === false) {
+                return;
+            }
+            
+            // Satırları yield et
+            $found_rows = false;
+            while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+                $found_rows = true;
+                $total_rows++;
+                
+                // Memory optimizasyonu
+                if ($total_rows % 1000 === 0) {
+                    $this->cleanup_resources();
+                }
+                
+                yield $row;
+            }
+            
+            // Tüm satırlar okunduysa çık
+            if (!$found_rows) {
+                break;
+            }
+            
+            $offset += $chunk_size;
+            
+            // Maksimum limit kontrolü
+            if ($offset >= config::MAX_RESULT_SET_SIZE) {
+                throw new \RuntimeException(
+                    sprintf(
+                        'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
+                        config::MAX_RESULT_SET_SIZE
+                    )
+                );
+            }
+            
+            // Statement'ı temizle
+            $stmt = null;
+            
+            // GC çağır
+            if ($offset % (config::DEFAULT_CHUNK_SIZE * 10) === 0) {
+                gc_collect_cycles();
+            }
+        }
+    }
+
+    public function update(string $sql, array $params = []): bool {
+        $this->set_last_called_method();
+        $this->last_results = [];
+        return $this->execute_query($sql, $params) !== false;
+    }
+
+    public function delete(string $sql, array $params = []): bool {
+        $this->set_last_called_method();
+        $this->last_results = [];
+        return $this->execute_query($sql, $params) !== false;
+    }
+
+    /**
+     * Son eklenen kaydın ID değerini döndürür.
+     *
+     * @return int Son eklenen kaydın ID değeri.
+     */
+    public function insert_id(): int {
+        return $this->last_insert_id;
+    }
+
+    /**
+     * Bir veritabanı işlemi başlatır.
+     *
+     * @return void
+     */
+    public function begin(): void {
+        $this->pdo->beginTransaction();
+    }
+
+    /**
+     * Bir veritabanı işlemini tamamlar ve değişiklikleri kaydeder.
+     *
+     * @return void
+     */    public function commit(): bool {
+        return $this->pdo->commit();
+    }
+
+    /**
+     * Bir veritabanı işlemini geri alır.
+     *
+     * @return bool İşlem başarılıysa true, değilse false döndürür
+     */
+    public function rollback(): bool {
+        return $this->pdo->rollBack();
+    }
+
+    /**
+     * Son çalıştırılan sorgunun detaylarını ve hata ayıklama bilgilerini gösterir.
+     *
+     * @return void
+     */
+    private function set_last_called_method(): void {
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
+        $this->last_called_method = $trace[1]['function'] ?? 'unknown';
+    }
+
+    /**
+     * Memory durumunu kontrol eder
+     */
+    private function check_memory_status(): void {
+        $now = time();
+        
+        if (self::$last_memory_check !== null && 
+            ($now - self::$last_memory_check) < config::MEMORY_CHECK_INTERVAL) {
+            return;
+        }
+        
+        self::$last_memory_check = $now;
+        $current_usage = memory_get_usage(true);
+        self::$memory_stats['peak_usage'] = memory_get_peak_usage(true);
+        
+        if ($current_usage > config::MEMORY_LIMIT_CRITICAL) {
+            self::$memory_stats['critical_count']++;
+            $this->cleanup_resources();
+            throw new \RuntimeException('Kritik bellek kullanımı aşıldı!');
+        }
+        
+        if ($current_usage > config::MEMORY_LIMIT_WARNING) {
+            self::$memory_stats['warning_count']++;
+            $this->cleanup_resources();
+        }
+    }
+
+    /**
+     * Kaynakları temizler
+     */
+    private function cleanup_resources(): void {
+        $this->clear_statement_cache();
+        $this->clear_query_cache();
+        gc_collect_cycles();
+    }
+
+    /**
+     * Chunk boyutunu bellek kullanımına göre ayarlar
+     */
+    private function adjust_chunk_size(): void {
+        self::initialize_static_vars();
+
+        if (!config::AUTO_ADJUST_CHUNK_SIZE) {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+            return;
+        }
+
+        $memory_usage = memory_get_usage(true);
+        $memory_limit = config::MEMORY_LIMIT_WARNING;
+        
+        $usage_ratio = $memory_usage / $memory_limit;
+        
+        if ($usage_ratio > 0.8) {
+            self::$current_chunk_size = max(
+                config::MIN_CHUNK_SIZE,
+                (int)(self::$current_chunk_size * (1 - ($usage_ratio - 0.8) / 0.2))
+            );
+        } else {
+            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        }
+    }
+}
