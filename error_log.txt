@@ -1,0 +1,48 @@
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: SELECT * FROM sayfalar
+Parametreler: []
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: SELECT id, tam_isim, eposta FROM kullanicilar ORDER BY tam_isim ASC
+Parametreler: []
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = :tam_isim_0 LIMIT 1
+Parametreler: {
+    ":tam_isim_0": {
+        "value": "Necip GÜNENÇ",
+        "type": 2
+    }
+}
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: get_results
+SQL Sorgusu: SELECT * FROM kullanicilar WHERE tam_isim = :tam_isim_0 LIMIT 1
+Parametreler: {
+    ":tam_isim_0": {
+        "value": "Necip GÜNENÇ",
+        "type": 2
+    }
+}
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: SELECT * FROM sayfalar LIMIT 1000 OFFSET 0
+Parametreler: []
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: select * from kullanicilar where id = '1'
+Parametreler: {
+    "id": 1
+}
+
+[2025-05-27 20:55:12] Çalıştırılan Metod: execute_query
+SQL Sorgusu: SELECT tam_isim FROM kullanicilar WHERE id = '1'
+Parametreler: {
+    "id": 1
+}
+
