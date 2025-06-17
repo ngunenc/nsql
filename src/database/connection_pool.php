@@ -248,15 +248,64 @@ class connection_pool {
      */
     private static function cleanup_stale_connections(): void {
         $now = time();
-        $timeout = config::CONNECTION_TIMEOUT;
 
+        // Her istekte belirli bir olasılıkla temizlik yap
+        if (mt_rand(1, 100) > config::CLEANUP_PROBABILITY) {
+            return;
+        }
+
+        // Aktif bağlantıları kontrol et
         foreach (self::$active_connections as $key => $timestamp) {
-            if (($now - $timestamp) > $timeout) {
+            // Timeout kontrolü
+            if (($now - $timestamp) > config::CONNECTION_TIMEOUT) {
                 unset(self::$connections[$key], self::$active_connections[$key]);
                 self::$stats['connection_timeouts']++;
                 self::$stats['active_connections']--;
+                continue;
+            }
+
+            // Bağlantı geçerliliğini kontrol et
+            if (!isset(self::$connections[$key]) || !self::is_connection_valid(self::$connections[$key])) {
+                unset(self::$connections[$key], self::$active_connections[$key]);
+                self::$stats['failed_health_checks']++;
+                self::$stats['active_connections']--;
             }
         }
+
+        // Boşta kalan bağlantıları kontrol et
+        foreach (self::$idle_connections as $key => $timestamp) {
+            // Boşta kalma süresi kontrolü
+            if (($now - $timestamp) > config::CONNECTION_IDLE_TIMEOUT) {
+                // Minimum bağlantı sayısını koru
+                if (count(self::$connections) > config::MIN_CONNECTIONS) {
+                    unset(self::$connections[$key], self::$idle_connections[$key]);
+                    self::$stats['idle_connections']--;
+                }
+                continue;
+            }
+
+            // Bağlantı geçerliliğini kontrol et
+            if (!isset(self::$connections[$key]) || !self::is_connection_valid(self::$connections[$key])) {
+                unset(self::$connections[$key], self::$idle_connections[$key]);
+                self::$stats['failed_health_checks']++;
+                self::$stats['idle_connections']--;
+            }
+        }
+
+        // Yeterli aktif bağlantı yoksa yeni bağlantılar oluştur
+        $total_connections = count(self::$connections);
+        if ($total_connections < config::MIN_CONNECTIONS) {
+            $needed = config::MIN_CONNECTIONS - $total_connections;
+            for ($i = 0; $i < $needed; $i++) {
+                self::create_connection();
+            }
+        }
+
+        // Başarısız denemelerini sıfırla
+        self::$retry_counts = array_filter(
+            self::$retry_counts,
+            fn($count) => $count < config::MAX_FAILED_CONNECTIONS
+        );
     }
 
     /**
