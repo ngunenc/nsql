@@ -18,12 +18,14 @@ class config {
     // Connection pool yapılandırma sabitleri  
     public const MIN_CONNECTIONS = 5;
     public const MAX_CONNECTIONS = 50; // Maksimum bağlantı sayısı artırıldı
-    public const CONNECTION_TIMEOUT = 10; // Timeout süresi optimize edildi
+    public const CONNECTION_TIMEOUT = 10; // Saniye cinsinden timeout süresi
     public const CONNECTION_LIFETIME = 1800; // 30 dakika
-    public const CONNECTION_IDLE_TIMEOUT = 180; // Boşta kalma süresi optimize edildi
+    public const CONNECTION_IDLE_TIMEOUT = 60; // Boşta kalma süresi 60 saniyeye düşürüldü
     public const MAX_RETRY_ATTEMPTS = 3;
-    public const HEALTH_CHECK_INTERVAL = 30; // Sağlık kontrolü sıklaştırıldı
+    public const HEALTH_CHECK_INTERVAL = 15; // Sağlık kontrolü sıklığı artırıldı (15 saniye)
     public const PERSISTENT_CONNECTION = false; // Kalıcı bağlantı varsayılan olarak kapalı
+    public const MAX_FAILED_CONNECTIONS = 3; // Bir bağlantının maksimum başarısız deneme sayısı
+    public const CLEANUP_PROBABILITY = 30; // Her istekte %30 olasılıkla temizlik yap
 
     // Memory limitleri (bytes)
     public const MEMORY_LIMIT_WARNING = 134217728; // 128MB

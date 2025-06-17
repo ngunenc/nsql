@@ -3,10 +3,19 @@
 require_once __DIR__ . '/vendor/autoload.php';
 
 use nsql\database\nsql;
+use nsql\database\config;
 
-// Debug modu açık olarak veritabanı bağlantısı
-$db = new nsql(debug: true);
+try {
 
+    // Yeni veritabanına bağlan
+    $db = new nsql(
+        host: 'localhost',
+        db: 'etiyop',
+        user: 'root',
+        pass: '',
+        charset: 'utf8mb4',
+        debug: true
+    );
 
 // SELECT tek satır örneği
 $kullanici = $db->get_row(
@@ -59,3 +68,6 @@ $ad = $db->get_row("SELECT tam_isim FROM kullanicilar WHERE id = :id", ['id' => 
 echo $ad->tam_isim ?? 'Kullanıcı bulunamadı';
 
 $db->debug();
+} catch (Exception $e) {
+    echo "Hata: " . $e->getMessage();
+}
