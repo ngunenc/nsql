@@ -302,9 +302,11 @@ class nsql extends PDO {
     private function execute_query(string $sql, array $params = [], ?int $fetchMode = null, mixed ...$fetchModeArgs): PDOStatement|false {
         $this->set_last_called_method();
         $this->ensure_connection();
+        
+        // Sorgu türünü belirle ve kaydet
         $this->last_query = $sql;
         $this->last_params = $params;
-        $this->last_error = null; // Artık nullable string olduğu için sorun olmayacak
+        $this->last_error = null; 
 
         $this->validate_param_types($params);
         $cache_key = $this->get_statement_cache_key($sql, $params);
@@ -342,7 +344,6 @@ class nsql extends PDO {
                 $stmt->execute();
                 
                 // Sorgu sonuçlarını last_results'a kaydet
-                // Sorgu sonuçlarını last_results'a kaydet (null fetch mode için)
                 if ($fetchMode === null) {
                     $this->last_results = $stmt->fetchAll(PDO::FETCH_OBJ);
                 }
