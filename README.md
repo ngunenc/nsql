@@ -31,9 +31,113 @@
 - PHPUnit test desteği
 - PSR-12 kod standardı uyumluluğu
 
+
 ## 📋 Dokümantasyon
 
 Detaylı kullanım kılavuzu için [kullanim-klavuzu.md](docs/kullanim-klavuzu.md) dosyasını inceleyebilirsiniz.
+
+### Kısa Özet ve Temel Kullanım
+
+#### Veritabanı Bağlantısı
+
+```php
+use nsql\database\nsql;
+
+// .env dosyasından yapılandırma ile
+$db = new nsql();
+
+// veya özel parametrelerle
+$db = new nsql(
+    host: 'localhost',
+    db: 'veritabani_adi',
+    user: 'kullanici',
+    pass: 'sifre',
+    charset: 'utf8mb4',
+    debug: true
+);
+```
+
+#### Veri Sorgulama
+
+```php
+// Tek satır getirme
+$kullanici = $db->get_row(
+    "SELECT * FROM kullanicilar WHERE id = :id",
+    ['id' => 1]
+);
+
+// Çoklu satır getirme
+$kullanicilar = $db->get_results("SELECT * FROM kullanicilar");
+
+// Generator ile büyük veri setleri
+foreach ($db->get_yield("SELECT * FROM buyuk_tablo") as $row) {
+    // Hafıza dostu işlemler...
+}
+```
+
+#### Veri Manipülasyonu
+
+```php
+// Ekleme
+$db->insert("INSERT INTO kullanicilar (ad, email) VALUES (:ad, :email)", [
+    'ad' => 'Ahmet',
+    'email' => 'ahmet@ornek.com'
+]);
+$son_id = $db->insert_id();
+
+// Güncelleme
+$db->update("UPDATE kullanicilar SET ad = :ad WHERE id = :id", [
+    'ad' => 'Mehmet',
+    'id' => 1
+]);
+
+// Silme
+$db->delete("DELETE FROM kullanicilar WHERE id = :id", ['id' => 1]);
+```
+
+
+---
+
+### Örnek Uygulama Akışı
+
+Aşağıda, nsql kütüphanesinin bir web uygulamasında kullanıcı ekleme, listeleme ve güncelleme işlemleri için nasıl kullanılabileceğine dair tam bir akış örneği verilmiştir:
+
+```php
+use nsql\database\nsql;
+
+// Bağlantı
+$db = new nsql();
+
+// 1. Kullanıcı ekleme
+$db->insert("INSERT INTO kullanicilar (ad, email) VALUES (:ad, :email)", [
+    'ad' => 'Ayşe',
+    'email' => 'ayse@ornek.com'
+]);
+$yeni_id = $db->insert_id();
+
+// 2. Tüm kullanıcıları listeleme
+$kullanicilar = $db->get_results("SELECT * FROM kullanicilar");
+foreach ($kullanicilar as $kullanici) {
+    echo $kullanici->ad . " - " . $kullanici->email . "<br>";
+}
+
+// 3. Kullanıcı güncelleme
+$db->update("UPDATE kullanicilar SET ad = :ad WHERE id = :id", [
+    'ad' => 'Ayşe Yılmaz',
+    'id' => $yeni_id
+]);
+
+// 4. Tek bir kullanıcıyı getirme
+$ayse = $db->get_row("SELECT * FROM kullanicilar WHERE id = :id", ['id' => $yeni_id]);
+echo "Güncellenen kullanıcı: " . $ayse->ad;
+
+// 5. Kullanıcı silme
+$db->delete("DELETE FROM kullanicilar WHERE id = :id", ['id' => $yeni_id]);
+```
+
+Bu örnek, nsql ile tipik bir CRUD (Create, Read, Update, Delete) akışının nasıl gerçekleştirileceğini göstermektedir. Tüm işlemler güvenli parametre bağlama ile yapılır ve hata yönetimi için try-catch blokları eklenebilir.
+
+Kütüphanenin daha fazla özelliği ve gelişmiş kullanım örnekleri için [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md) dosyasını inceleyebilirsiniz.
 
 ## 📂 Proje Yapısı
 
@@ -184,7 +288,7 @@ $db = new nsql();
 // veya özel parametrelerle
 $db = new nsql(
     host: 'localhost',
-    db: 'veritabani',
+    db: 'veritabanı',
     user: 'kullanici',
     pass: 'sifre',
     charset: 'utf8mb4',
@@ -303,6 +407,66 @@ $db->safeExecute(function() use ($db) {
     return $db->get_results("SELECT * FROM tablo");
 }, "Veriler alınırken bir hata oluştu");
 ```
+
+---
+
+### Gerçek Hayat Kullanım Senaryoları
+
+#### Migration Kullanımı
+
+Gerçek projelerde veritabanı şemasını güncellemek için migration modülünü kullanabilirsiniz:
+
+```php
+use nsql\database\migration_manager;
+
+$migration = new migration_manager();
+$migration->runMigrations(); // Tüm migration dosyalarını uygular
+```
+
+#### Seed Kullanımı
+
+Test ve demo verisi eklemek için seed modülünü kullanabilirsiniz:
+
+```php
+use nsql\database\seeds\user_seeder;
+
+$seeder = new user_seeder();
+$seeder->run(); // Örnek kullanıcı verilerini ekler
+```
+
+#### Güvenlik Modülleri
+
+Gerçek uygulamalarda rate limiting ve veri şifreleme gibi güvenlik modüllerini entegre edebilirsiniz:
+
+```php
+use nsql\database\security\rate_limiter;
+
+$limiter = new rate_limiter();
+if (!$limiter->check('user_ip')) {
+    die('Çok fazla istek!');
+}
+
+use nsql\database\security\encryption;
+
+$enc = new encryption();
+$crypted = $enc->encrypt('gizli veri');
+$plain = $enc->decrypt($crypted);
+```
+
+#### Cache Kullanımı
+
+Sorgu önbellekleme ile performansı artırmak için:
+
+```php
+use nsql\database\nsql;
+
+$db = new nsql();
+$db->enableQueryCache(); // Sorgu önbellekleme aktif
+$sonuclar = $db->get_results("SELECT * FROM tablo"); // Sonuçlar cache'den gelir
+$db->clearQueryCache(); // Cache temizlenir
+```
+
+Bu örnekler, nsql kütüphanesinin migration, seed, güvenlik ve cache gibi modüllerinin gerçek bir projede nasıl kullanılabileceğini göstermektedir.
 
 ## 📜 Lisans
 
@@ -423,7 +587,7 @@ $db->debug();
 // Güvenli hata yönetimi
 $result = $db->safeExecute(function() use ($db) {
     return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
-});
+}, 'Kullanıcı bilgileri alınamadı');
 ```
 
 ### Güvenlik Fonksiyonları
@@ -589,9 +753,23 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 ## 🏗️ Mimari Özellikler
 
 ### Katmanlı Mimari
+```
+   [Kullanıcı]
+       |
+   [index.php / uygulama]
+       |
+   [nsql (src/database/nsql.php)]
+       |
+   +-------------------+-------------------+
+   |                   |                   |
+[ConnectionPool]   [QueryBuilder]   [SecurityManager]
+       |                   |                   |
+   [PDO]              [SQL]              [Güvenlik modülleri]
+```
+
 - **Config Katmanı**: Yapılandırma yönetimi (`Config.php`)
 - **Bağlantı Katmanı**: Veritabanı bağlantı havuzu yönetimi (`ConnectionPool.php`)
-- **Core Katmanı**: Ana veritabanı işlemleri (`pdo.php`)
+- **Core Katmanı**: Ana veritabanı işlemleri (`nsql.php`)
 - **Güvenlik Katmanı**: XSS, CSRF ve Session güvenliği
 - **Cache Katmanı**: Query ve Statement önbellekleme
 
@@ -715,6 +893,7 @@ Parametreler: {"id": 1}
 
 ### 🧪 Test
 
+
 ### Unit Tests
 
 Testler PHPUnit ile yazılmıştır. Test sınıfları `tests` dizini altında bulunmaktadır.
@@ -752,6 +931,32 @@ class NsqlTest extends TestCase
         );
         $this->assertEquals('Test Name', $row->name);
     }
+
+    // Edge case örneği: Boş veri ekleme
+    public function testInsertEmptyName()
+    {
+        $id = $this->db->insert(
+            "INSERT INTO test_table (name) VALUES (:name)",
+            ['name' => '']
+        );
+        $this->assertIsInt($id);
+    }
+
+    // Entegrasyon testi örneği: Transaction
+    public function testTransactionRollback()
+    {
+        $this->db->begin();
+        $id = $this->db->insert(
+            "INSERT INTO test_table (name) VALUES (:name)",
+            ['name' => 'Rollback Test']
+        );
+        $this->db->rollback();
+        $row = $this->db->get_row(
+            "SELECT * FROM test_table WHERE id = :id",
+            ['id' => $id]
+        );
+        $this->assertNull($row);
+    }
 }
 ```
 
@@ -768,15 +973,14 @@ class NsqlTest extends TestCase
 ./vendor/bin/phpunit --filter testCRUD tests/NsqlTest.php
 ```
 
-### Test Çalıştırma
+### Test Kapsamı ve İyi Uygulamalar
 
-```powershell
-# PHPUnit ile testleri çalıştır
-./vendor/bin/phpunit tests/
-
-# Belirli bir test sınıfını çalıştır
-./vendor/bin/phpunit tests/nsqlTest.php
-```
+- CRUD işlemlerinin yanı sıra edge case ve hata senaryoları için testler yazın (ör. boş veri, hatalı parametre, bağlantı hatası).
+- Transaction, rollback, cache, güvenlik ve migration gibi modüller için entegrasyon testleri ekleyin.
+- Testlerde assert fonksiyonlarını kullanarak beklenen sonuçları doğrulayın.
+- Her yeni fonksiyon veya modül için birim test eklemeyi unutmayın.
+- Test veritabanı ile gerçek veritabanını ayırın, test ortamında dummy veri kullanın.
+- Kodunuzu test etmeden production ortamına geçmeyin.
 
 ---
 
@@ -884,12 +1088,6 @@ foreach ($db->get_yield("SELECT * FROM cok_buyuk_tablo", []) as $row) {
 
 ---
 
-### Özet
-- Küçük/orta veri setleri için: `get_results` (dizi döner, debug ile tablo gösterir)
-- Çok büyük veri setleri için: `get_yield` (generator döner, foreach ile satır satır işlenir)
-
----
-
 ### 📦 Kütüphane ve Bağımlılık Güncelliği
 
 - Kütüphanenin ve kullandığınız tüm harici bağımlılıkların (ör. PDO, PHP sürümü, ek güvenlik kütüphaneleri) güncel tutulması önerilir.
@@ -990,3 +1188,61 @@ Son Güncelleme: 24 Mayıs 2025
 - NoSQL adaptörleri
 - Event sistemi
 - Plugin sistemi
+
+---
+
+## 🌐 Uluslararasılaştırma ve Lokalizasyon (i18n & l10n)
+
+nsql kütüphanesi, çoklu dil desteği ve lokalizasyon için aşağıdaki imkanları sunar:
+
+### 1. Veritabanı Charset ve Collation
+- Tüm örneklerde ve .env dosyasında `DB_CHARSET=utf8mb4` kullanılır. Bu ayar, Unicode karakter desteği sağlar ve çoklu dil veri saklama için uygundur.
+- Tablo oluştururken charset ve collation ayarlarını belirtin:
+
+```sql
+CREATE TABLE kullanicilar (
+    id INT PRIMARY KEY,
+    ad VARCHAR(255),
+    email VARCHAR(255)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+```
+
+### 2. Dil Dosyası Entegrasyonu
+- Uygulamanızda hata mesajları, arayüz metinleri ve loglar için dil dosyası kullanabilirsiniz.
+- Örnek PHP dil dosyası:
+
+```php
+// lang/tr.php
+return [
+    'user_not_found' => 'Kullanıcı bulunamadı',
+    'db_error' => 'Veritabanı hatası oluştu',
+    'login_success' => 'Giriş başarılı',
+];
+```
+
+Kullanım:
+```php
+$lang = require 'lang/tr.php';
+echo $lang['user_not_found'];
+```
+
+### 3. Dinamik Dil Seçimi
+- Kullanıcıya göre dil dosyası seçimi yapılabilir:
+
+```php
+$locale = $_GET['lang'] ?? 'tr';
+$lang = require "lang/{$locale}.php";
+```
+
+### 4. Tarih, Para ve Sayı Formatları
+- PHP `Intl` eklentisi ile tarih, para ve sayı formatlarını yerelleştirebilirsiniz:
+
+```php
+$fmt = new NumberFormatter('tr_TR', NumberFormatter::CURRENCY);
+echo $fmt->formatCurrency(1234.56, 'TRY'); // 1.234,56 TL
+```
+
+### 5. Çoklu Dil İçin Entegrasyon Önerisi
+- Tüm hata mesajlarını ve arayüz metinlerini dil dosyalarından çekin.
+- Veritabanı charset ayarlarını her ortamda kontrol edin.
+- Kullanıcıya dil seçimi imkanı sunun.
