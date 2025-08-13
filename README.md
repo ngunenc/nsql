@@ -50,15 +50,48 @@ $db = new nsql();
 $db = new nsql(
     host: 'localhost',
     db: 'veritabani_adi',
+## 🚀 Hızlı Başlangıç
+
+Kurulumdan sonra aşağıdaki örnekle hızlıca çalışmaya başlayabilirsiniz:
+```php
+require 'vendor/autoload.php';
+use nsql\database\nsql;
+
+$db = new nsql();
+$users = $db->get_results("SELECT * FROM users");
+print_r($users);
+```
+
+## 🗂️ .env Dosyası Örneği
+
+Proje kök dizininde `.env` dosyası oluşturun ve aşağıdaki örneği kullanın:
+
+```ini
+DB_HOST=localhost
+DB_NAME=veritabani_adi
+DB_USER=kullanici
+DB_PASS=sifre
+DB_CHARSET=utf8mb4
+QUERY_CACHE_ENABLED=true
+STATEMENT_CACHE_LIMIT=100
+RATE_LIMIT_ENABLED=true
+ENCRYPTION_KEY=your-secure-key
+LOG_FILE=error_log.txt
+DEBUG_MODE=false
+```
+
+Açıklamalar:
+- `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`: Veritabanı bağlantı bilgileri
+- `DB_CHARSET`: Karakter seti
+- `QUERY_CACHE_ENABLED`: Sorgu önbelleği
+- `STATEMENT_CACHE_LIMIT`: Statement cache limiti
+- `RATE_LIMIT_ENABLED`: Rate limit aktif/pasif
+- `ENCRYPTION_KEY`: Şifreleme anahtarı
+- `LOG_FILE`: Hata log dosyası
+- `DEBUG_MODE`: Geliştirme/üretim modu
     user: 'kullanici',
     pass: 'sifre',
     charset: 'utf8mb4',
-    debug: true
-);
-```
-
-#### Veri Sorgulama
-
 ```php
 // Tek satır getirme
 $kullanici = $db->get_row(
@@ -1125,11 +1158,17 @@ $db->debug();
 
 ## 👥 Katkıda Bulunma
 
-1. Bu depoyu fork edin
-2. Feature branch'inizi oluşturun (`git checkout -b feature/AmazingFeature`)
+1. Depoyu fork edin
+2. Feature branch oluşturun (`git checkout -b feature/AmazingFeature`)
 3. Değişikliklerinizi commit edin (`git commit -m 'Add some AmazingFeature'`)
-4. Branch'inizi push edin (`git push origin feature/AmazingFeature`)
-5. Pull Request oluşturun
+4. Branch'i push edin (`git push origin feature/AmazingFeature`)
+5. Pull Request açın (açıklayıcı başlık ve açıklama ile)
+6. Issue açmadan önce mevcut konuları kontrol edin, örnek kod, hata mesajı ve ortam bilgisi ekleyin
+7. Kodunuzu PSR-12 standartlarına uygun yazın
+8. Her yeni fonksiyon için birim test ekleyin
+9. Açıklayıcı PHPDoc yorumları ekleyin
+10. Kod incelemelerinde geri bildirimlere dikkat edin ve önerilere yanıt verin
+11. Testlerinizin geçtiğinden emin olun
 
 ### Kod Standartları
 - PSR-12 kod standartlarına uyun
@@ -1137,19 +1176,20 @@ $db->debug();
 - Unit testler ekleyin
 - Performans ve güvenlik göz önünde bulundurun
 
+### Katkı Süreci
+- Pull Request'ler kod incelemesinden geçer.
+- Issue açarken mümkün olduğunca detay verin.
+- Kodunuzu test edin ve test sonuçlarını paylaşın.
+
 ## 📝 Sürüm Geçmişi
 
-- v1.1.0
-  - Query Cache özelliği eklendi
-  - Connection Pool desteği eklendi
-  - Gelişmiş debug sistemi
-  - Performans iyileştirmeleri
 
-- v1.0.0
-  - İlk kararlı sürüm
-  - Temel PDO wrapper fonksiyonları
-  - Statement cache
-  - Güvenlik özellikleri
+| Sürüm   | Tarih        | Değişiklikler                                      |
+|---------|--------------|----------------------------------------------------|
+| 1.3.0   | 13.08.2025   | Redis önbellek entegrasyonu, gelişmiş migration sistemi, şema validasyonu, hata loglama iyileştirmeleri |
+| 1.2.0   | 01.07.2025   | PostgreSQL ve SQLite desteği, Query Builder geliştirmeleri, test altyapısı güncellemeleri |
+| 1.1.0   | 24.05.2025   | Query Cache, Connection Pool, debug sistemi, performans iyileştirmeleri |
+| 1.0.0   | 01.03.2025   | İlk kararlı sürüm, temel PDO wrapper, statement cache, güvenlik özellikleri |
 
 ## 📄 Lisans
 
@@ -1164,7 +1204,7 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE
 ---
 
 Geliştirici: [Necip Günenç](https://github.com/ngunenc)
-Son Güncelleme: 24 Mayıs 2025
+Son Güncelleme: 08 Ağustos 2025
 
 ## 🎯 Planlanan Özellikler
 
