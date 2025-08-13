@@ -5,6 +5,14 @@ namespace nsql\database\security;
 use RuntimeException;
 
 class session_manager {
+    /**
+     * Statik güvenli session başlatma
+     */
+    public static function secure_session_start(array $config = []): session_manager {
+        $manager = new self($config);
+        $manager->start();
+        return $manager;
+    }
     private bool $initialized = false;
     private array $config;
     

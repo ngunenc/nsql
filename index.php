@@ -7,7 +7,7 @@ use nsql\database\config;
 
 try {
 
-    // Yeni veritabanına bağlan
+    // Yeni veritabanına bağlan 
     $db = new nsql(
         host: 'localhost',
         db: 'etiyop',
