@@ -27,7 +27,7 @@ composer require ngunenc/nsql
 
 ### Yapılandırma
 
-1. `.env` dosyasını oluşturun:
+1. Proje kök dizininde `.env` dosyasını oluşturun:
 
 ```ini
 # Veritabanı Ayarları
@@ -43,13 +43,13 @@ QUERY_CACHE_TIMEOUT=300
 QUERY_CACHE_SIZE_LIMIT=1000
 STATEMENT_CACHE_LIMIT=100
 
-# Connection Pool Ayarları  
+# Connection Pool Ayarları
 DB_MIN_CONNECTIONS=5
 DB_MAX_CONNECTIONS=20
 DB_CONNECTION_TIMEOUT=15
 
 # Debug Modu
-DEBUG_MODE=false 
+DEBUG_MODE=false
 
 # Log Ayarları
 LOG_FILE=error_log.txt
@@ -153,13 +153,15 @@ $sonuc2 = $db->get_results("SELECT * FROM urunler WHERE kategori = 'elektronik'"
 
 // Cache'i manuel temizleme
 $db->clearQueryCache();
+
+// Not: $db->withCache(...) fonksiyonu henüz mevcut değildir, planlanan bir özelliktir.
 ```
 
 ### Connection Pool İstatistikleri
 
 ```php
 // Bağlantı havuzu durumunu kontrol et
-$stats = $db->getPoolStats();
+$stats = nsql::get_pool_stats();
 print_r($stats);
 /* 
 Array
@@ -203,11 +205,16 @@ $kullanicilar = $db->get_results(
 
 ```php
 // Güvenli oturum başlatma
-nsql::secureSessionStart();
+nsql::secure_session_start();
 
 // Oturum ID'sini yenileme
-nsql::regenerateSessionId();
+nsql::session()->regenerate_id();
+
+// Oturumu sonlandırma
+nsql::end_session();
 ```
+
+> Not: Oturum yönetimi için `session_manager` sınıfı kullanılmaktadır. Tüm işlemler otomatik olarak güvenli şekilde yapılır.
 
 ### Input Filtreleme
 
@@ -215,7 +222,7 @@ nsql::regenerateSessionId();
 use nsql\database\security\sensitive_data_filter;
 
 $filter = new sensitive_data_filter();
-$temiz_veri = $filter->clean($_POST['user_input']);
+$temiz_veri = $filter->filter($_POST['user_input']);
 ```
 
 ## 🚄 Performans Optimizasyonu
@@ -244,6 +251,7 @@ for ($i = 0; $i < 1000; $i++) {
 
 ## ⚠️ Hata Yönetimi
 
+
 ### Debug Modu
 
 ```php
@@ -257,11 +265,12 @@ $db->get_results("SELECT * FROM tablo");
 $db->debug();
 ```
 
+
 ### Güvenli Hata Yönetimi
 
 ```php
 // Güvenli sorgu çalıştırma
-$result = $db->safeExecute(function() use ($db) {
+$result = $db->safe_execute(function() use ($db) {
     return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
 }, "Kullanıcı bilgileri alınırken hata oluştu");
 ```
@@ -269,30 +278,30 @@ $result = $db->safeExecute(function() use ($db) {
 ## 💡 İyi Uygulamalar
 
 1. **Bağlantı Yönetimi**
-   - Connection Pool kullanın
-   - Uzun süreli bağlantılar için timeout ayarlayın
-   - Bağlantı sayılarını monitör edin
+    - Connection Pool kullanın (`get_pool_stats()` ile izleyin)
+    - Uzun süreli bağlantılar için timeout ayarlayın
+    - Bağlantı sayılarını monitör edin
 
 2. **Performans**
-   - Büyük veriler için `get_yield()` kullanın
-   - Query Cache'i etkin kullanın
-   - Statement Cache'den faydalanın
+    - Büyük veriler için `get_yield()` veya `get_chunk()` kullanın
+    - Query Cache'i etkin kullanın
+    - Statement Cache'den faydalanın
 
 3. **Güvenlik**
-   - Her zaman prepared statements kullanın
-   - Hassas verileri filtreleyin
-   - Güvenli oturum yönetimini kullanın
-   - Rate limiting uygulayın
+    - Her zaman prepared statements kullanın
+    - Hassas verileri filtreleyin (`sensitive_data_filter`)
+    - Güvenli oturum yönetimini kullanın (`secure_session_start`, `end_session`)
+    - Rate limiting uygulayın
 
 4. **Bellek Yönetimi**
-   - Gereksiz result set'leri temizleyin
-   - Büyük sorgularda chunk processing kullanın
-   - Memory limitlerini monitör edin
+    - Gereksiz result set'leri temizleyin
+    - Büyük sorgularda chunk processing kullanın
+    - Memory limitlerini monitör edin (`get_memory_stats()`)
 
 5. **Hata Yönetimi**
-   - try-catch bloklarını kullanın
-   - Detaylı log tutun
-   - Debug modunu geliştirme ortamında kullanın
+    - try-catch bloklarını kullanın
+    - Detaylı log tutun
+    - Debug modunu geliştirme ortamında kullanın
 
 ## 📦 Versiyon Özellikleri ve Kullanım
 
@@ -329,16 +338,34 @@ $result = $db->withCache(300)->get_results($query);
 $db->setReadWriteSplit(true);
 $db->addReadServer('slave1.example.com');
 
-// Redis cache
-$db->setCacheDriver('redis');
-$db->withCache(300)->get_results($query);
+### v1.0.0 (Güncel)
+**Yeni Özellikler:**
+- PDO tabanlı veritabanı soyutlama
+- Connection pooling
+- Query ve statement cache
+- Temel güvenlik özellikleri
 
-// Circuit breaker
-$db->enableCircuitBreaker([
-    'failure_threshold' => 5,
-    'reset_timeout' => 30
-]);
+**Örnek Kullanım:**
+```php
+// Temel veritabanı işlemleri
+$db = new nsql();
+$db->get_results("SELECT * FROM users");
+
+// Connection pool kullanımı
+$stats = nsql::get_pool_stats();
+
+// Cache kullanımı
+// (withCache fonksiyonu henüz mevcut değil, planlanan özellik)
 ```
+
+### v1.1.0 (Planlanan)
+**Yeni Özellikler:**
+- Master/Slave yapılandırması
+- Circuit breaker implementasyonu
+- Redis cache entegrasyonu
+- Gelişmiş monitoring araçları
+
+**Not:** Bu özellikler henüz mevcut değildir, planlanmaktadır.
 
 ### v1.2.0 (Planlanan)
 **Yeni Özellikler:**
@@ -347,25 +374,7 @@ $db->enableCircuitBreaker([
 - Distributed caching
 - Async sorgular
 
-**Örnek Kullanım:**
-```php
-// Sharding kullanımı
-$db->setShardKey('user_id');
-$db->addShard('shard1', ['range' => [1, 1000]]);
-
-// GraphQL sorguları
-$db->graphql()->query('{
-    users(first: 5) {
-        id
-        name
-        email
-    }
-}');
-
-// Async sorgu
-$promise = $db->async()->get_results($query);
-$result = await($promise);
-```
+**Not:** Bu özellikler henüz mevcut değildir, planlanmaktadır.
 
 ### v1.3.0 (Planlanan)
 **Yeni Özellikler:**
@@ -374,25 +383,5 @@ $result = await($promise);
 - Cloud entegrasyonları
 - Advanced security
 
-**Örnek Kullanım:**
+**Not:** Bu özellikler henüz mevcut değildir, planlanmaktadır.
 ```php
-// Schema validation
-$db->enableSchemaValidation();
-$db->validateTable('users');
-
-// Query optimization
-$db->enableQueryOptimizer();
-$plan = $db->explainQuery($query);
-
-// Cloud storage
-$db->backup()->toCloud('aws-s3');
-```
-
-## 🤝 Destek ve Katkı
-
-- GitHub Issues: [https://github.com/ngunenc/nsql/issues](https://github.com/ngunenc/nsql/issues)
-- Katkıda bulunmak için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasını inceleyin.
-
-## 📜 Lisans
-
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakınız.

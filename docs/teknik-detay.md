@@ -21,10 +21,29 @@ src/database/
 ├── connection_pool.php  -> Bağlantı havuzu
 ├── query_builder.php    -> Sorgu oluşturucu
 └── traits/             -> Yeniden kullanılabilir özellikler
+├── exceptions/         -> Özel hata ve istisna yönetimi
+├── migrations/         -> Migration dosyaları ve yönetimi
+├── seeds/              -> Test ve demo verisi üretimi
+├── templates/          -> Debug ve özel çıktı şablonları
+├── security/           -> Güvenlik bileşenleri (rate limiter, encryption, audit vs.)
 ```
 
 Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıdır (loose coupling).
 
+#### Alt Klasörlerin Sorumlulukları
+
+| Klasör/Dosya         | Açıklama |
+|----------------------|----------|
+| config.php           | Ortam ve yapılandırma yönetimi |
+| nsql.php             | Ana veritabanı erişim katmanı (PDO wrapper) |
+| connection_pool.php  | Bağlantı havuzu ve yönetimi |
+| query_builder.php    | Dinamik ve güvenli sorgu oluşturucu |
+| traits/              | Yeniden kullanılabilir kod özellikleri |
+| exceptions/          | Özel hata ve istisna sınıfları |
+| migrations/          | Veritabanı migration dosyaları |
+| seeds/               | Test/demo verisi üretimi |
+| templates/           | Debug ve özel çıktı şablonları |
+| security/            | Rate limiting, şifreleme, audit, veri filtreleme |
 ## 🔧 Temel Bileşenler
 
 ### 1. Config Yönetimi (config.php)
@@ -91,6 +110,68 @@ $db->table('users')
 - İndeks kullanımına dikkat edin
 - Karmaşık sorguları optimize edin
 
+### 4. Exception Yönetimi (exceptions/)
+
+Özel hata ve istisna yönetimi için exceptions klasörü kullanılır. Tüm veritabanı hataları merkezi olarak burada ele alınır.
+
+```php
+use exceptions\DatabaseException;
+
+try {
+    $db->query($sql);
+} catch (DatabaseException $e) {
+    // Hata loglama ve özel işlem
+    error_log($e->getMessage());
+}
+```
+
+**Best Practice:**
+- Tüm hata türleri için ayrı exception sınıfları oluşturun
+- Hataları merkezi olarak loglayın
+
+### 5. Migration Yönetimi (migrations/, migration_manager.php)
+
+Veritabanı şema değişiklikleri migration dosyaları ile yönetilir. Migration işlemleri migration_manager.php üzerinden yapılır.
+
+```php
+$manager = new migration_manager();
+$manager->create('create_users_table');
+$manager->migrate(['--force' => true]);
+```
+
+**Best Practice:**
+- Migration dosyalarını versiyonlayın
+- Rollback stratejisi belirleyin
+- Migration bağımlılıklarını yönetin
+
+### 6. Seed Yönetimi (seeds/)
+
+Test ve demo verisi üretimi için seed dosyaları kullanılır.
+
+```php
+require_once 'src/database/seeds/user_seeder.php';
+$userSeeder = new user_seeder();
+$userSeeder->run();
+```
+
+**Best Practice:**
+- Seed dosyalarını test ortamında kullanın
+- Gerçek veriye benzer dummy data üretin
+
+### 7. Template Kullanımı (templates/)
+
+Özel çıktı ve debug işlemleri için template dosyaları kullanılır.
+
+```php
+require_once 'src/database/templates/debug_template.php';
+$template = new debug_template();
+echo $template->render($debugData);
+```
+
+**Best Practice:**
+- Debug ve hata çıktıları için ayrı template dosyaları oluşturun
+- Template'leri özelleştirilebilir yapıda tutun
+
 ## 🔒 Güvenlik Mekanizmaları
 
 ### 1. Security Manager (security_manager.php)
@@ -134,6 +215,41 @@ if ($limiter->checkLimit($ip)) {
 - Adaptive rate limiting stratejileri
 - IP bazlı whitelist/blacklist
 
+#### Güvenlik Bileşenleri (security/)
+
+- **audit_logger.php**: Tüm veritabanı işlemlerini ve güvenlik olaylarını loglar.
+  ```php
+  $logger = new audit_logger();
+  $logger->log('login_attempt', $userId);
+  ```
+- **encryption.php**: Hassas verileri şifreler ve çözer.
+  ```php
+  $enc = new encryption();
+  $cipher = $enc->encrypt($data);
+  $plain = $enc->decrypt($cipher);
+  ```
+- **query_analyzer.php**: Sorgu güvenliği ve performans analizi sağlar.
+  ```php
+  $analyzer = new query_analyzer();
+  $analyzer->analyze($query);
+  ```
+- **sensitive_data_filter.php**: Hassas veri girişlerini filtreler ve maskeleyerek saklar.
+  ```php
+  $filter = new sensitive_data_filter();
+  $safe = $filter->sanitize($input);
+  ```
+- **session_manager.php**: Oturum yönetimi ve güvenli oturum açma işlemleri sağlar.
+  ```php
+  $session = new session_manager();
+  $session->start($userId);
+  ```
+
+**Best Practice:**
+- Tüm güvenlik bileşenlerini merkezi olarak yönetin
+- Log ve şifreleme anahtarlarını düzenli olarak güncelleyin
+- Hassas veri girişlerinde filtreleme ve maskeleme uygulayın
+- Oturum yönetiminde timeout ve güvenlik kontrolleri ekleyin
+
 ## 🚀 Performans Optimizasyonları
 
 ### 1. Query Cache (cache_trait.php)
@@ -170,6 +286,36 @@ $stmt = $db->prepare($query); // Önbellekte varsa kullanır
 - Sık kullanılan statementları önceliklendirin
 - Memory kullanımını monitör edin
 
+#### Performans Trait ve Bileşenleri
+
+- **cache_trait.php**: Sorgu sonuçlarını ve verileri önbelleğe alır.
+  ```php
+  $db->withCache(300)->get_results($query);
+  ```
+- **statement_cache_trait.php**: Hazırlanan SQL ifadelerini LRU algoritması ile önbelleğe alır.
+  ```php
+  $stmt = $db->prepare($query);
+  ```
+- **connection_trait.php**: Bağlantı yönetimi ve havuz optimizasyonu sağlar.
+  ```php
+  $db->ensureConnection();
+  ```
+- **debug_trait.php**: Sorgu ve performans analizini kolaylaştırır.
+  ```php
+  $db->debug();
+  $stats = $db->get_memory_stats();
+  ```
+- **query_analyzer_trait.php**: Sorgu analizi ve optimizasyon önerileri sunar.
+  ```php
+  $db->analyzeQuery($query);
+  ```
+
+**Best Practice:**
+- Trait dosyalarını modüler ve bağımsız tutun
+- Cache ve statement boyutlarını workload'a göre ayarlayın
+- Sık kullanılan sorguları ve statementları önceliklendirin
+- Performans izleme ve loglama araçlarını düzenli kullanın
+
 ## 🧪 Test ve Kalite
 
 ### 1. Unit Tests (tests/nsql_test.php)
@@ -192,32 +338,72 @@ class NsqlTest extends TestCase
 }
 ```
 
-**Test Stratejileri:**
-- Her özellik için unit test yazın
-- Edge case'leri test edin
-- Performance testleri ekleyin
-- Coverage hedeflerini belirleyin
+#### Test ve Kalite Bileşenleri
+
+- **Unit Testler (tests/nsql_test.php)**: Tüm temel ve edge-case senaryoları için birim testler içerir.
+  ```php
+  class NsqlTest extends TestCase {
+      public function testUserInsert() {
+          $result = $db->table('users')->insert(['name' => 'Test']);
+          $this->assertTrue($result);
+      }
+  }
+  ```
+- **Seed Testleri (seeds/)**: Test ortamı için dummy veri üretimi sağlar.
+  ```php
+  $userSeeder = new user_seeder();
+  $userSeeder->run();
+  ```
+- **Exception Testleri (exceptions/)**: Hata ve istisna senaryoları için özel testler yazılır.
+  ```php
+  $this->expectException(DatabaseException::class);
+  $db->query('INVALID SQL');
+  ```
+
+**Best Practice:**
+- Her ana fonksiyon ve modül için birim test yazın
+- Exception ve edge-case senaryolarını test edin
+- Seed ve migration işlemlerini test ortamında doğrulayın
+- Test coverage ve kalite metriklerini takip edin
 
 ## 📊 Monitoring ve Debug
 
 ### Debug Trait (debug_trait.php)
 
 ```php
-// Debug modu etkinleştirme
-$db->enableDebug();
+// Debug modunu etkinleştirmek için
+$db = new nsql(debug: true);
 
-// Sorgu analizi
-$db->debug(); // Sorgu, parametreler ve timing bilgisi
+// Sorgu analizi ve hata ayıklama
+$db->debug(); // Sorgu, parametreler ve hata bilgisi
 
 // Memory kullanımı
-$stats = $db->getMemoryStats();
+$stats = $db->get_memory_stats();
 ```
 
-**Monitoring Tavsiyeleri:**
-- Query execution time thresholds belirleyin
-- Slow query log tutun
-- Resource usage alerts tanımlayın
-- Regular performance audits yapın
+#### Monitoring ve Debug Bileşenleri
+
+- **debug_trait.php**: Sorgu analizi, hata ayıklama ve performans izleme sağlar.
+  ```php
+  $db = new nsql(debug: true);
+  $db->debug();
+  $stats = $db->get_memory_stats();
+  ```
+- **query_analyzer_trait.php**: Sorgu performansını ve güvenliğini analiz eder.
+  ```php
+  $db->analyzeQuery($query);
+  ```
+- **audit_logger.php**: Tüm kritik işlemleri ve hataları loglar.
+  ```php
+  $logger = new audit_logger();
+  $logger->log('slow_query', $query);
+  ```
+
+**Best Practice:**
+- Sorgu ve işlem sürelerini düzenli olarak izleyin
+- Yavaş sorguları ve hataları loglayın
+- Kaynak kullanımı ve performans metriklerini takip edin
+- Düzenli performans denetimleri yapın
 
 ## 🔧 Maintenance
 
@@ -232,11 +418,27 @@ $manager->migrate(['--pretend' => true]); // Dry run
 $manager->migrate(['--force' => true]); // Tehlikeli operasyonları onayla
 ```
 
-**Bakım İpuçları:**
-- Regular schema backups alın
-- Migration dependency'leri yönetin
-- Rollback stratejileri belirleyin
-- Zero-downtime migration planları yapın
+#### Bakım Bileşenleri (Maintenance)
+
+- **migration_manager.php**: Migration işlemlerini ve şema güncellemelerini yönetir.
+  ```php
+  $manager = new migration_manager();
+  $manager->create('add_email_column');
+  $manager->migrate(['--pretend' => true]);
+  ```
+- **schema/README.md**: Şema değişiklikleri ve migration geçmişi için dokümantasyon sağlar.
+- **Rollback ve Backup**: Migration rollback ve veritabanı yedekleme işlemleri için özel fonksiyonlar kullanılabilir.
+  ```php
+  $manager->rollback('2025_05_24_000001_create_users_table');
+  $backup = new DatabaseBackup($db);
+  $backup->createSnapshot();
+  ```
+
+**Best Practice:**
+- Düzenli şema yedekleri alın
+- Migration ve rollback işlemlerini test edin
+- Zero-downtime migration planları oluşturun
+- Migration bağımlılıklarını ve geçmişini dokümantate edin
 
 ## 🔍 Debugging ve Troubleshooting
 
@@ -266,42 +468,72 @@ $db->setDeadlockRetries(3)
    ->setDeadlockWait(200); // ms
 ```
 
-### Performance Tuning Checklist
+4. **Hata Loglama ve Analiz**
+```php
+$logger = new audit_logger();
+$logger->log('error', $errorMessage);
+```
 
-1. **Query Optimizasyonu**
-   - EXPLAIN kullanımı
-   - İndeks stratejisi
-   - Query refactoring
+#### Debugging ve Troubleshooting Bileşenleri
 
-2. **Resource Yönetimi**
-   - Connection pool monitoring
-   - Memory usage tracking
-   - Cache hit/miss analysis
+- **Bağlantı Sorunları**: Bağlantı kontrolü ve otomatik yeniden bağlanma mekanizması.
+  ```php
+  try {
+      $db->ensureConnection();
+  } catch (ConnectionException $e) {
+      $db->reconnect(['timeout' => 5]);
+  }
+  ```
+- **Memory Leak Yönetimi**: Kaynak temizleme ve önbellek boşaltma işlemleri.
+  ```php
+  $db->disconnect();
+  $db->clearStatementCache();
+  $db->clearQueryCache();
+  ```
+- **Deadlock Yönetimi**: Deadlock durumunda otomatik retry ve bekleme stratejisi.
+  ```php
+  $db->setDeadlockRetries(3)
+     ->setDeadlockWait(200); // ms
+  ```
+- **Hata Loglama ve Analiz**: Tüm hata ve istisnalar için merkezi loglama.
+  ```php
+  $logger = new audit_logger();
+  $logger->log('error', $errorMessage);
+  ```
 
-3. **Error Handling**
-   - Structured logging
-   - Error aggregation
-   - Alert thresholds
+**Best Practice:**
+- Bağlantı ve kaynak yönetimini otomatikleştirin
+- Deadlock ve memory leak senaryolarını test edin
+- Hataları merkezi olarak loglayın ve analiz edin
+- Sorun çözümü için düzenli troubleshooting dokümantasyonu oluşturun
 
 ## 📈 Ölçeklendirme
 
-### Horizontal Scaling
+#### Ölçeklendirme (Scalability)
 
-```php
-// Read/Write splitting
-$db->setReadWriteSplit(true);
-$db->addReadServer('slave1.example.com');
-$db->addReadServer('slave2.example.com');
-```
+- **Horizontal Scaling**: Okuma/yazma ayrımı ve birden fazla sunucu ile ölçeklenebilirlik.
+  ```php
+  $db->setReadWriteSplit(true);
+  $db->addReadServer('slave1.example.com');
+  $db->addReadServer('slave2.example.com');
+  ```
+- **Sharding Strategy**: Veritabanı shard anahtarı ve shard sunucuları ile dağıtık yapı.
+  ```php
+  $db->setShardKey('user_id');
+  $db->addShard('shard1', ['range' => [1, 1000]]);
+  $db->addShard('shard2', ['range' => [1001, 2000]]);
+  ```
+- **Load Balancing**: Okuma/yazma işlemlerinde yük dengeleme için sunucu ekleme ve yönetimi.
+  ```php
+  $db->addReadServer('slave3.example.com');
+  $db->setLoadBalancerStrategy('round_robin');
+  ```
 
-### Sharding Strategy
-
-```php
-// Shard key belirleme
-$db->setShardKey('user_id');
-$db->addShard('shard1', ['range' => [1, 1000]]);
-$db->addShard('shard2', ['range' => [1001, 2000]]);
-```
+**Best Practice:**
+- Okuma/yazma ayrımı ve shard anahtarı seçiminde iş yükünü analiz edin
+- Sunucu ekleme ve çıkarma işlemlerini otomatikleştirin
+- Load balancing ve monitoring araçlarını entegre edin
+- Dağıtık yapıda veri tutarlılığını ve yedekliliği sağlayın
 
 ## 🔐 Security Best Practices
 
@@ -316,7 +548,28 @@ $id = $filter->sanitize($_GET['id'], 'int');
 $user = $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => $id]);
 ```
 
-### 2. Access Control
+### 2. Prepared Statements
+
+```php
+$stmt = $db->prepare("SELECT * FROM users WHERE email = :email");
+$stmt->execute(['email' => $email]);
+```
+
+### 3. Rate Limiting
+
+```php
+// Yapılandırma
+const WINDOW_SIZE = 3600; // 1 saat
+const MAX_REQUESTS = 1000;
+
+// Kullanım
+$limiter = new rate_limiter();
+if ($limiter->checkLimit($ip)) {
+    // İşleme devam et
+}
+```
+
+### 4. Access Control
 
 ```php
 // Role-based query filtering
@@ -328,116 +581,143 @@ $db->addQueryFilter(function($query) use ($userRole) {
 });
 ```
 
+### 5. Audit Logging
+
+```php
+$logger->log('security_event', $eventData);
+```
+
+**Best Practice:**
+- Tüm girişleri filtreleyin ve doğrulayın
+- Prepared statement ve parametreli sorgu kullanın
+- Rate limiting ve erişim kontrolü uygulayın
+- Güvenlik loglarını düzenli analiz edin
+- Şifreleme anahtarlarını ve erişim politikalarını güncel tutun
+
 ## 📊 Monitoring ve Metrics
 
 ### Performance Metrics
 
 ```php
-// Query timing
-$db->enableQueryTiming();
-$result = $db->get_results($query);
-$timing = $db->getLastQueryTiming();
+// Query timing ve detaylı performans ölçümü için (planlanan özellik)
+// $db->enableQueryTiming();
+// $timing = $db->getLastQueryTiming();
 
-// Connection pool stats
-$poolStats = $db->getPoolStats();
+// Connection pool istatistikleri
+$poolStats = nsql::get_pool_stats();
 $activeConnections = $poolStats['active_connections'];
 ```
 
 ### Health Checks
 
 ```php
-// Basic health check
-$health = $db->getHealthStatus();
-
-// Detailed diagnostics
-$diagnostics = $db->getDiagnostics([
-    'connection_pool',
-    'query_cache',
-    'statement_cache',
-    'memory_usage'
-]);
+// Health check ve detaylı tanı fonksiyonları planlanmaktadır.
+// $health = $db->getHealthStatus();
+// $diagnostics = $db->getDiagnostics([...]);
 ```
+
+#### Monitoring ve Metrics
+
+- **Query Timing**: Sorgu sürelerini ve performans metriklerini izleyin.
+  ```php
+  $db->enableQueryTiming();
+  $timing = $db->getLastQueryTiming();
+  ```
+- **Connection Pool Stats**: Aktif bağlantı ve havuz istatistiklerini takip edin.
+  ```php
+  $poolStats = nsql::get_pool_stats();
+  $activeConnections = $poolStats['active_connections'];
+  ```
+- **Health Checks**: Veritabanı ve sistem sağlığını düzenli olarak kontrol edin.
+  ```php
+  $health = $db->getHealthStatus();
+  $diagnostics = $db->getDiagnostics([...]);
+  ```
+- **Resource Usage**: Bellek, CPU ve cache kullanımı gibi kaynak metriklerini izleyin.
+  ```php
+  $stats = $db->get_memory_stats();
+  $cacheStats = $db->getCacheStats();
+  ```
+
+**Best Practice:**
+- Sorgu ve bağlantı metriklerini düzenli olarak analiz edin
+- Health check ve resource usage için otomasyon kurun
+- Performans ve hata metriklerini merkezi olarak toplayın
+- Kritik eşikler için uyarı ve raporlama mekanizması oluşturun
 
 ## 🔄 Recovery ve Backup
 
-### Otomatik Recovery
+#### Recovery ve Backup
 
-```php
-// Retry mekanizması
-$db->setRetryPolicy([
-    'max_attempts' => 3,
-    'initial_wait' => 100,
-    'multiplier' => 2
-]);
+- **Otomatik Recovery**: Bağlantı ve sorgu hatalarında otomatik retry ve circuit breaker mekanizması.
+  ```php
+  $db->setRetryPolicy([
+      'max_attempts' => 3,
+      'initial_wait' => 100,
+      'multiplier' => 2
+  ]);
+  $db->enableCircuitBreaker([
+      'failure_threshold' => 5,
+      'reset_timeout' => 30
+  ]);
+  ```
+- **Backup Stratejileri**: Anlık yedekleme ve geri yükleme işlemleri.
+  ```php
+  $backup = new DatabaseBackup($db);
+  $backup->createSnapshot();
+  $backup->restoreToPoint('2025-05-27 12:00:00');
+  ```
+- **Point-in-Time Recovery**: Belirli bir zamana geri dönebilme özelliği.
 
-// Circuit breaker
-$db->enableCircuitBreaker([
-    'failure_threshold' => 5,
-    'reset_timeout' => 30
-]);
-```
-
-### Backup Stratejileri
-
-```php
-// Point-in-time recovery
-$backup = new DatabaseBackup($db);
-$backup->createSnapshot();
-$backup->restoreToPoint('2025-05-27 12:00:00');
-```
+**Best Practice:**
+- Otomatik recovery ve retry politikalarını yapılandırın
+- Düzenli ve zamanlanmış yedekler alın
+- Geri yükleme işlemlerini test edin
+- Kritik veriler için point-in-time recovery planı oluşturun
 
 ## 🎯 Best Practices Özeti
 
-1. **Güvenlik**
-   - Her zaman prepared statements kullanın
-   - Input validation uygulayın
-   - Rate limiting implementasyonu yapın
-   - Düzenli security audit yapın
+#### Best Practices Özeti
 
-2. **Performans**
-   - Connection pooling kullanın
-   - Query/Statement cache optimize edin
-   - İndeks stratejisi belirleyin
-   - Regular performance monitoring yapın
+- **Güvenlik**: Prepared statement, input validation, rate limiting, security audit.
+- **Performans**: Connection pool, query/statement cache, indeks stratejisi, monitoring.
+- **Maintainability**: Temiz kod, düzenli refactoring, kapsamlı test, güncel dokümantasyon.
+- **Scalability**: Horizontal scaling, sharding, load balancing, monitoring ve alerting.
+- **Backup & Recovery**: Düzenli yedekleme, otomatik recovery, rollback ve point-in-time recovery.
+- **Monitoring & Debug**: Sorgu ve kaynak izleme, hata loglama, performans denetimi.
 
-3. **Maintainability**
-   - Clean code prensiplerini uygulayın
-   - Düzenli refactoring yapın
-   - Comprehensive testing uygulayın
-   - Documentation güncel tutun
+#### Versiyon Detayları
 
-4. **Scalability**
-   - Horizontal scaling planı yapın
-   - Sharding stratejisi belirleyin
-   - Load balancing implementasyonu yapın
-   - Monitoring ve alerting kurun
+- **v1.0.0 (Güncel)**: İlk kararlı sürüm, temel veritabanı işlemleri, connection pool, query/statement cache, temel güvenlik.
+- **v1.1.0 (Planlanan)**: Read/Write splitting, gelişmiş monitoring, circuit breaker, Redis cache, migration iyileştirmeleri.
+- **v1.2.0 (Planlanan)**: Otomatik sharding, distributed cache, GraphQL, real-time monitoring, async query.
+- **v1.3.0 (Planlanan)**: Schema validation, database proxy, query optimization engine, advanced security, cloud integration.
 
-## 📦 Versiyon Detayları
+#### Performance Tuning Checklist
 
-### v1.0.0 (Güncel)
-- İlk kararlı sürüm
-- Temel veritabanı işlemleri
-- Connection pool implementasyonu
-- Query ve statement cache
-- Temel güvenlik özellikleri
+- **Query Optimizasyonu**: Sorgu performansını artırmak için EXPLAIN, indeks ve refactoring kullanın.
+  ```php
+  $db->analyzeQuery('SELECT * FROM users WHERE ...');
+  // EXPLAIN çıktısını inceleyin
+  ```
+- **Resource Yönetimi**: Bağlantı havuzu, memory ve cache kullanımı izlenmeli.
+  ```php
+  $poolStats = nsql::get_pool_stats();
+  $activeConnections = $poolStats['active_connections'];
+  ```
+- **Error Handling**: Yapılandırılmış loglama, hata toplama ve uyarı eşikleri tanımlayın.
+  ```php
+  $logger->log('error', $errorMessage);
+  // Alert mekanizması ile kritik hataları bildirin
+  ```
+- **Cache ve Statement Yönetimi**: Cache hit/miss oranlarını ve statement cache boyutunu izleyin.
+  ```php
+  $db->getCacheStats();
+  $db->getStatementCacheStats();
+  ```
 
-### v1.1.0 (Planlanan)
-- Read/Write splitting
-- Gelişmiş monitoring
-- Circuit breaker pattern
-- Redis cache desteği
-- Migration system iyileştirmeleri
-
-### v1.2.0 (Planlanan)
-- Otomatik sharding desteği
-- Distributed cache
-- GraphQL desteği
-- Real-time monitoring
-- Async query execution
-
-### v1.3.0 (Planlanan)
-- Schema validation
-- Database proxy
-- Query optimization engine
-- Advanced security features
-- Cloud integration
+**Best Practice:**
+- Sorgu ve indeks optimizasyonunu düzenli olarak gözden geçirin
+- Kaynak ve hata yönetimi için otomasyon ve izleme araçları kullanın
+- Performans metriklerini ve logları düzenli analiz edin
+- Kritik işlemler için alert ve raporlama mekanizması kurun
