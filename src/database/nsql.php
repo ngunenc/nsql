@@ -162,7 +162,7 @@ class nsql extends PDO {
         $this->initialize_pool();
         $this->initialize_connection();
         $this->load_cache_config();
-    }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
+    }   public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static {
         // dsn'den host, db ve charset bilgilerini ayıkla
         $pattern = '/mysql:host=([^;]+);dbname=([^;]+);charset=([^;]+)/';
         if (preg_match($pattern, $dsn, $matches)) {
@@ -226,10 +226,10 @@ class nsql extends PDO {
         try {
             return $fn();
         } catch (Exception $e) {
-            echo $this->handle_exception($e, $genericMessage);
+            $this->handle_exception($e, $genericMessage);
             return null;
         } catch (Throwable $e) {
-            echo $this->handle_exception($e, $genericMessage);
+            $this->handle_exception($e, $genericMessage);
             return null;
         }
     }
@@ -391,12 +391,11 @@ class nsql extends PDO {
 
     public function get_row(string $query, array $params = []): ?object {
         $this->set_last_called_method();
-        
         // LIMIT 1 ekle eğer yoksa
         if (!preg_match('/\bLIMIT\s+\d+(?:\s*,\s*\d+)?$/i', $query)) {
             $query .= ' LIMIT 1';
         }
-        
+    // ...debug çıktısı kaldırıldı...
         // Cache kontrolü
         $cache_key = $this->generate_query_cache_key($query, $params);
         if ($this->query_cache_enabled) {
@@ -405,20 +404,26 @@ class nsql extends PDO {
                 return is_array($cached) && !empty($cached) ? (object)$cached[0] : $cached;
             }
         }
-        
         // Sorguyu çalıştır
         $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
+            // Hata yönetimi: PDO hatasını tetikle
+            $errorInfo = $this->pdo ? $this->pdo->errorInfo() : ['Hata',0,'Sorgu çalıştırılamadı'];
+            trigger_error('get_row: Sorgu başarısız! PDO error: ' . print_r($errorInfo, true), E_USER_WARNING);
             return null;
         }
-        
-        // Sonucu al ve cache'le
-        $result = $stmt->fetch(PDO::FETCH_OBJ);
-        if ($result && $this->query_cache_enabled) {
-            $this->add_to_query_cache($cache_key, $result);
+        // Satır sayısını kontrol et
+        $rowCount = $stmt->rowCount();
+        // Hem obj hem assoc ile veri çek
+        $stmt->execute(); // Sorguyu tekrar çalıştır (fetch sonrası boşsa)
+        $resultObj = $stmt->fetch(PDO::FETCH_OBJ);
+        $stmt->execute();
+        $resultAssoc = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Cache'e sadece obj ekle
+        if ($resultObj && $this->query_cache_enabled) {
+            $this->add_to_query_cache($cache_key, $resultObj);
         }
-        
-        return $result ?: null;
+        return $resultObj ?: null;
     }
     
     public function get_results(string $query, array $params = []): array {
