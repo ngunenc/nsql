@@ -10,7 +10,7 @@ class audit_logger {
     ];
 
     public function __construct(string $log_file = null) {
-        $this->log_file = $log_file ?? config::get('AUDIT_LOG_FILE', 'audit_log.txt');
+        $this->log_file = $log_file ?? \nsql\database\Config::get('AUDIT_LOG_FILE', 'audit_log.txt');
     }
 
     /**

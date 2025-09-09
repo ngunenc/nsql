@@ -60,9 +60,9 @@ trait cache_trait {
     }
     
     private function load_cache_config(): void {
-        $this->query_cache_enabled = Config::get('QUERY_CACHE_ENABLED', false);
-        $this->query_cache_timeout = Config::get('QUERY_CACHE_TIMEOUT', 3600);
-        $this->query_cache_size_limit = Config::get('QUERY_CACHE_SIZE_LIMIT', 100);
+        $this->query_cache_enabled = \nsql\database\Config::get('QUERY_CACHE_ENABLED', false);
+        $this->query_cache_timeout = \nsql\database\Config::get('QUERY_CACHE_TIMEOUT', 3600);
+        $this->query_cache_size_limit = \nsql\database\Config::get('QUERY_CACHE_SIZE_LIMIT', 100);
     }
     
     /**

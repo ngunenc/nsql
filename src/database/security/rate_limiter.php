@@ -17,9 +17,9 @@ class rate_limiter {
             $this->init_rate_limit_table();
         }
         
-        // Default değerleri config'den al
-        $this->token_rate = config::RATE_LIMIT_DECAY;
-        $this->burst_limit = config::RATE_LIMIT_BURST;
+        // Default değerleri Config'den al
+        $this->token_rate = \nsql\database\Config::RATE_LIMIT_DECAY;
+        $this->burst_limit = \nsql\database\Config::RATE_LIMIT_BURST;
     }
 
     /**
@@ -51,7 +51,7 @@ class rate_limiter {
      */
     public function check_rate_limit(string $identifier, string $request_type = 'default'): bool {
         $now = time();
-        $window_start = $now - config::RATE_LIMIT_WINDOW;
+        $window_start = $now - \nsql\database\Config::RATE_LIMIT_WINDOW;
         
         // Mevcut tokenleri al
         $limit = $this->db->get_row(
@@ -69,7 +69,7 @@ class rate_limiter {
                 [
                     'identifier' => $identifier,
                     'type' => $request_type,
-                    'tokens' => config::RATE_LIMIT_MAX_REQUESTS,
+                    'tokens' => \nsql\database\Config::RATE_LIMIT_MAX_REQUESTS,
                     'now' => $now,
                     'window' => $window_start
                 ]
@@ -80,14 +80,14 @@ class rate_limiter {
         // Zaman penceresi kontrolü
         if ($limit->window_start < $window_start) {
             // Yeni pencere başlat
-            $tokens = config::RATE_LIMIT_MAX_REQUESTS;
+            $tokens = \nsql\database\Config::RATE_LIMIT_MAX_REQUESTS;
             $burst_count = 0;
             $burst_start = $now;
         } else {
             // Token yenileme
             $elapsed = $now - $limit->last_update;
             $new_tokens = min(
-                config::RATE_LIMIT_MAX_REQUESTS,
+                \nsql\database\Config::RATE_LIMIT_MAX_REQUESTS,
                 $limit->tokens + ($elapsed * $this->token_rate)
             );
             
