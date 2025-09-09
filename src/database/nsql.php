@@ -5,6 +5,7 @@ namespace nsql\database;
 use PDO;
 use PDOException;
 use PDOStatement;
+use nsql\database\security\session_manager;
 use RuntimeException;
 use InvalidArgumentException;
 use Exception;
@@ -78,7 +79,7 @@ class nsql extends PDO {
      */
     private static function initialize_static_vars(): void {
         if (!isset(self::$current_chunk_size)) {
-            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+            self::$current_chunk_size = Config::DEFAULT_CHUNK_SIZE;
         }
         if (!isset(self::$last_memory_check)) {
             self::$last_memory_check = null;
@@ -444,7 +445,7 @@ class nsql extends PDO {
         
         // Büyük veri setleri için optimizasyon
         $result_count = $stmt->rowCount();
-        if ($result_count > config::LARGE_RESULT_WARNING) {
+        if ($result_count > Config::LARGE_RESULT_WARNING) {
             trigger_error(
                 "Büyük veri seti ($result_count satır). get_chunk() veya get_yield() kullanmayı düşünün.",
                 E_USER_NOTICE
@@ -476,7 +477,7 @@ class nsql extends PDO {
         }
         
         $offset = 0;
-        $chunk_size = config::DEFAULT_CHUNK_SIZE;
+        $chunk_size = Config::DEFAULT_CHUNK_SIZE;
         $total_rows = 0;
         
         // İlk sorgu için prepared statement oluştur
@@ -519,11 +520,11 @@ class nsql extends PDO {
             $offset += $chunk_size;
             
             // Maksimum limit kontrolü
-            if ($offset >= config::MAX_RESULT_SET_SIZE) {
+            if ($offset >= Config::MAX_RESULT_SET_SIZE) {
                 throw new \RuntimeException(
                     sprintf(
                         'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                        config::MAX_RESULT_SET_SIZE
+                        Config::MAX_RESULT_SET_SIZE
                     )
                 );
             }
@@ -532,7 +533,7 @@ class nsql extends PDO {
             $stmt = null;
             
             // GC çağır
-            if ($offset % (config::DEFAULT_CHUNK_SIZE * 10) === 0) {
+            if ($offset % (Config::DEFAULT_CHUNK_SIZE * 10) === 0) {
                 gc_collect_cycles();
             }
         }
@@ -602,7 +603,7 @@ class nsql extends PDO {
         $now = time();
         
         if (self::$last_memory_check !== null && 
-            ($now - self::$last_memory_check) < config::MEMORY_CHECK_INTERVAL) {
+            ($now - self::$last_memory_check) < Config::MEMORY_CHECK_INTERVAL) {
             return;
         }
         
@@ -610,13 +611,13 @@ class nsql extends PDO {
         $current_usage = memory_get_usage(true);
         self::$memory_stats['peak_usage'] = memory_get_peak_usage(true);
         
-        if ($current_usage > config::MEMORY_LIMIT_CRITICAL) {
+        if ($current_usage > Config::MEMORY_LIMIT_CRITICAL) {
             self::$memory_stats['critical_count']++;
             $this->cleanup_resources();
             throw new \RuntimeException('Kritik bellek kullanımı aşıldı!');
         }
         
-        if ($current_usage > config::MEMORY_LIMIT_WARNING) {
+        if ($current_usage > Config::MEMORY_LIMIT_WARNING) {
             self::$memory_stats['warning_count']++;
             $this->cleanup_resources();
         }
@@ -637,24 +638,24 @@ class nsql extends PDO {
     private function adjust_chunk_size(): void {
         self::initialize_static_vars();
 
-        if (!config::AUTO_ADJUST_CHUNK_SIZE) {
-            self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        if (!Config::AUTO_ADJUST_CHUNK_SIZE) {
+            self::$current_chunk_size = Config::DEFAULT_CHUNK_SIZE;
             return;
         }
 
         $memory_usage = memory_get_usage(true);
-        $memory_limit = config::MEMORY_LIMIT_WARNING;
+        $memory_limit = Config::MEMORY_LIMIT_WARNING;
         
         $usage_ratio = $memory_usage / $memory_limit;
         
         if ($usage_ratio > 0.8) {
             self::$current_chunk_size = max(
-                config::MIN_CHUNK_SIZE,
+                Config::MIN_CHUNK_SIZE,
                 (int)(self::$current_chunk_size / 2)
             );
         } elseif ($usage_ratio < 0.5) {
             self::$current_chunk_size = min(
-                config::MAX_CHUNK_SIZE,
+                Config::MAX_CHUNK_SIZE,
                 (int)(self::$current_chunk_size * 1.5)
             );
         }
@@ -676,7 +677,7 @@ class nsql extends PDO {
         }
         
         $offset = 0;
-        self::$current_chunk_size = config::DEFAULT_CHUNK_SIZE;
+        self::$current_chunk_size = Config::DEFAULT_CHUNK_SIZE;
         $total_rows = 0;
         
         // Prepared statement hazırla
@@ -729,17 +730,17 @@ class nsql extends PDO {
                 $offset += self::$current_chunk_size;
                 
                 // Maksimum limit kontrolü
-                if ($offset >= config::MAX_RESULT_SET_SIZE) {
+                if ($offset >= Config::MAX_RESULT_SET_SIZE) {
                     throw new \RuntimeException(
                         sprintf(
                             'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                            config::MAX_RESULT_SET_SIZE
+                            Config::MAX_RESULT_SET_SIZE
                         )
                     );
                 }
                 
                 // Bellek optimizasyonu
-                if ($offset % (config::DEFAULT_CHUNK_SIZE * 10) === 0) {
+                if ($offset % (Config::DEFAULT_CHUNK_SIZE * 10) === 0) {
                     $this->cleanup_resources();
                     gc_collect_cycles();
                 }
@@ -758,7 +759,7 @@ class nsql extends PDO {
         return array_merge(self::$memory_stats, [
             'current_usage' => memory_get_usage(true),
             'peak_usage' => memory_get_peak_usage(true),
-            'current_chunk_size' => self::$current_chunk_size ?? config::DEFAULT_CHUNK_SIZE
+            'current_chunk_size' => self::$current_chunk_size ?? Config::DEFAULT_CHUNK_SIZE
         ]);
     }
 
