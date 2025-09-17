@@ -13,13 +13,13 @@ class nsql_test extends TestCase
     protected function setUp(): void
     {
         // Test ortamını ayarla
-        \nsql\database\Config::set_environment('testing');
+        \nsql\database\config::set_environment('testing');
 
         $this->db = new nsql(
-            host: \nsql\database\Config::get('db_host', 'localhost'),
-            db: \nsql\database\Config::get('db_name', 'nsql_test_db'),
-            user: \nsql\database\Config::get('db_user', 'root'),
-            pass: \nsql\database\Config::get('db_pass', '')
+            host: \nsql\database\config::get('db_host', 'localhost'),
+            db: \nsql\database\config::get('db_name', 'etiyop'),
+            user: \nsql\database\config::get('db_user', 'root'),
+            pass: \nsql\database\config::get('db_pass', '')
         );
 
         if (! self::$migrated) {
@@ -43,8 +43,9 @@ class nsql_test extends TestCase
     protected function tearDown(): void
     {
         if ($this->db) {
-            $this->db->query('TRUNCATE TABLE users');
-            $this->db->query('TRUNCATE TABLE test_table');
+            // Test verilerini korumak için tearDown'ı devre dışı bırak
+            // $this->db->query('TRUNCATE TABLE users');
+            // $this->db->query('TRUNCATE TABLE test_table');
             $this->db = null;
         }
     }

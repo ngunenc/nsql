@@ -3,7 +3,7 @@
 ## 📑 İçindekiler
 
 - [Ana Sınıflar](#-ana-sınıflar)
-- [Config Sınıfı](#-config-sınıfı)
+- [config Sınıfı](#-config-sınıfı)
 - [nsql Sınıfı](#-nsql-sınıfı)
 - [Query Builder](#-query-builder)
 - [Security Sınıfları](#-security-sınıfları)
@@ -13,7 +13,7 @@
 
 ## 🏗 Ana Sınıflar
 
-### Config Sınıfı
+### config Sınıfı
 
 Yapılandırma yönetimi için merkezi sınıf.
 
@@ -21,41 +21,41 @@ Yapılandırma yönetimi için merkezi sınıf.
 
 ```php
 // Ortam ayarlama
-Config::set_environment(string $env): void
+config::set_environment(string $env): void
 
 // Değer alma
-Config::get(string $key, mixed $default = null): mixed
+config::get(string $key, mixed $default = null): mixed
 
 // Değer ayarlama
-Config::set(string $key, mixed $value): void
+config::set(string $key, mixed $value): void
 
 // Değer kontrolü
-Config::has(string $key): bool
+config::has(string $key): bool
 
 // Tüm yapılandırma
-Config::all(): array
+config::all(): array
 
 // Proje kök dizini
-Config::get_project_root(): string
+config::get_project_root(): string
 ```
 
 #### Sabitler
 
 ```php
 // Veritabanı ayarları
-Config::db_host = 'localhost'
-Config::db_name = 'database_name'
-Config::db_user = 'username'
-Config::db_pass = 'password'
+config::db_host = 'localhost'
+config::db_name = 'database_name'
+config::db_user = 'username'
+config::db_pass = 'password'
 
 // Güvenlik ayarları
-Config::SECURITY_STRICT_MODE = false
-Config::ENCRYPTION_KEY = 'your_encryption_key'
+config::SECURITY_STRICT_MODE = false
+config::ENCRYPTION_KEY = 'your_encryption_key'
 
 // Performans ayarları
-Config::STATEMENT_CACHE_LIMIT = 100
-Config::QUERY_CACHE_LIMIT = 1000
-Config::default_chunk_size = 1000
+config::STATEMENT_CACHE_LIMIT = 100
+config::QUERY_CACHE_LIMIT = 1000
+config::default_chunk_size = 1000
 ```
 
 ### nsql Sınıfı
@@ -356,10 +356,10 @@ interpolate_query(string $sql, array $params): string
 
 ```php
 use nsql\database\nsql;
-use nsql\database\Config;
+use nsql\database\config;
 
 // Yapılandırma
-Config::set_environment('production');
+config::set_environment('production');
 
 // Veritabanı bağlantısı
 $db = new nsql();

@@ -3,7 +3,7 @@
 namespace nsql\database;
 
 /**
- * Config
+ * config
  *
  * Basit bir yapılandırma yöneticisi.
  * - .env dosyasını otomatik yükler (harici paket gerekmez)
@@ -11,7 +11,7 @@ namespace nsql\database;
  * - Tip güvenli get/set (bool/int/float otomatik dönüştürme)
  * - Varsayılanlar ve önbellekleme
  */
-class Config
+class config
 {
     /** @var array<string, mixed> */
     private static array $config = [];

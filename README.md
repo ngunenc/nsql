@@ -889,7 +889,7 @@ $db->delete("DELETE FROM users WHERE id = :id", [
    [PDO]              [SQL]              [Güvenlik modülleri]
 ```
 
-- **Config Katmanı**: Yapılandırma yönetimi (`Config.php`)
+- **config Katmanı**: Yapılandırma yönetimi (`config.php`)
 - **Bağlantı Katmanı**: Veritabanı bağlantı havuzu yönetimi (`ConnectionPool.php`)
 - **Core Katmanı**: Ana veritabanı işlemleri (`nsql.php`)
 - **Güvenlik Katmanı**: XSS, CSRF ve Session güvenliği
