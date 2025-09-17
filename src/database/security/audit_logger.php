@@ -2,7 +2,7 @@
 
 namespace nsql\database\security;
 
-use nsql\database\Config;
+use nsql\database\config;
 
 class audit_logger
 {
@@ -14,7 +14,7 @@ class audit_logger
 
     public function __construct(?string $log_file = null)
     {
-        $default = Config::get('audit_log_file', 'audit_log.txt');
+        $default = config::get('audit_log_file', 'audit_log.txt');
         $this->log_file = $this->resolve_log_path($log_file ?? (string)$default);
         $this->ensure_log_directory(dirname($this->log_file));
     }
@@ -193,14 +193,14 @@ class audit_logger
             return $path;
         }
         $root = dirname(__DIR__, 3); // proje kökü
-        $dir = Config::get('log_dir', $root . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
+        $dir = config::get('log_dir', $root . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
 
         return rtrim((string)$dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
     }
 
     private function rotate_if_needed(string $file): void
     {
-        $max = (int)Config::get('log_max_size', 1048576); // 1MB varsayılan
+        $max = (int)config::get('log_max_size', 1048576); // 1MB varsayılan
         if (is_file($file) && filesize($file) > $max) {
             $rotated = $file . '.' . date('Ymd_His');
             @rename($file, $rotated);

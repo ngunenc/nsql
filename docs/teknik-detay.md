@@ -16,7 +16,7 @@ nsql, SOLID prensiplerini takip eden modüler ve katmanlı bir mimariye sahiptir
 
 ```
 src/database/
-├── Config.php           -> Yapılandırma yönetimi
+├── config.php           -> Yapılandırma yönetimi
 ├── nsql.php            -> Ana PDO wrapper
 ├── connection_pool.php  -> Bağlantı havuzu
 ├── query_builder.php    -> Sorgu oluşturucu
@@ -42,21 +42,21 @@ Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıd
 
 ## 🔧 Temel Bileşenler
 
-### 1. Config Yönetimi (config.php)
+### 1. config Yönetimi (config.php)
 
 ```php
 // Örnek kullanım
-Config::set_environment('development');
-$db_host = Config::get('db_host');
+config::set_environment('development');
+$db_host = config::get('db_host');
 
 // Önerilen Pratikler:
 // - Environment bazlı config yönetimi
 // - Hassas bilgilerin .env dosyasında tutulması
-// - Config değerlerinin tip güvenliği
+// - config değerlerinin tip güvenliği
 ```
 
 **Optimizasyon İpuçları:**
-- Config değerlerini önbellekte tutun
+- config değerlerini önbellekte tutun
 - Environment kontrollerini minimize edin
 - Varsayılan değerleri akıllıca belirleyin
 

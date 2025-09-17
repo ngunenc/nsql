@@ -2,7 +2,7 @@
 
 namespace nsql\database\security;
 
-use nsql\database\Config;
+use nsql\database\config;
 
 class security_manager
 {
@@ -121,7 +121,7 @@ class security_manager
         }
 
         if ($matched) {
-            if (Config::get('security_strict_mode', false)) {
+            if (config::get('security_strict_mode', false)) {
                 throw new \InvalidArgumentException('Tehlikeli SQL kalıbı tespit edildi.');
             }
             self::log_event('sql_pattern_warning', 'Tehlikeli SQL kalıbı tespit edildi', [
@@ -182,7 +182,7 @@ class security_manager
 
         foreach ($patterns as $pattern) {
             if (preg_match($pattern, $sql)) {
-                if (Config::get('security_strict_mode', false)) {
+                if (config::get('security_strict_mode', false)) {
                     throw new \InvalidArgumentException('Doğrudan değer kullanımı tespit edildi. Prepared statements kullanın.');
                 }
                 self::log_event('prepared_stmt_warning', 'Doğrudan değer kullanımı tespit edildi', [
@@ -219,7 +219,7 @@ class security_manager
         }
 
         if ($matched) {
-            if (Config::get('security_strict_mode', false)) {
+            if (config::get('security_strict_mode', false)) {
                 throw new \RuntimeException('Potansiyel SQL Enjeksiyon tespit edildi!');
             }
             self::log_event('sql_injection_warning', 'Potansiyel SQL Enjeksiyon tespit edildi', [
@@ -244,7 +244,7 @@ class security_manager
                 // Potansiyel tehlikeli kalıplar (mutasyon yok, sadece tespit)
                 $danger = (bool)preg_match('/(--|;|\/\*|\*\/|xp_|INTO\s+OUTFILE|UNION\s+SELECT)/i', $value);
                 if ($danger) {
-                    if (Config::get('security_strict_mode', false)) {
+                    if (config::get('security_strict_mode', false)) {
                         throw new \InvalidArgumentException('Şüpheli parametre içeriği tespit edildi');
                     }
                     self::log_event('param_suspicious', 'Şüpheli parametre içeriği tespit edildi', [

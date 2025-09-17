@@ -20,10 +20,10 @@
 require_once 'vendor/autoload.php';
 
 use nsql\database\nsql;
-use nsql\database\Config;
+use nsql\database\config;
 
 // Yapılandırma
-Config::set_environment('development');
+config::set_environment('development');
 
 // Veritabanı bağlantısı
 $db = new nsql();
@@ -41,7 +41,7 @@ echo "Mevcut zaman: " . $time['current_time'];
 ```php
 <?php
 use nsql\database\nsql;
-use nsql\database\Config;
+use nsql\database\config;
 
 // Özel yapılandırma
 $db = new nsql(

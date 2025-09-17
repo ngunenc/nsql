@@ -58,7 +58,7 @@ class connection_pool
         $now = time();
 
         if (self::$last_health_check !== null &&
-            ($now - self::$last_health_check) < Config::health_check_interval) {
+            ($now - self::$last_health_check) < config::health_check_interval) {
             return;
         }
 
@@ -74,7 +74,7 @@ class connection_pool
                 unset(self::$connections[$key], self::$active_connections[$key]);
                 
                 // Sadece minimum bağlantı sayısının altındaysa yeni bağlantı oluştur
-                if (count(self::$connections) < Config::min_connections) {
+                if (count(self::$connections) < config::min_connections) {
                     self::create_connection();
                 }
             }
@@ -84,7 +84,7 @@ class connection_pool
         self::manage_idle_connections();
 
         // Timeout olan bağlantıları temizle (daha az sıklıkta)
-        if (rand(1, 100) <= Config::cleanup_probability) {
+        if (rand(1, 100) <= config::cleanup_probability) {
             self::cleanup_stale_connections();
         }
     }
@@ -100,9 +100,9 @@ class connection_pool
             if (! isset(self::$active_connections[$key])) {
                 if (! isset(self::$idle_connections[$key])) {
                     self::$idle_connections[$key] = $now;
-                } elseif (($now - self::$idle_connections[$key]) > Config::connection_idle_timeout) {
+                } elseif (($now - self::$idle_connections[$key]) > config::connection_idle_timeout) {
                     // Boşta kalma süresi aşıldıysa ve minimum bağlantı sayısının üzerindeyse kapat
-                    if (count(self::$connections) > Config::min_connections) {
+                    if (count(self::$connections) > config::min_connections) {
                         unset(self::$connections[$key], self::$idle_connections[$key]);
                         self::$stats['idle_connections']--;
                     }
@@ -157,7 +157,7 @@ class connection_pool
             }
 
             // Yeni bağlantı oluştur
-            if (count(self::$connections) < Config::max_connections) {
+            if (count(self::$connections) < config::max_connections) {
                 return self::create_connection();
             }
 
@@ -166,7 +166,7 @@ class connection_pool
 
             return null;
         } catch (\PDOException $e) {
-            if ($attempt < Config::max_retry_attempts) {
+            if ($attempt < config::max_retry_attempts) {
                 self::$stats['connection_retries']++;
                 sleep(1); // Kısa bir bekleme
 
@@ -188,8 +188,8 @@ class connection_pool
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
                 \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
                 \PDO::ATTR_EMULATE_PREPARES => false,
-                \PDO::ATTR_TIMEOUT => Config::get('connection_timeout', 5),
-                \PDO::ATTR_PERSISTENT => Config::get('persistent_connection', false),
+                \PDO::ATTR_TIMEOUT => config::get('connection_timeout', 5),
+                \PDO::ATTR_PERSISTENT => config::get('persistent_connection', false),
             ];
 
             $final_options = $default_options;
@@ -271,14 +271,14 @@ class connection_pool
         $now = time();
 
         // Her istekte belirli bir olasılıkla temizlik yap
-        if (mt_rand(1, 100) > Config::cleanup_probability) {
+        if (mt_rand(1, 100) > config::cleanup_probability) {
             return;
         }
 
         // Aktif bağlantıları kontrol et
         foreach (self::$active_connections as $key => $timestamp) {
             // Timeout kontrolü
-            if (($now - $timestamp) > Config::get('connection_timeout', 5)) {
+            if (($now - $timestamp) > config::get('connection_timeout', 5)) {
                 unset(self::$connections[$key], self::$active_connections[$key]);
                 self::$stats['connection_timeouts']++;
                 self::$stats['active_connections']--;
@@ -297,9 +297,9 @@ class connection_pool
         // Boşta kalan bağlantıları kontrol et
         foreach (self::$idle_connections as $key => $timestamp) {
             // Boşta kalma süresi kontrolü
-            if (($now - $timestamp) > Config::connection_idle_timeout) {
+            if (($now - $timestamp) > config::connection_idle_timeout) {
                 // Minimum bağlantı sayısını koru
-                if (count(self::$connections) > Config::min_connections) {
+                if (count(self::$connections) > config::min_connections) {
                     unset(self::$connections[$key], self::$idle_connections[$key]);
                     self::$stats['idle_connections']--;
                 }
@@ -317,8 +317,8 @@ class connection_pool
 
         // Yeterli aktif bağlantı yoksa yeni bağlantılar oluştur
         $total_connections = count(self::$connections);
-        if ($total_connections < Config::min_connections) {
-            $needed = Config::min_connections - $total_connections;
+        if ($total_connections < config::min_connections) {
+            $needed = config::min_connections - $total_connections;
             for ($i = 0; $i < $needed; $i++) {
                 self::create_connection();
             }
@@ -327,7 +327,7 @@ class connection_pool
         // Başarısız denemelerini sıfırla
         self::$retry_counts = array_filter(
             self::$retry_counts,
-            fn ($count) => $count < Config::max_failed_connections
+            fn ($count) => $count < config::max_failed_connections
         );
     }
 
