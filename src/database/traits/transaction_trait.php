@@ -2,57 +2,62 @@
 
 namespace nsql\database\traits;
 
-trait transaction_trait {
-    private int $transactionLevel = 0;
+trait transaction_trait
+{
+    private int $transaction_level = 0;
 
     /**
      * Bir veritabanı işlemi başlatır
      */
-    public function begin(): void {
-        if ($this->transactionLevel === 0) {
+    public function begin(): void
+    {
+        if ($this->transaction_level === 0) {
             $this->pdo->beginTransaction();
         } else {
-            $this->pdo->exec("SAVEPOINT trans{$this->transactionLevel}");
+            $this->pdo->exec("SAVEPOINT trans{$this->transaction_level}");
         }
-        $this->transactionLevel++;
+        $this->transaction_level++;
     }
 
     /**
      * Bir veritabanı işlemini tamamlar ve değişiklikleri kaydeder
      */
-    public function commit(): bool {
-        $this->transactionLevel--;
-        
-        if ($this->transactionLevel === 0) {
+    public function commit(): bool
+    {
+        $this->transaction_level--;
+
+        if ($this->transaction_level === 0) {
             return $this->pdo->commit();
-        } else if ($this->transactionLevel > 0) {
-            return $this->pdo->exec("RELEASE SAVEPOINT trans{$this->transactionLevel}") !== false;
+        } elseif ($this->transaction_level > 0) {
+            return $this->pdo->exec("RELEASE SAVEPOINT trans{$this->transaction_level}") !== false;
         }
-        
+
         return false;
     }
 
     /**
      * Bir veritabanı işlemini geri alır
      */
-    public function rollback(): bool {
-        if ($this->transactionLevel === 0) {
+    public function rollback(): bool
+    {
+        if ($this->transaction_level === 0) {
             return false;
         }
 
-        $this->transactionLevel--;
-        
-        if ($this->transactionLevel === 0) {
+        $this->transaction_level--;
+
+        if ($this->transaction_level === 0) {
             return $this->pdo->rollBack();
         } else {
-            return $this->pdo->exec("ROLLBACK TO SAVEPOINT trans{$this->transactionLevel}") !== false;
+            return $this->pdo->exec("ROLLBACK TO SAVEPOINT trans{$this->transaction_level}") !== false;
         }
     }
 
     /**
      * İşlem seviyesini döndürür
      */
-    public function getTransactionLevel(): int {
-        return $this->transactionLevel;
+    public function get_transaction_level(): int
+    {
+        return $this->transaction_level;
     }
 }

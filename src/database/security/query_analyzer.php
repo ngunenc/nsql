@@ -2,7 +2,8 @@
 
 namespace nsql\database\security;
 
-class query_analyzer {
+class query_analyzer
+{
     private array $risk_patterns = [
         'delete_without_where' => '/DELETE\s+FROM\s+[`\w.]+\s*(?!WHERE)/i',
         'update_without_where' => '/UPDATE\s+[`\w.]+\s+SET\s+(?:[`\w.]+\s*=\s*[^,]+\s*,?\s*)+(?!WHERE)/i',
@@ -39,7 +40,7 @@ class query_analyzer {
         'high' => 4,
         'medium' => 3,
         'low' => 2,
-        'info' => 1
+        'info' => 1,
     ];
 
     private array $pattern_risk_levels = [
@@ -64,15 +65,16 @@ class query_analyzer {
         'system_table_access' => 'high',
         'multiple_statements' => 'critical',
         'potential_injection' => 'critical',
-        'privilege_escalation' => 'critical'
+        'privilege_escalation' => 'critical',
     ];
 
     /**
      * SQL sorgusunu analiz eder ve risk raporu oluşturur
      */
-    public function analyze_query(string $query): array {
+    public function analyze_query(string $query): array
+    {
         $issues = [];
-        
+
         // Risk pattern kontrolü
         foreach ($this->risk_patterns as $type => $pattern) {
             if (preg_match($pattern, $query)) {
@@ -114,14 +116,15 @@ class query_analyzer {
             'query' => $query,
             'issues' => $issues,
             'risk_score' => $this->calculate_risk_score($issues),
-            'recommendations' => $this->generate_recommendations($issues)
+            'recommendations' => $this->generate_recommendations($issues),
         ];
     }
 
     /**
      * Risk mesajını döndürür
      */
-    private function get_risk_message(string $type): string {
+    private function get_risk_message(string $type): string
+    {
         $messages = [
             'delete_without_where' => 'WHERE koşulu olmadan DELETE sorgusu tehlikelidir',
             'update_without_where' => 'WHERE koşulu olmadan UPDATE sorgusu tehlikelidir',
@@ -133,7 +136,7 @@ class query_analyzer {
             'select_all_columns' => 'Tüm kolonların seçilmesi önerilmez, spesifik kolonları seçin',
             'union_query' => 'UNION sorguları performans sorunlarına yol açabilir',
             'subquery_exists' => 'EXISTS alt sorgusu tespit edildi',
-            'large_in_clause' => 'Çok büyük IN bloğu tespit edildi'
+            'large_in_clause' => 'Çok büyük IN bloğu tespit edildi',
         ];
 
         return $messages[$type] ?? 'Bilinmeyen risk türü';
@@ -142,14 +145,15 @@ class query_analyzer {
     /**
      * Performans mesajını döndürür
      */
-    private function get_performance_message(string $type): string {
+    private function get_performance_message(string $type): string
+    {
         $messages = [
             'missing_index_hint' => 'Index hint kullanımı performansı artırabilir',
             'order_by_rand' => 'RAND() kullanımı performans sorunlarına yol açar',
             'group_by_all' => 'Çok sayıda kolon ile GROUP BY kullanımı',
             'distinct_all' => 'DISTINCT kullanımı performansı etkileyebilir',
             'having_without_group' => 'GROUP BY olmadan HAVING kullanımı',
-            'like_wildcard_start' => 'LIKE ile başlangıç wildcard kullanımı indeks kullanımını engeller'
+            'like_wildcard_start' => 'LIKE ile başlangıç wildcard kullanımı indeks kullanımını engeller',
         ];
 
         return $messages[$type] ?? 'Bilinmeyen performans sorunu';
@@ -158,13 +162,14 @@ class query_analyzer {
     /**
      * Güvenlik mesajını döndürür
      */
-    private function get_security_message(string $type): string {
+    private function get_security_message(string $type): string
+    {
         $messages = [
             'sql_comment' => 'SQL yorum satırları güvenlik riski oluşturabilir',
             'system_table_access' => 'Sistem tablolarına erişim tespit edildi',
             'multiple_statements' => 'Çoklu SQL sorgusu tespit edildi',
             'potential_injection' => 'Potansiyel SQL injection riski',
-            'privilege_escalation' => 'Yetki yükseltme riski tespit edildi'
+            'privilege_escalation' => 'Yetki yükseltme riski tespit edildi',
         ];
 
         return $messages[$type] ?? 'Bilinmeyen güvenlik sorunu';
@@ -173,7 +178,8 @@ class query_analyzer {
     /**
      * Sorgu karmaşıklığını analiz eder
      */
-    private function analyze_query_complexity(string $query, array &$issues): void {
+    private function analyze_query_complexity(string $query, array &$issues): void
+    {
         // Join sayısı
         $join_count = preg_match_all('/\bJOIN\b/i', $query);
         if ($join_count > 3) {
@@ -198,7 +204,8 @@ class query_analyzer {
     /**
      * Sorgu uzunluğunu analiz eder
      */
-    private function analyze_query_length(string $query, array &$issues): void {
+    private function analyze_query_length(string $query, array &$issues): void
+    {
         $length = strlen($query);
         if ($length > 1000) {
             $issues[] = $this->create_issue(
@@ -212,30 +219,35 @@ class query_analyzer {
     /**
      * Risk skorunu hesaplar
      */
-    private function calculate_risk_score(array $issues): int {
+    private function calculate_risk_score(array $issues): int
+    {
         $score = 0;
         foreach ($issues as $issue) {
             $risk_level = $this->pattern_risk_levels[$issue['type']] ?? 'low';
             $score += $this->risk_levels[$risk_level];
         }
+
         return $score;
     }
 
     /**
      * Öneriler oluşturur
      */
-    private function generate_recommendations(array $issues): array {
+    private function generate_recommendations(array $issues): array
+    {
         $recommendations = [];
         foreach ($issues as $issue) {
             $recommendations[] = $this->get_recommendation($issue['type']);
         }
+
         return array_filter(array_unique($recommendations));
     }
 
     /**
      * Her sorun tipi için özel öneri döndürür
      */
-    private function get_recommendation(string $type): string {
+    private function get_recommendation(string $type): string
+    {
         $recommendations = [
             'delete_without_where' => 'WHERE koşulu ekleyin veya bilinçli olarak tüm verileri sildiğinizden emin olun',
             'update_without_where' => 'WHERE koşulu ekleyin veya bilinçli olarak tüm verileri güncellediğinizden emin olun',
@@ -247,7 +259,7 @@ class query_analyzer {
             'select_all_columns' => 'Sadece ihtiyaç duyulan kolonları seçin',
             'missing_index_hint' => 'EXPLAIN ile sorgu planını kontrol edin ve gerekli indeksleri ekleyin',
             'order_by_rand' => 'Rastgele sıralama için alternatif yöntemler kullanın',
-            'like_wildcard_start' => 'LIKE ile başlangıç wildcard kullanımından kaçının'
+            'like_wildcard_start' => 'LIKE ile başlangıç wildcard kullanımından kaçının',
         ];
 
         return $recommendations[$type] ?? '';
@@ -256,12 +268,13 @@ class query_analyzer {
     /**
      * Sorun kaydı oluşturur
      */
-    private function create_issue(string $type, string $category, string $message): array {
+    private function create_issue(string $type, string $category, string $message): array
+    {
         return [
             'type' => $type,
             'category' => $category,
             'message' => $message,
-            'risk_level' => $this->pattern_risk_levels[$type] ?? 'low'
+            'risk_level' => $this->pattern_risk_levels[$type] ?? 'low',
         ];
     }
 }

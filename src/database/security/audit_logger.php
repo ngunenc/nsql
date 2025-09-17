@@ -2,15 +2,21 @@
 
 namespace nsql\database\security;
 
-class audit_logger {
+use nsql\database\Config;
+
+class audit_logger
+{
     private string $log_file;
     private array $sensitive_fields = [
         'password', 'token', 'secret', 'key', 'auth',
-        'credit_card', 'card_number', 'cvv', 'ssn'
+        'credit_card', 'card_number', 'cvv', 'ssn',
     ];
 
-    public function __construct(string $log_file = null) {
-        $this->log_file = $log_file ?? \nsql\database\Config::get('AUDIT_LOG_FILE', 'audit_log.txt');
+    public function __construct(?string $log_file = null)
+    {
+        $default = Config::get('audit_log_file', 'audit_log.txt');
+        $this->log_file = $this->resolve_log_path($log_file ?? (string)$default);
+        $this->ensure_log_directory(dirname($this->log_file));
     }
 
     /**
@@ -30,7 +36,7 @@ class audit_logger {
             'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
             'session_id' => session_id() ?: 'no_session',
-            'context' => $this->sanitize_sensitive_data($context)
+            'context' => $this->sanitize_sensitive_data($context),
         ];
 
         $this->write_log($log_entry);
@@ -64,7 +70,7 @@ class audit_logger {
             'session_destroy' => 'Oturum sonlandırıldı',
             'session_hijacking_attempt' => 'Oturum çalma girişimi tespit edildi',
             'session_expired' => 'Oturum süresi doldu',
-            'session_regenerate' => 'Oturum ID yenilendi'
+            'session_regenerate' => 'Oturum ID yenilendi',
         ];
 
         $severity = ($event_type === 'session_hijacking_attempt') ? 'critical' : 'info';
@@ -91,7 +97,7 @@ class audit_logger {
             [
                 'query' => $query,
                 'parameters' => $this->sanitize_sensitive_data($params),
-                'error' => $error
+                'error' => $error,
             ],
             'critical'
         );
@@ -132,19 +138,22 @@ class audit_logger {
     /**
      * Hassas verileri temizler
      */
-    private function sanitize_sensitive_data(array $data): array {
-        array_walk_recursive($data, function(&$value, $key) {
+    private function sanitize_sensitive_data(array $data): array
+    {
+        array_walk_recursive($data, function (&$value, $key) {
             if (in_array(strtolower($key), $this->sensitive_fields)) {
                 $value = '******';
             }
         });
+
         return $data;
     }
 
     /**
-     * Log dosyasına yazar
+     * Log dosyasına yazar (rota + rotasyon)
      */
-    private function write_log(array $log_entry): void {
+    private function write_log(array $log_entry): void
+    {
         $log_line = sprintf(
             "[%s] [%s] [%s] %s | IP: %s | UA: %s | SID: %s | %s\n",
             $log_entry['timestamp'],
@@ -157,6 +166,8 @@ class audit_logger {
             json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE)
         );
 
+        $this->rotate_if_needed($this->log_file);
+
         $result = file_put_contents(
             $this->log_file,
             $log_line,
@@ -164,7 +175,35 @@ class audit_logger {
         );
 
         if ($result === false) {
-            error_log("Audit log yazma hatası: " . error_get_last()['message']);
+            error_log("Audit log yazma hatası: " . (error_get_last()['message'] ?? 'unknown'));
+        }
+    }
+
+    private function ensure_log_directory(string $dir): void
+    {
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+    }
+
+    private function resolve_log_path(string $path): string
+    {
+        // Mutlak yol ise aynen kullan
+        if (preg_match('/^[A-Za-z]:\\\\|^\//', $path)) {
+            return $path;
+        }
+        $root = dirname(__DIR__, 3); // proje kökü
+        $dir = Config::get('log_dir', $root . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
+
+        return rtrim((string)$dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
+    }
+
+    private function rotate_if_needed(string $file): void
+    {
+        $max = (int)Config::get('log_max_size', 1048576); // 1MB varsayılan
+        if (is_file($file) && filesize($file) > $max) {
+            $rotated = $file . '.' . date('Ymd_His');
+            @rename($file, $rotated);
         }
     }
 }

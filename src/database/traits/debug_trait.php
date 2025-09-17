@@ -2,16 +2,16 @@
 
 namespace nsql\database\traits;
 
-use PDO;
 use RuntimeException;
 use Throwable;
-use nsql\database\Config;
 
-trait debug_trait {
+trait debug_trait
+{
     /**
      * Hata loglar
      */
-    private function log_error(string $message): void {
+    private function log_error(string $message): void
+    {
         $timestamp = date('Y-m-d H:i:s');
         $log_message = "[$timestamp] $message" . PHP_EOL;
         file_put_contents($this->log_file, $log_message, FILE_APPEND);
@@ -20,16 +20,19 @@ trait debug_trait {
     /**
      * Son çağrılan metodu kaydeder
      */
-    private function set_last_called_method(): void {
+    private function set_last_called_method(): void
+    {
         $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
         $this->last_called_method = $trace[1]['function'] ?? 'unknown';
     }
 
     /**
      * Debug çıktısı oluşturur
-     */    public function debug(): void {
-        if (!$this->debug_mode) {
+     */    public function debug(): void
+    {
+        if (! $this->debug_mode) {
             echo '<div style="color:red;font-weight:bold;">Debug modu kapalı! Detaylı sorgu ve hata bilgisi için nsql nesnesini debug modda başlatın.</div>';
+
             return;
         }
 
@@ -149,35 +152,35 @@ HTML;
         echo "<div class='query-section'>";
         echo "<h4>🔍 SQL Sorgusu:</h4>";
         echo "<pre>" . htmlspecialchars($query) . "</pre>";
-        
+
         echo "<h4>📋 Parametreler:</h4>";
         echo "<pre>" . htmlspecialchars($params_json) . "</pre>";
         echo "</div>";
 
-        if (!empty($this->last_results)) {
+        if (! empty($this->last_results)) {
             echo "<div class='query-section'>";
             echo "<h4>📊 Sonuç Verisi:</h4>";
-            
+
             if (is_array($this->last_results) && count($this->last_results) > 0) {
                 $first_row = is_object($this->last_results[0]) ? (array)$this->last_results[0] : $this->last_results[0];
-                
+
                 echo "<table><thead><tr>";
                 foreach ($first_row as $key => $_) {
                     echo "<th>" . htmlspecialchars((string)$key) . "</th>";
                 }
                 echo "</tr></thead><tbody>";
-                
+
                 foreach ($this->last_results as $row) {
                     echo "<tr>";
                     foreach ((array)$row as $value) {
-                        $display_value = is_null($value) ? '-' : 
+                        $display_value = is_null($value) ? '-' :
                                     (is_array($value) || is_object($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value);
                         echo "<td>" . htmlspecialchars($display_value) . "</td>";
                     }
                     echo "</tr>";
                 }
                 echo "</tbody></table>";
-                
+
                 echo "<div class='info'>✓ Toplam " . count($this->last_results) . " kayıt bulundu.</div>";
             } else {
                 echo "<div class='info'>ℹ️ Sonuç bulunamadı.</div>";
@@ -195,8 +198,9 @@ HTML;
     /**
      * Sorgu ve parametreleri birleştirir
      */
-    private function interpolate_query(string $query, array $params): string {
-        if (!$this->debug_mode) {
+    private function interpolate_query(string $query, array $params): string
+    {
+        if (! $this->debug_mode) {
             throw new RuntimeException("interpolate_query yalnızca debug modunda kullanılabilir.");
         }
 
@@ -208,40 +212,45 @@ HTML;
             }
 
             $escaped = $this->pdo->quote(is_bool($actual_value) ? ($actual_value ? '1' : '0') : (string) $actual_value);
-            
+
             if (is_string($key)) {
                 $query = str_replace(":$key", $escaped, $query);
             } else {
                 $query = preg_replace('/\?/', $escaped, $query, 1);
             }
         }
+
         return $query;
     }
 
     /**
      * Debug çıktısını render eder
-     */    private function render_debug_output(string $query, string $params_json): void {
-        if (!defined('NSQL_TEMPLATE')) {
+     */    private function render_debug_output(string $query, string $params_json): void
+    {
+        if (! defined('NSQL_TEMPLATE')) {
             define('NSQL_TEMPLATE', true);
         }
-        
+
         $template_data = [
             'method' => $this->last_called_method,
             'query' => $query,
             'params' => $params_json,
             'error' => $this->last_error,
-            'results' => json_encode($this->last_results ?? [], 
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+            'results' => json_encode(
+                $this->last_results ?? [],
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+            ),
         ];
         extract($template_data);
-        
+
         include __DIR__ . '/../templates/debug_template.php';
     }
 
     /**
      * Debug hatalarını işler
      */
-    private function handle_debug_error(Throwable $e): void {
+    private function handle_debug_error(Throwable $e): void
+    {
         $this->last_error = $e->getMessage();
         $query = $this->last_query . ' [Parametre dönüştürme hatası]';
         $params_json = 'Parametreler görüntülenemedi: ' . $e->getMessage();
