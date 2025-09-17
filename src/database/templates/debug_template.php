@@ -1,4 +1,4 @@
-<?php 
+<?php
 /**
  * Debug template - Yalnızca debug_trait tarafından kullanılmalıdır
  * @var string $method Son çağrılan metod
@@ -6,7 +6,9 @@
  * @var string $params Parametreler (JSON)
  * @var string|null $error Hata mesajı
  */
-if (!defined('NSQL_TEMPLATE')) return; 
+if (! defined('NSQL_TEMPLATE')) {
+    return;
+}
 ?>
 <style>
 .nsql-debug {
