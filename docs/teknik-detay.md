@@ -16,11 +16,26 @@ nsql, SOLID prensiplerini takip eden modüler ve katmanlı bir mimariye sahiptir
 
 ```
 src/database/
-├── config.php           -> Yapılandırma yönetimi
+├── Config.php           -> Yapılandırma yönetimi
 ├── nsql.php            -> Ana PDO wrapper
 ├── connection_pool.php  -> Bağlantı havuzu
 ├── query_builder.php    -> Sorgu oluşturucu
+├── migration_manager.php -> Migration yönetimi
+├── security/           -> Güvenlik bileşenleri
+│   ├── audit_logger.php
+│   ├── encryption.php
+│   ├── rate_limiter.php
+│   ├── security_manager.php
+│   ├── sensitive_data_filter.php
+│   └── session_manager.php
 └── traits/             -> Yeniden kullanılabilir özellikler
+    ├── cache_trait.php
+    ├── connection_trait.php
+    ├── debug_trait.php
+    ├── query_analyzer_trait.php
+    ├── query_parameter_trait.php
+    ├── statement_cache_trait.php
+    └── transaction_trait.php
 ```
 
 Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıdır (loose coupling).
@@ -31,8 +46,8 @@ Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıd
 
 ```php
 // Örnek kullanım
-Config::setEnvironment('development');
-$dbHost = Config::get('DB_HOST');
+Config::set_environment('development');
+$db_host = Config::get('db_host');
 
 // Önerilen Pratikler:
 // - Environment bazlı config yönetimi
@@ -339,8 +354,8 @@ $result = $db->get_results($query);
 $timing = $db->getLastQueryTiming();
 
 // Connection pool stats
-$poolStats = $db->getPoolStats();
-$activeConnections = $poolStats['active_connections'];
+$pool_stats = $db->get_pool_stats();
+$active_connections = $pool_stats['active_connections'];
 ```
 
 ### Health Checks
