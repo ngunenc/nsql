@@ -81,7 +81,7 @@ class nsql extends PDO
     private static function initialize_static_vars(): void
     {
         if (! isset(self::$current_chunk_size)) {
-            self::$current_chunk_size = Config::default_chunk_size;
+            self::$current_chunk_size = config::default_chunk_size;
         }
         if (! isset(self::$last_memory_check)) {
             self::$last_memory_check = null;
@@ -122,8 +122,8 @@ class nsql extends PDO
 
             connection_pool::initialize(
                 self::$pool_config,
-                (int)Config::get('min_connections', 2),
-                (int)Config::get('max_connections', 10)
+                (int)config::get('min_connections', 2),
+                (int)config::get('max_connections', 10)
             );
 
             self::$pool_initialized = true;
@@ -139,28 +139,28 @@ class nsql extends PDO
         ?bool $debug = null
     ) {
         // Config sınıfından değerleri al
-        $host = $host ?? Config::get('db_host', 'localhost');
-        $db = $db ?? Config::get('db_name', 'etiyop');
-        $user = $user ?? Config::get('db_user', 'root');
-        $pass = $pass ?? Config::get('db_pass', '');
-        $charset = $charset ?? Config::get('db_charset', 'utf8mb4');
+        $host = $host ?? config::get('db_host', 'localhost');
+        $db = $db ?? config::get('db_name', 'etiyop');
+        $user = $user ?? config::get('db_user', 'root');
+        $pass = $pass ?? config::get('db_pass', '');
+        $charset = $charset ?? config::get('db_charset', 'utf8mb4');
 
         // PDO bağlantı seçeneklerini ayarla
         $this->options = [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
             \PDO::ATTR_EMULATE_PREPARES => false,
-            \PDO::ATTR_TIMEOUT => Config::get('connection_timeout', 5),
-            \PDO::ATTR_PERSISTENT => Config::get('persistent_connection', false),
+            \PDO::ATTR_TIMEOUT => config::get('connection_timeout', 5),
+            \PDO::ATTR_PERSISTENT => config::get('persistent_connection', false),
         ];
 
         // DSN ve diğer özellikleri ayarla
         $this->dsn = "mysql:host=" . (string)$host . ";dbname=" . (string)$db . ";charset=" . (string)$charset;
         $this->user = (string)$user;
         $this->pass = (string)$pass;
-        $this->debug_mode = (bool)($debug ?? Config::get('debug_mode', false));
-        $this->log_file = (string)Config::get('log_file', 'error_log.txt');
-        $this->statement_cache_limit = (int)Config::get('statement_cache_limit', 100);
+        $this->debug_mode = (bool)($debug ?? config::get('debug_mode', false));
+        $this->log_file = (string)config::get('log_file', 'error_log.txt');
+        $this->statement_cache_limit = (int)config::get('statement_cache_limit', 100);
 
         // Parent PDO constructor'ı çağır
         parent::__construct($this->dsn, $this->user, $this->pass, $this->options);
@@ -228,14 +228,14 @@ class nsql extends PDO
             return $path;
         }
         $root = dirname(__DIR__, 1);
-        $dir = Config::get('log_dir', dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
+        $dir = config::get('log_dir', dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
 
         return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
     }
 
     private function rotate_if_needed(string $file): void
     {
-        $max = (int)Config::get('log_max_size', 1048576);
+        $max = (int)config::get('log_max_size', 1048576);
         if (is_file($file) && filesize($file) > $max) {
             $rotated = $file . '.' . date('Ymd_His');
             @rename($file, $rotated);
@@ -529,7 +529,7 @@ class nsql extends PDO
 
         // Büyük veri setleri için optimizasyon
         $result_count = $stmt->rowCount();
-        if ($result_count > Config::large_result_warning) {
+        if ($result_count > config::large_result_warning) {
             trigger_error(
                 "Büyük veri seti ($result_count satır). get_chunk() veya get_yield() kullanmayı düşünün.",
                 E_USER_NOTICE
@@ -562,7 +562,7 @@ class nsql extends PDO
         }
 
         $offset = 0;
-        $chunk_size = Config::default_chunk_size;
+        $chunk_size = config::default_chunk_size;
         $total_rows = 0;
 
         // İlk sorgu için prepared statement oluştur
@@ -605,11 +605,11 @@ class nsql extends PDO
             $offset += $chunk_size;
 
             // Maksimum limit kontrolü
-            if ($offset >= Config::max_result_set_size) {
+            if ($offset >= config::max_result_set_size) {
                 throw new \RuntimeException(
                     sprintf(
                         'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                        Config::max_result_set_size
+                        config::max_result_set_size
                     )
                 );
             }
@@ -618,7 +618,7 @@ class nsql extends PDO
             $stmt = null;
 
             // GC çağır
-            if ($offset % (Config::default_chunk_size * 10) === 0) {
+            if ($offset % (config::default_chunk_size * 10) === 0) {
                 gc_collect_cycles();
             }
         }
@@ -698,7 +698,7 @@ class nsql extends PDO
         $now = time();
 
         if (self::$last_memory_check !== null &&
-            ($now - self::$last_memory_check) < Config::memory_check_interval) {
+            ($now - self::$last_memory_check) < config::memory_check_interval) {
             return;
         }
 
@@ -711,7 +711,7 @@ class nsql extends PDO
             self::$memory_stats['peak_usage'] = $peak_usage;
         }
 
-        if ($current_usage > Config::memory_limit_critical) {
+        if ($current_usage > config::memory_limit_critical) {
             self::$memory_stats['critical_count']++;
             $this->cleanup_resources();
             
@@ -720,12 +720,12 @@ class nsql extends PDO
                 sprintf(
                     'Kritik bellek kullanımı aşıldı! Mevcut: %s, Limit: %s',
                     $this->format_bytes($current_usage),
-                    $this->format_bytes(Config::memory_limit_critical)
+                    $this->format_bytes(config::memory_limit_critical)
                 )
             );
         }
 
-        if ($current_usage > Config::memory_limit_warning) {
+        if ($current_usage > config::memory_limit_warning) {
             self::$memory_stats['warning_count']++;
             $this->cleanup_resources();
             
@@ -736,7 +736,7 @@ class nsql extends PDO
                     sprintf(
                         'Bellek uyarı seviyesi aşıldı: %s (Limit: %s)',
                         $this->format_bytes($current_usage),
-                        $this->format_bytes(Config::memory_limit_warning)
+                        $this->format_bytes(config::memory_limit_warning)
                     )
                 );
             }
@@ -775,26 +775,26 @@ class nsql extends PDO
     {
         self::initialize_static_vars();
 
-        if (! Config::auto_adjust_chunk_size) {
-            self::$current_chunk_size = Config::default_chunk_size;
+        if (! config::auto_adjust_chunk_size) {
+            self::$current_chunk_size = config::default_chunk_size;
             return;
         }
 
         $memory_usage = memory_get_usage(true);
-        $memory_limit = Config::memory_limit_warning;
+        $memory_limit = config::memory_limit_warning;
         $usage_ratio = $memory_usage / $memory_limit;
 
         // Daha agresif chunk size ayarlaması (performans optimizasyonu)
         if ($usage_ratio > 0.75) {
             // Bellek kullanımı yüksekse chunk size'ı daha agresif azalt
             self::$current_chunk_size = max(
-                Config::min_chunk_size,
+                config::min_chunk_size,
                 (int)(self::$current_chunk_size * 0.6) // 0.5 → 0.6 (daha yumuşak azalma)
             );
         } elseif ($usage_ratio < 0.4) {
             // Bellek kullanımı düşükse chunk size'ı artır
             self::$current_chunk_size = min(
-                Config::max_chunk_size,
+                config::max_chunk_size,
                 (int)(self::$current_chunk_size * 1.3) // 1.5 → 1.3 (daha yumuşak artış)
             );
         }
@@ -830,7 +830,7 @@ class nsql extends PDO
         }
 
         $offset = 0;
-        self::$current_chunk_size = Config::default_chunk_size;
+        self::$current_chunk_size = config::default_chunk_size;
         $total_rows = 0;
 
         // Prepared statement hazırla
@@ -883,17 +883,17 @@ class nsql extends PDO
                 $offset += self::$current_chunk_size;
 
                 // Maksimum limit kontrolü
-                if ($offset >= Config::max_result_set_size) {
+                if ($offset >= config::max_result_set_size) {
                     throw new \RuntimeException(
                         sprintf(
                             'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                            Config::max_result_set_size
+                            config::max_result_set_size
                         )
                     );
                 }
 
                 // Bellek optimizasyonu
-                if ($offset % (Config::default_chunk_size * 10) === 0) {
+                if ($offset % (config::default_chunk_size * 10) === 0) {
                     $this->cleanup_resources();
                     gc_collect_cycles();
                 }
@@ -913,7 +913,7 @@ class nsql extends PDO
         return array_merge(self::$memory_stats, [
             'current_usage' => memory_get_usage(true),
             'peak_usage' => memory_get_peak_usage(true),
-            'current_chunk_size' => self::$current_chunk_size ?? Config::default_chunk_size,
+            'current_chunk_size' => self::$current_chunk_size ?? config::default_chunk_size,
         ]);
     }
 

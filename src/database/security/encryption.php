@@ -81,7 +81,7 @@ class encryption
     private function get_or_generate_key(): string
     {
         // Config'den anahtarı almaya çalış
-        $key = \nsql\database\Config::get('encryption_key');
+        $key = \nsql\database\config::get('encryption_key');
 
         if (empty($key)) {
             // Yeni anahtar oluştur

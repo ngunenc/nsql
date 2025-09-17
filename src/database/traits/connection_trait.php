@@ -6,7 +6,7 @@ use PDO;
 use PDOException;
 use RuntimeException;
 use nsql\database\connection_pool;
-use nsql\database\Config;
+use nsql\database\config;
 
 trait connection_trait
 {
@@ -93,8 +93,8 @@ trait connection_trait
 
             connection_pool::initialize(
                 self::$pool_config,
-                (int)Config::get('min_connections', 2),
-                (int)Config::get('max_connections', 10)
+                (int)config::get('min_connections', 2),
+                (int)config::get('max_connections', 10)
             );
 
             self::$pool_initialized = true;
