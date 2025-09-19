@@ -24,6 +24,11 @@ $db_charset = config::get('db_charset', 'utf8mb4');
 // DSN
 $dsn = "mysql:host={$db_host};dbname={$db_name};charset={$db_charset}";
 
+// Benchmark için cache'i etkinleştir (nsql constructor öncesi)
+config::set('query_cache_enabled', true);
+config::set('query_cache_timeout', 1800);
+config::set('query_cache_size_limit', 200);
+
 // nsql bağlantısı
 $nsql = new nsql();
 
@@ -64,6 +69,57 @@ function format_bytes(int $bytes): string {
     $bytes = $bytes / (1 << (10 * $pow));
     return round($bytes, 2) . ' ' . $units[$pow];
 }
+
+/**
+ * users tablosunu ve test verisini hazırlar
+ */
+function ensure_users_seed(PDO $pdo, int $min_rows = 20000): void {
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_active (active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
+
+    $count = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($count >= $min_rows) {
+        return;
+    }
+
+    $target = $min_rows - $count;
+    $chunk = 1000;
+    $stmt = $pdo->prepare('INSERT INTO users (name, email, active) VALUES (:name, :email, :active)');
+    $pdo->beginTransaction();
+    try {
+        for ($i = 1; $i <= $target; $i++) {
+            $name = 'User ' . ($count + $i);
+            $email = 'user' . ($count + $i) . '@example.com';
+            $active = (($count + $i) % 2) ? 1 : 0;
+            $stmt->execute([
+                'name' => $name,
+                'email' => $email,
+                'active' => $active,
+            ]);
+            if ($i % $chunk === 0) {
+                $pdo->commit();
+                $pdo->beginTransaction();
+            }
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+// Seed verisi hazırla (users tablosu ve en az 20k satır)
+ensure_users_seed($pdo, 20000);
 
 /**
  * Sonuçları tablo biçiminde yazdırma
