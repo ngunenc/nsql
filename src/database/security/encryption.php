@@ -2,15 +2,17 @@
 
 namespace nsql\database\security;
 
-class encryption {
+class encryption
+{
     private string $key;
     private string $cipher = 'aes-256-gcm';
-    private int $tagLength = 16;
+    private int $tag_length = 16;
 
-    public function __construct(?string $key = null) {
+    public function __construct(?string $key = null)
+    {
         if ($key === null) {
             // Config'den şifreleme anahtarını al veya yeni oluştur
-            $key = $this->getOrGenerateKey();
+            $key = $this->get_or_generate_key();
         }
         $this->key = $key;
     }
@@ -18,9 +20,10 @@ class encryption {
     /**
      * Veriyi şifrele
      */
-    public function encrypt(string $data): string {
+    public function encrypt(string $data): string
+    {
         $iv = random_bytes(16);
-        
+
         // Şifreleme işlemi
         $ciphertext = openssl_encrypt(
             $data,
@@ -30,7 +33,7 @@ class encryption {
             $iv,
             $tag,
             '',
-            $this->tagLength
+            $this->tag_length
         );
 
         if ($ciphertext === false) {
@@ -39,20 +42,21 @@ class encryption {
 
         // IV, tag ve şifrelenmiş veriyi birleştir
         $encrypted = base64_encode($iv . $tag . $ciphertext);
-        
+
         return $encrypted;
     }
 
     /**
      * Şifrelenmiş veriyi çöz
      */
-    public function decrypt(string $encryptedData): string {
-        $decoded = base64_decode($encryptedData);
-        
+    public function decrypt(string $encrypted_data): string
+    {
+        $decoded = base64_decode($encrypted_data);
+
         // IV ve tag'i ayır
         $iv = substr($decoded, 0, 16);
-        $tag = substr($decoded, 16, $this->tagLength);
-        $ciphertext = substr($decoded, 16 + $this->tagLength);
+        $tag = substr($decoded, 16, $this->tag_length);
+        $ciphertext = substr($decoded, 16 + $this->tag_length);
 
         // Şifre çözme işlemi
         $decrypted = openssl_decrypt(
@@ -74,18 +78,19 @@ class encryption {
     /**
      * Şifreleme anahtarını al veya oluştur
      */
-    private function getOrGenerateKey(): string {
+    private function get_or_generate_key(): string
+    {
         // Config'den anahtarı almaya çalış
-        $key = \nsql\database\Config::get('ENCRYPTION_KEY');
-        
+        $key = \nsql\database\config::get('encryption_key');
+
         if (empty($key)) {
             // Yeni anahtar oluştur
             $key = base64_encode(random_bytes(32));
-            
+
             // TODO: Anahtarı güvenli bir şekilde sakla
             // Örneğin: özel bir dosyada veya environment variable'da
         }
-        
-        return $key;
+
+        return (string)$key;
     }
 }
