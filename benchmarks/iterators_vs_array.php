@@ -5,7 +5,8 @@ $ctx = require __DIR__ . '/bootstrap.php';
 /** @var PDO $pdo */
 $nsql = $ctx['nsql'];
 
-$sql = "SELECT * FROM users LIMIT 50000"; // büyük set
+// LIMIT kullanma; get_yield LIMIT/OFFSET kabul etmez
+$sql = "SELECT * FROM users"; // büyük set; streaming için
 
 $rows = [];
 
