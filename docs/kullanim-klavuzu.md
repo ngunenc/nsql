@@ -152,7 +152,8 @@ $sonuc1 = $db->get_results("SELECT * FROM urunler WHERE kategori = 'elektronik'"
 $sonuc2 = $db->get_results("SELECT * FROM urunler WHERE kategori = 'elektronik'");
 
 // Cache'i manuel temizleme
-$db->clearQueryCache();
+// Cache istatistiklerini görüntüle
+$cache_stats = $db->get_all_cache_stats();
 ```
 
 ### Connection Pool İstatistikleri
@@ -206,7 +207,8 @@ $kullanicilar = $db->get_results(
 nsql::secure_session_start();
 
 // Oturum ID'sini yenileme
-nsql::regenerate_session_id();
+$sm = nsql::session();
+$sm->regenerate_id();
 ```
 
 ### Input Filtreleme
@@ -261,7 +263,7 @@ $db->debug();
 
 ```php
 // Güvenli sorgu çalıştırma
-$result = $db->safeExecute(function() use ($db) {
+$result = $db->safe_execute(function() use ($db) {
     return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
 }, "Kullanıcı bilgileri alınırken hata oluştu");
 ```
@@ -313,7 +315,8 @@ $db->get_results("SELECT * FROM users");
 $stats = $db->get_pool_stats();
 
 // Cache kullanımı
-$result = $db->withCache(300)->get_results($query);
+// Cache config üzerinden yönetilir; istenirse istatistikler alınabilir
+$result = $db->get_results($query);
 ```
 
 ### v1.1.0 (Planlanan)
@@ -331,7 +334,8 @@ $db->addReadServer('slave1.example.com');
 
 // Redis cache
 $db->setCacheDriver('redis');
-$db->withCache(300)->get_results($query);
+// Cache istatistikleri
+$cache_stats = $db->get_all_cache_stats();
 
 // Circuit breaker
 $db->enableCircuitBreaker([

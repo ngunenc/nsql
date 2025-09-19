@@ -459,7 +459,7 @@ try {
 $token = \nsql\database\security\session_manager::get_csrf_token();
 
 // Token doğrulama
-if (nsql::validate_csrf_token($_POST['token'])) {
+if (nsql::validate_csrf($_POST['token'] ?? '')) {
     // Güvenli işlem
 }
 ```
@@ -498,7 +498,7 @@ $db->debug();
 
 ```php
 // Güvenli oturum başlatma
-nsql::secureSessionStart();
+nsql::secure_session_start();
 
 // Oturum ID'sini yenileme
 nsql::regenerateSessionId();
@@ -507,7 +507,7 @@ nsql::regenerateSessionId();
 ### Hata Yönetimi
 
 ```php
-$db->safeExecute(function() use ($db) {
+$db->safe_execute(function() use ($db) {
     return $db->get_results("SELECT * FROM tablo");
 }, "Veriler alınırken bir hata oluştu");
 ```
@@ -565,9 +565,10 @@ Sorgu önbellekleme ile performansı artırmak için:
 use nsql\database\nsql;
 
 $db = new nsql();
-$db->enableQueryCache(); // Sorgu önbellekleme aktif
-$sonuclar = $db->get_results("SELECT * FROM tablo"); // Sonuçlar cache'den gelir
-$db->clearQueryCache(); // Cache temizlenir
+// Cache yapılandırması .env/config üzerinden yönetilir
+$sonuclar = $db->get_results("SELECT * FROM tablo");
+// İstatistikleri görüntüleme
+$stats = $db->get_all_cache_stats();
 ```
 
 Bu örnekler, nsql kütüphanesinin migration, seed, güvenlik ve cache gibi modüllerinin gerçek bir projede nasıl kullanılabileceğini göstermektedir.
@@ -666,7 +667,8 @@ $users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
 $users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
 
 // Cache'i manuel temizleme
-$db->clearQueryCache();
+// Cache istatistikleri
+$stats = $db->get_all_cache_stats();
 ```
 
 ### Connection Pool Kullanımı
@@ -679,20 +681,20 @@ $stats = nsql::get_pool_stats();
 print_r($stats);
 
 // Tüm istatistikleri görüntüleme (v1.4 Yeni!)
-$allStats = $db->get_all_stats();
+$all_stats = $db->get_all_stats();
 print_r($allStats);
 
 // Cache istatistikleri
-$cacheStats = $db->get_all_cache_stats();
+$cache_stats = $db->get_all_cache_stats();
 echo "Query Cache Hit Rate: " . $cacheStats['query_cache']['hit_rate'] . "%\n";
 echo "Statement Cache Hit Rate: " . $cacheStats['statement_cache']['hit_rate'] . "%\n";
 
 // Query Analyzer istatistikleri
-$analyzerStats = $db->get_query_analyzer_stats();
+$analyzer_stats = $db->get_query_analyzer_stats();
 echo "Analysis Cache Hit Rate: " . $analyzerStats['cache_hit_rate'] . "%\n";
 
 // Memory istatistikleri
-$memoryStats = $db->get_memory_stats();
+$memory_stats = $db->get_memory_stats();
 echo "Current Memory: " . $memoryStats['current_usage'] . " bytes\n";
 echo "Peak Memory: " . $memoryStats['peak_usage'] . " bytes\n";
 
@@ -707,7 +709,7 @@ echo "Peak Memory: " . $memoryStats['peak_usage'] . " bytes\n";
 $db->debug();
 
 // Güvenli hata yönetimi
-$result = $db->safeExecute(function() use ($db) {
+$result = $db->safe_execute(function() use ($db) {
     return $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => 1]);
 }, 'Kullanıcı bilgileri alınamadı');
 ```
@@ -716,11 +718,11 @@ $result = $db->safeExecute(function() use ($db) {
 
 ```php
 // Güvenli oturum başlatma
-nsql::secureSessionStart();
+nsql::secure_session_start();
 
 // CSRF koruması
 $token = \nsql\database\security\session_manager::get_csrf_token();
-if (nsql::validate_csrf_token($_POST['token'])) {
+if (nsql::validate_csrf($_POST['token'] ?? '')) {
     // Form işleme
 }
 
@@ -984,8 +986,8 @@ Debug çıktısı şunları içerir:
 #### Güvenli Hata Yönetimi
 
 ```php
-// Hata yönetimi için safeExecute kullanımı
-$result = $db->safeExecute(function() use ($db) {
+// Hata yönetimi için safe_execute kullanımı
+$result = $db->safe_execute(function() use ($db) {
     return $db->get_row(
         "SELECT * FROM users WHERE id = :id",
         ['id' => 1]
@@ -1112,7 +1114,7 @@ Oturum başlatırken ve cookie ayarlarında güvenlik için aşağıdaki fonksiy
 
 ```php
 // Oturum başlatmadan önce çağırın
-db::secureSessionStart(); // veya nsql::secureSessionStart();
+nsql::secure_session_start();
 ```
 
 Bu fonksiyon;
@@ -1150,7 +1152,7 @@ Formlarınızda CSRF koruması için aşağıdaki fonksiyonları kullanabilirsin
 
 **Token doğrulama:**
 ```php
-if (!nsql::validate_csrf_token($_POST['csrf_token'] ?? '')) {
+if (!nsql::validate_csrf($_POST['csrf_token'] ?? '')) {
     die('Geçersiz CSRF token');
 }
 ```
@@ -1168,7 +1170,7 @@ Bu özellik sayesinde uzun süreli çalışan uygulamalarda veya bağlantı kopm
 Manuel olarak bağlantı kontrolü yapmak isterseniz:
 
 ```php
-$db->ensureConnection(); // Bağlantı kopmuşsa otomatik olarak yeniden bağlanır
+$db->ensure_connection(); // Bağlantı kopmuşsa otomatik olarak yeniden bağlanır
 ```
 
 Her sorgudan önce bu kontrol otomatik olarak yapılır, ekstra bir işlem yapmanıza gerek yoktur.
