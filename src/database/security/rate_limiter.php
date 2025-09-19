@@ -4,28 +4,34 @@ namespace nsql\database\security;
 
 use nsql\database\nsql;
 
-class rate_limiter {
-    private nsql $db;
+class rate_limiter
+{
+    private ?nsql $db = null;
     private string $rate_limit_table = 'rate_limits';
     private float $token_rate = 1.0;
     private int $burst_limit = 50;
-    private array $limit_types = ['api', 'auth', 'default'];
 
-    public function __construct(?nsql $db = null) {
+    public function __construct(?nsql $db = null)
+    {
         $this->db = $db;
         if ($db !== null) {
             $this->init_rate_limit_table();
         }
-        
-        // Default değerleri config'den al
-        $this->token_rate = config::RATE_LIMIT_DECAY;
-        $this->burst_limit = config::RATE_LIMIT_BURST;
+
+        // Default değerleri Config'den al
+        $this->token_rate = \nsql\database\config::rate_limit_decay;
+        $this->burst_limit = \nsql\database\config::rate_limit_burst;
     }
 
     /**
      * Rate limit tablosunu oluşturur
      */
-    private function init_rate_limit_table(): void {
+    private function init_rate_limit_table(): void
+    {
+        if ($this->db === null) {
+            throw new \RuntimeException('Database connection is required for rate limiting');
+        }
+
         $sql = "CREATE TABLE IF NOT EXISTS {$this->rate_limit_table} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             identifier VARCHAR(255) NOT NULL,
@@ -49,10 +55,15 @@ class rate_limiter {
     /**
      * Rate limit kontrolü yapar
      */
-    public function check_rate_limit(string $identifier, string $request_type = 'default'): bool {
+    public function check_rate_limit(string $identifier, string $request_type = 'default'): bool
+    {
+        if ($this->db === null) {
+            throw new \RuntimeException('Database connection is required for rate limiting');
+        }
+
         $now = time();
-        $window_start = $now - config::RATE_LIMIT_WINDOW;
-        
+        $window_start = $now - \nsql\database\config::rate_limit_window;
+
         // Mevcut tokenleri al
         $limit = $this->db->get_row(
             "SELECT * FROM {$this->rate_limit_table} 
@@ -60,7 +71,7 @@ class rate_limiter {
             ['identifier' => $identifier, 'type' => $request_type]
         );
 
-        if (!$limit) {
+        if (! $limit) {
             // Yeni kayıt oluştur
             $this->db->insert(
                 "INSERT INTO {$this->rate_limit_table}
@@ -69,41 +80,42 @@ class rate_limiter {
                 [
                     'identifier' => $identifier,
                     'type' => $request_type,
-                    'tokens' => config::RATE_LIMIT_MAX_REQUESTS,
+                    'tokens' => \nsql\database\config::rate_limit_max_requests,
                     'now' => $now,
-                    'window' => $window_start
+                    'window' => $window_start,
                 ]
             );
+
             return true;
         }
 
         // Zaman penceresi kontrolü
-        if ($limit->window_start < $window_start) {
+        if (isset($limit->window_start) && $limit->window_start < $window_start) {
             // Yeni pencere başlat
-            $tokens = config::RATE_LIMIT_MAX_REQUESTS;
+            $tokens = \nsql\database\config::rate_limit_max_requests;
             $burst_count = 0;
             $burst_start = $now;
         } else {
             // Token yenileme
-            $elapsed = $now - $limit->last_update;
+            $elapsed = $now - ($limit->last_update ?? $now);
             $new_tokens = min(
-                config::RATE_LIMIT_MAX_REQUESTS,
-                $limit->tokens + ($elapsed * $this->token_rate)
+                \nsql\database\config::rate_limit_max_requests,
+                ($limit->tokens ?? 0) + ($elapsed * $this->token_rate)
             );
-            
+
             // Burst kontrolleri
-            $in_burst = ($now - $limit->burst_start) < 1;
+            $in_burst = ($now - ($limit->burst_start ?? $now)) < 1;
             if ($in_burst) {
-                if ($limit->burst_count >= $this->burst_limit) {
+                if (($limit->burst_count ?? 0) >= $this->burst_limit) {
                     return false;
                 }
-                $burst_count = $limit->burst_count + 1;
-                $burst_start = $limit->burst_start;
+                $burst_count = ($limit->burst_count ?? 0) + 1;
+                $burst_start = $limit->burst_start ?? $now;
             } else {
                 $burst_count = 1;
                 $burst_start = $now;
             }
-            
+
             $tokens = $new_tokens - 1;
         }
 
@@ -120,7 +132,7 @@ class rate_limiter {
             $burst_count,
             $burst_start,
             $window_start,
-            $limit->total_requests + 1
+            ($limit->total_requests ?? 0) + 1
         );
 
         return true;
@@ -156,7 +168,7 @@ class rate_limiter {
                 'burst_count' => $burst_count,
                 'burst_start' => $burst_start,
                 'window_start' => $window_start,
-                'total_requests' => $total_requests
+                'total_requests' => $total_requests,
             ]
         );
     }

@@ -20,28 +20,43 @@ src/database/
 ├── nsql.php            -> Ana PDO wrapper
 ├── connection_pool.php  -> Bağlantı havuzu
 ├── query_builder.php    -> Sorgu oluşturucu
+├── migration_manager.php -> Migration yönetimi
+├── security/           -> Güvenlik bileşenleri
+│   ├── audit_logger.php
+│   ├── encryption.php
+│   ├── rate_limiter.php
+│   ├── security_manager.php
+│   ├── sensitive_data_filter.php
+│   └── session_manager.php
 └── traits/             -> Yeniden kullanılabilir özellikler
+    ├── cache_trait.php
+    ├── connection_trait.php
+    ├── debug_trait.php
+    ├── query_analyzer_trait.php
+    ├── query_parameter_trait.php
+    ├── statement_cache_trait.php
+    └── transaction_trait.php
 ```
 
 Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıdır (loose coupling).
 
 ## 🔧 Temel Bileşenler
 
-### 1. Config Yönetimi (config.php)
+### 1. config Yönetimi (config.php)
 
 ```php
 // Örnek kullanım
-Config::setEnvironment('development');
-$dbHost = Config::get('DB_HOST');
+config::set_environment('development');
+$db_host = config::get('db_host');
 
 // Önerilen Pratikler:
 // - Environment bazlı config yönetimi
 // - Hassas bilgilerin .env dosyasında tutulması
-// - Config değerlerinin tip güvenliği
+// - config değerlerinin tip güvenliği
 ```
 
 **Optimizasyon İpuçları:**
-- Config değerlerini önbellekte tutun
+- config değerlerini önbellekte tutun
 - Environment kontrollerini minimize edin
 - Varsayılan değerleri akıllıca belirleyin
 
@@ -339,8 +354,8 @@ $result = $db->get_results($query);
 $timing = $db->getLastQueryTiming();
 
 // Connection pool stats
-$poolStats = $db->getPoolStats();
-$activeConnections = $poolStats['active_connections'];
+$pool_stats = $db->get_pool_stats();
+$active_connections = $pool_stats['active_connections'];
 ```
 
 ### Health Checks

@@ -1,0 +1,15 @@
+parameters:
+    level: 8
+    paths:
+        - src
+    excludePaths:
+        - src/database/migrations
+        - src/database/seeds
+        - src/database/templates
+    ignoreErrors:
+        - '#Call to an undefined method PDO::#'
+        - identifier: missingType.iterableValue
+        - identifier: missingType.generics
+    reportUnmatchedIgnoredErrors: false
+    treatPhpDocTypesAsCertain: false
+    memoryLimitFile: 256M

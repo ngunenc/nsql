@@ -27,14 +27,14 @@ composer require ngunenc/nsql
 
 ### Yapılandırma
 
-1. `.env` dosyasını oluşturun:
+1. `.env` dosyasını oluşturun (`.env.example` dosyasından kopyalayabilirsiniz):
 
 ```ini
 # Veritabanı Ayarları
-DB_HOST=localhost
-DB_NAME=veritabani_adi
-DB_USER=kullanici_adi
-DB_PASS=sifre
+db_host=localhost
+db_name=veritabani_adi
+db_user=kullanici_adi
+db_pass=sifre
 DB_CHARSET=utf8mb4
 
 # Cache Ayarları
@@ -159,7 +159,7 @@ $db->clearQueryCache();
 
 ```php
 // Bağlantı havuzu durumunu kontrol et
-$stats = $db->getPoolStats();
+$stats = $db->get_pool_stats();
 print_r($stats);
 /* 
 Array
@@ -203,10 +203,10 @@ $kullanicilar = $db->get_results(
 
 ```php
 // Güvenli oturum başlatma
-nsql::secureSessionStart();
+nsql::secure_session_start();
 
 // Oturum ID'sini yenileme
-nsql::regenerateSessionId();
+nsql::regenerate_session_id();
 ```
 
 ### Input Filtreleme
@@ -310,7 +310,7 @@ $db = new nsql();
 $db->get_results("SELECT * FROM users");
 
 // Connection pool kullanımı
-$stats = $db->getPoolStats();
+$stats = $db->get_pool_stats();
 
 // Cache kullanımı
 $result = $db->withCache(300)->get_results($query);

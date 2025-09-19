@@ -5,14 +5,17 @@ namespace nsql\database\migrations;
 use nsql\database\migration;
 use nsql\database\nsql;
 
-class create_users_table implements migration {
+class create_users_table implements migration
+{
     private nsql $db;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->db = new nsql();
     }
 
-    public function up(): void {
+    public function up(): void
+    {
         try {
             $sql = "CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -31,7 +34,8 @@ class create_users_table implements migration {
         }
     }
 
-    public function down(): void {
+    public function down(): void
+    {
         try {
             $sql = "DROP TABLE IF EXISTS users";
             $this->db->query($sql);
@@ -40,7 +44,8 @@ class create_users_table implements migration {
         }
     }
 
-    public function get_description(): string {
+    public function get_description(): string
+    {
         return 'Create users table';
     }
 }

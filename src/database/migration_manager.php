@@ -2,7 +2,8 @@
 
 namespace nsql\database;
 
-class migration_manager {
+class migration_manager
+{
     private nsql $db;
     private array $migrations = [];
     private string $migrations_table = 'migrations';
@@ -11,7 +12,8 @@ class migration_manager {
     private bool $dry_run = false;
     private array $dependencies = [];
 
-    public function __construct(nsql $db) {
+    public function __construct(nsql $db)
+    {
         $this->db = $db;
         $this->migrations_path = __DIR__ . '/migrations';
         $this->seeds_path = __DIR__ . '/seeds';
@@ -21,7 +23,8 @@ class migration_manager {
     /**
      * Migrations tablosunu oluşturur
      */
-    private function init_migrations_table(): void {
+    private function init_migrations_table(): void
+    {
         $sql = "CREATE TABLE IF NOT EXISTS {$this->migrations_table} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             migration_name VARCHAR(255) NOT NULL,
@@ -31,19 +34,23 @@ class migration_manager {
             duration FLOAT NULL,
             executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )";
-        
+
         $this->db->query($sql);
     }
 
     /**
      * Tüm migration dosyalarını yükler
      */
-    public function load_migrations(): void {
-        if (!is_dir($this->migrations_path)) {
+    public function load_migrations(): void
+    {
+        if (! is_dir($this->migrations_path)) {
             mkdir($this->migrations_path, 0755, true);
         }
 
         $files = glob($this->migrations_path . '/*.php');
+        if ($files === false) {
+            $files = [];
+        }
         foreach ($files as $file) {
             require_once $file;
             $class_name = 'nsql\\database\\migrations\\' . basename($file, '.php');
@@ -59,18 +66,19 @@ class migration_manager {
     /**
      * Çalıştırılmamış tüm migration'ları uygular
      */
-    public function migrate(): array {
+    public function migrate(): array
+    {
         $this->load_migrations();
         $executed = [];
         $batch = $this->get_next_batch();
 
         $applied = $this->get_applied_migrations();
-        
+
         foreach ($this->migrations as $name => $migration) {
-            if (!in_array($name, $applied)) {
+            if (! in_array($name, $applied)) {
                 try {
                     $migration->up();
-                    $this->log_migration($name, $batch);
+                    $this->log_migration($name, $batch, 'completed');
                     $executed[] = $name;
                 } catch (\Exception $e) {
                     throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage());
@@ -84,12 +92,13 @@ class migration_manager {
     /**
      * Son batch'teki migration'ları geri alır
      */
-    public function rollback(): array {
+    public function rollback(): array
+    {
         $this->load_migrations();
         $rolled_back = [];
 
         $last_batch = $this->get_last_batch();
-        if (!$last_batch) {
+        if (! $last_batch) {
             return $rolled_back;
         }
 
@@ -117,12 +126,13 @@ class migration_manager {
     /**
      * Yeni bir migration dosyası oluşturur
      */
-    public function create(string $name): string {
+    public function create(string $name): string
+    {
         $timestamp = date('Y_m_d_His');
         $filename = $timestamp . '_' . $name . '.php';
         $path = $this->migrations_path . '/' . $filename;
 
-        if (!is_dir($this->migrations_path)) {
+        if (! is_dir($this->migrations_path)) {
             mkdir($this->migrations_path, 0755, true);
         }
 
@@ -132,8 +142,10 @@ class migration_manager {
         return $path;
     }
 
-    private function get_migration_template(string $name): string {
+    private function get_migration_template(string $name): string
+    {
         $class_name = str_replace(['-', ' '], '_', $name);
+
         return <<<PHP
 <?php
 
@@ -157,36 +169,44 @@ class {$class_name} implements migration {
 PHP;
     }
 
-    private function get_next_batch(): int {
+    private function get_next_batch(): int
+    {
         $last_batch = $this->get_last_batch();
+
         return $last_batch + 1;
     }
 
-    private function get_last_batch(): int {
+    private function get_last_batch(): int
+    {
         $result = $this->db->get_row(
             "SELECT MAX(batch) as last_batch FROM {$this->migrations_table}"
         );
-        return $result ? (int)$result->last_batch : 0;
+
+        return $result && isset($result->last_batch) ? (int)$result->last_batch : 0;
     }
 
-    private function get_applied_migrations(): array {
+    private function get_applied_migrations(): array
+    {
         $results = $this->db->get_results(
             "SELECT migration_name FROM {$this->migrations_table}"
         );
-        return array_map(fn($row) => $row->migration_name, $results);
+
+        return array_map(fn ($row) => $row->migration_name, $results);
     }
 
     /**
      * Dry-run modunu ayarlar
      */
-    public function set_dry_run(bool $enabled): void {
+    public function set_dry_run(bool $enabled): void
+    {
         $this->dry_run = $enabled;
     }
 
     /**
      * Belirli bir sürüme kadar migration'ları çalıştırır
      */
-    public function migrate_to(string $version): array {
+    public function migrate_to(string $version): array
+    {
         $this->load_migrations();
         $executed = [];
         $target_found = false;
@@ -194,11 +214,12 @@ PHP;
         foreach ($this->migrations as $name => $migration) {
             if ($name === $version) {
                 $target_found = true;
+
                 break;
             }
         }
 
-        if (!$target_found) {
+        if (! $target_found) {
             throw new \RuntimeException("Hedef versiyon bulunamadı: {$version}");
         }
 
@@ -210,21 +231,22 @@ PHP;
                 break;
             }
 
-            if (!in_array($name, $applied)) {
+            if (! in_array($name, $applied)) {
                 if ($this->check_dependencies($name)) {
+                    $start_time = microtime(true);
                     try {
-                        $start_time = microtime(true);
-                        
-                        if (!$this->dry_run) {
+
+                        if (! $this->dry_run) {
                             $migration->up();
                             $duration = microtime(true) - $start_time;
                             $this->log_migration($name, $batch, 'completed', null, $duration);
                         }
-                        
+
                         $executed[] = $name;
                     } catch (\Exception $e) {
                         $duration = microtime(true) - $start_time;
                         $this->log_migration($name, $batch, 'failed', $e->getMessage(), $duration);
+
                         throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage());
                     }
                 } else {
@@ -239,14 +261,15 @@ PHP;
     /**
      * Migration bağımlılıklarını kontrol eder
      */
-    private function check_dependencies(string $name): bool {
-        if (!isset($this->dependencies[$name])) {
+    private function check_dependencies(string $name): bool
+    {
+        if (! isset($this->dependencies[$name])) {
             return true;
         }
 
         $applied = $this->get_applied_migrations();
         foreach ($this->dependencies[$name] as $dependency) {
-            if (!in_array($dependency, $applied)) {
+            if (! in_array($dependency, $applied)) {
                 return false;
             }
         }
@@ -257,8 +280,9 @@ PHP;
     /**
      * Migration için bağımlılık ekler
      */
-    public function add_dependency(string $migration, string $depends_on): void {
-        if (!isset($this->dependencies[$migration])) {
+    public function add_dependency(string $migration, string $depends_on): void
+    {
+        if (! isset($this->dependencies[$migration])) {
             $this->dependencies[$migration] = [];
         }
         $this->dependencies[$migration][] = $depends_on;
@@ -267,13 +291,17 @@ PHP;
     /**
      * Seed verilerini yükler
      */
-    public function seed(string $class = null): void {
-        if (!is_dir($this->seeds_path)) {
+    public function seed(?string $class = null): void
+    {
+        if (! is_dir($this->seeds_path)) {
             mkdir($this->seeds_path, 0755, true);
         }
 
         if ($class === null) {
             $files = glob($this->seeds_path . '/*.php');
+            if ($files === false) {
+                $files = [];
+            }
             foreach ($files as $file) {
                 $this->run_seeder(basename($file, '.php'));
             }
@@ -285,30 +313,36 @@ PHP;
     /**
      * Belirli bir seeder'ı çalıştırır
      */
-    private function run_seeder(string $class): void {
+    private function run_seeder(string $class): void
+    {
         $file = $this->seeds_path . '/' . $class . '.php';
-        if (!file_exists($file)) {
+        if (! file_exists($file)) {
             throw new \RuntimeException("Seeder dosyası bulunamadı: {$class}");
         }
 
         require_once $file;
         $class_name = 'nsql\\database\\seeds\\' . $class;
-        if (!class_exists($class_name)) {
+        if (! class_exists($class_name)) {
             throw new \RuntimeException("Seeder sınıfı bulunamadı: {$class_name}");
         }
 
         $seeder = new $class_name();
-        $seeder->run($this->db);
+        if (method_exists($seeder, 'run')) {
+            $seeder->run($this->db);
+        } else {
+            throw new \RuntimeException("Seeder sınıfında run() metodu bulunamadı: {$class_name}");
+        }
     }
 
     /**
      * Yeni bir seeder dosyası oluşturur
      */
-    public function create_seeder(string $name): string {
+    public function create_seeder(string $name): string
+    {
         $filename = $name . '.php';
         $path = $this->seeds_path . '/' . $filename;
 
-        if (!is_dir($this->seeds_path)) {
+        if (! is_dir($this->seeds_path)) {
             mkdir($this->seeds_path, 0755, true);
         }
 
@@ -318,8 +352,10 @@ PHP;
         return $path;
     }
 
-    private function get_seeder_template(string $name): string {
+    private function get_seeder_template(string $name): string
+    {
         $class_name = str_replace(['-', ' '], '_', $name);
+
         return <<<PHP
 <?php
 
@@ -335,13 +371,14 @@ class {$class_name} {
 PHP;
     }
 
-    private function log_migration(string $name, int $batch, string $status, ?string $error_message = null, ?float $duration = null): void {
+    private function log_migration(string $name, int $batch, string $status, ?string $error_message = null, ?float $duration = null): void
+    {
         $params = [
             'name' => $name,
             'batch' => $batch,
             'status' => $status,
             'error_message' => $error_message,
-            'duration' => $duration
+            'duration' => $duration,
         ];
 
         $this->db->insert(
@@ -351,7 +388,8 @@ PHP;
         );
     }
 
-    private function remove_migration(string $name): void {
+    private function remove_migration(string $name): void
+    {
         $this->db->delete(
             "DELETE FROM {$this->migrations_table} WHERE migration_name = :name",
             ['name' => $name]
