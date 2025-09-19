@@ -95,7 +95,7 @@ $db->query("SELECT * FROM users WHERE id = " . $id);
 $db->table('users')
    ->select(['id', 'name', 'email'])
    ->where('status', 'active')
-   ->orderBy('created_at', 'DESC')
+   ->order_by('created_at', 'DESC')
    ->limit(10)
    ->get();
 ```
@@ -162,7 +162,8 @@ const CACHE_STRATEGIES = [
 ];
 
 // Örnek kullanım
-$result = $db->withCache(300)->get_results($query);
+// Cache yapılandırması config üzerinden yönetilir
+$result = $db->get_results($query);
 ```
 
 **Cache Optimizasyonları:**
@@ -225,7 +226,7 @@ $db->enableDebug();
 $db->debug(); // Sorgu, parametreler ve timing bilgisi
 
 // Memory kullanımı
-$stats = $db->getMemoryStats();
+$stats = $db->get_memory_stats();
 ```
 
 **Monitoring Tavsiyeleri:**
@@ -260,7 +261,7 @@ $manager->migrate(['--force' => true]); // Tehlikeli operasyonları onayla
 1. **Bağlantı Sorunları**
 ```php
 try {
-    $db->ensureConnection();
+    $db->ensure_connection();
 } catch (ConnectionException $e) {
     // Retry logic
     $db->reconnect(['timeout' => 5]);
@@ -272,7 +273,7 @@ try {
 // Resource temizleme
 $db->disconnect();
 $db->clearStatementCache();
-$db->clearQueryCache();
+$db->clear_query_cache();
 ```
 
 3. **Deadlock Yönetimi**
