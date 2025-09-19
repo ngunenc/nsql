@@ -925,6 +925,41 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 ---
 
 ### 🧠 Yeni Özellikler
+ 
+## ⚡ Benchmark Sonuçları (v1.4)
+
+Yerel ortam ölçümleri, `benchmarks/` betikleri ile alınmıştır (MySQL, PHP 8.2, Windows). Değerler yaklaşıktır ve ortalama tek çalıştırma sonuçlarını temsil eder.
+
+```
+1) Küçük/Orta SELECT (nsql vs PDO, bench_users tablosu)
+   case         nsql_ms   pdo_ms   count
+   small_1k     ~3.10     ~1.94    1000
+   medium_10k   ~12.84    ~12.38   10000
+
+Yorum: Küçük setlerde nsql’in ek güvenlik/katman maliyeti küçük bir fark yaratır; orta setlerde fark kapanır.
+
+2) Generator vs Array (get_yield vs get_results)
+   mode        time_ms   mem_peak
+   generator   ~4.6      ~4 MB
+   array       ~41.9     ~16 MB
+
+Yorum: Büyük veri setlerinde get_yield belirgin şekilde daha hızlı ve bellek dostu.
+
+3) Cache Hit/Miss (aynı sorgu iki kez)
+   phase    time_ms   hit_rate
+   first    ~5.8      ~50%
+   second   ~0.39     ~50%
+
+Yorum: İkinci çağrıda cache sayesinde ciddi hızlanma elde edilir. TTL ve limit değerleri workload’a göre ayarlanmalıdır.
+```
+
+Benchmark’ları çalıştırmak için:
+
+```bash
+php benchmarks/select_small_vs_large.php
+php benchmarks/iterators_vs_array.php
+php benchmarks/cache_hit_miss.php
+```
 
 ### SQL Sabitlerini Otomatik Parametreye Çevirme
 
