@@ -361,7 +361,7 @@ $users = searchUsers($db, $filters);
 ```php
 <?php
 use nsql\database\nsql;
-use nsql\database\security\SecurityManager;
+use nsql\database\security\security_manager;
 
 $db = new nsql();
 
@@ -369,7 +369,7 @@ $db = new nsql();
 $userInput = '<script>alert("XSS")</script>';
 
 // Güvenli hale getirme
-$safeInput = SecurityManager::escape_html($userInput);
+$safeInput = security_manager::escape_html($userInput);
 
 // Veritabanına kaydetme
 $db->insert(
@@ -389,10 +389,10 @@ echo $safeInput; // &lt;script&gt;alert("XSS")&lt;/script&gt;
 
 ```php
 <?php
-use nsql\database\security\SecurityManager;
+use nsql\database\security\security_manager;
 
 // Form oluşturma
-$csrfToken = SecurityManager::generate_csrf_token();
+$csrfToken = security_manager::generate_csrf_token();
 ?>
 
 <form method="POST" action="update_user.php">
@@ -406,12 +406,12 @@ $csrfToken = SecurityManager::generate_csrf_token();
 if ($_POST) {
     $token = $_POST['csrf_token'] ?? '';
     
-    if (!SecurityManager::validate_csrf_token($token)) {
+    if (!\nsql\database\nsql::validate_csrf($token)) {
         die('CSRF token geçersiz!');
     }
     
     // Güvenli işlem
-    $name = SecurityManager::escape_html($_POST['name']);
+    $name = security_manager::escape_html($_POST['name']);
     // ... veritabanı işlemleri
 }
 ?>

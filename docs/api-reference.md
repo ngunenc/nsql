@@ -136,7 +136,7 @@ nsql::escape_html(mixed $string): string
 nsql::generate_csrf_token(): string
 
 // CSRF token doğrulama
-nsql::validate_csrf_token(mixed $token): bool
+nsql::validate_csrf(mixed $token): bool
 ```
 
 ## 🔧 Query Builder
@@ -202,19 +202,19 @@ Güvenlik işlemlerinin merkezi yönetimi.
 
 ```php
 // HTML escape
-SecurityManager::escape_html(mixed $string): string
+security_manager::escape_html(mixed $string): string
 
 // CSRF token oluşturma
-SecurityManager::generate_csrf_token(): string
+security_manager::generate_csrf_token(): string
 
 // CSRF token doğrulama
-SecurityManager::validate_csrf_token(mixed $token): bool
+security_manager::validate_csrf_token(mixed $token): bool
 
 // SQL parametrelerini doğrulama
-SecurityManager::validate_sql_params(array $params): bool
+security_manager::validate_sql_params(array $params): bool
 
 // Güvenli sorgu hazırlama
-SecurityManager::prepare_safe_query(string $sql, array $params): string
+security_manager::prepare_safe_query(string $sql, array $params): string
 ```
 
 ### Encryption
@@ -420,14 +420,14 @@ $users = $builder
 ### Security Kullanımı
 
 ```php
-use nsql\database\security\SecurityManager;
+use nsql\database\security\security_manager;
 
 // XSS koruması
-$safe_html = SecurityManager::escape_html('<script>alert("xss")</script>');
+$safe_html = security_manager::escape_html('<script>alert("xss")</script>');
 
 // CSRF koruması
-$token = SecurityManager::generate_csrf_token();
-$is_valid = SecurityManager::validate_csrf_token($token);
+$token = security_manager::generate_csrf_token();
+$is_valid = security_manager::validate_csrf_token($token);
 ```
 
 ### Migration Kullanımı

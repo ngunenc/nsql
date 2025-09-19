@@ -15,6 +15,7 @@ if (! defined('NSQL_TEMPLATE')) {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     background: #f8f9fa;
     border: 1px solid #e9ecef;
+    color: #212529 !important;
     padding: 1.25rem;
     margin: 1rem 0;
     border-radius: 0.5rem;
@@ -41,6 +42,7 @@ if (! defined('NSQL_TEMPLATE')) {
 .nsql-debug pre {
     background: #fff;
     border: 1px solid #e9ecef;
+    color: #212529 !important;
     padding: 1rem;
     margin: 0.5rem 0;
     border-radius: 0.375rem;
