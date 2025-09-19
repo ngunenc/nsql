@@ -4,7 +4,7 @@ $ctx = require __DIR__ . '/bootstrap.php';
 /** @var \nsql\database\nsql $nsql */
 $nsql = $ctx['nsql'];
 
-$query = "SELECT * FROM users WHERE active = 1 LIMIT 1000";
+$query = "SELECT * FROM bench_users WHERE active = 1 LIMIT 1000";
 
 // İlk çağrı (miss)
 $start = timer_start();

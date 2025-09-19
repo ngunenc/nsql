@@ -15,7 +15,7 @@ $results = [];
 
 foreach ($cases as $c) {
     $limit = (int)$c['limit'];
-    $sql = "SELECT * FROM users LIMIT {$limit}"; // tablo artık seed ile dolu
+    $sql = "SELECT * FROM bench_users LIMIT {$limit}"; // benchmark tablosu
 
     // nsql get_results
     $start = timer_start();
