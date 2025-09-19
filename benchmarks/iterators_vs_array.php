@@ -6,7 +6,7 @@ $ctx = require __DIR__ . '/bootstrap.php';
 $nsql = $ctx['nsql'];
 
 // LIMIT kullanma; get_yield LIMIT/OFFSET kabul etmez
-$sql = "SELECT * FROM users"; // büyük set; streaming için
+$sql = "SELECT * FROM bench_users"; // büyük set; streaming için
 
 $rows = [];
 

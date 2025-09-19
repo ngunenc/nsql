@@ -73,9 +73,9 @@ function format_bytes(int $bytes): string {
 /**
  * users tablosunu ve test verisini hazırlar
  */
-function ensure_users_seed(PDO $pdo, int $min_rows = 20000): void {
+function ensure_bench_users_seed(PDO $pdo, int $min_rows = 20000): void {
     $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS users (
+        "CREATE TABLE IF NOT EXISTS bench_users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             email VARCHAR(255) NOT NULL,
@@ -85,14 +85,14 @@ function ensure_users_seed(PDO $pdo, int $min_rows = 20000): void {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
 
-    $count = (int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    $count = (int)$pdo->query('SELECT COUNT(*) FROM bench_users')->fetchColumn();
     if ($count >= $min_rows) {
         return;
     }
 
     $target = $min_rows - $count;
     $chunk = 1000;
-    $stmt = $pdo->prepare('INSERT INTO users (name, email, active) VALUES (:name, :email, :active)');
+    $stmt = $pdo->prepare('INSERT INTO bench_users (name, email, active) VALUES (:name, :email, :active)');
     $pdo->beginTransaction();
     try {
         for ($i = 1; $i <= $target; $i++) {
@@ -118,8 +118,8 @@ function ensure_users_seed(PDO $pdo, int $min_rows = 20000): void {
     }
 }
 
-// Seed verisi hazırla (users tablosu ve en az 20k satır)
-ensure_users_seed($pdo, 20000);
+// Seed verisi hazırla (bench_users tablosu ve en az 20k satır)
+ensure_bench_users_seed($pdo, 20000);
 
 /**
  * Sonuçları tablo biçiminde yazdırma
