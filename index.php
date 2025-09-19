@@ -2,12 +2,12 @@
 
 require_once __DIR__ . '/vendor/autoload.php';
 
-use nsql\database\Config;
+use nsql\database\config;
 use nsql\database\nsql;
 
 try {
 
-    // Config tabanlı güvenli bağlantı (credentials .env/Config üzerinden)
+    // Config tabanlı güvenli bağlantı (credentials config üzerinden)
     $db = new nsql();
 
     // SELECT tek satır örneği
@@ -15,7 +15,7 @@ try {
         "SELECT * FROM kullanicilar WHERE id = :id",
         ['id' => 1]
     );
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -23,7 +23,7 @@ try {
     $kullanicilar = $db->get_results(
         "SELECT * FROM sayfalar"
     );
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -34,7 +34,7 @@ try {
         ->select('id', 'tam_isim', 'eposta')
         ->order_by('tam_isim', 'ASC')
         ->get();
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -42,7 +42,7 @@ try {
     $tekKullanici = $db->table('kullanicilar')
         ->where('tam_isim', '=', 'Necip GÜNENÇ')
         ->first();
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -71,13 +71,13 @@ try {
 
     // Tek satır döndürme (İsim al) - XSS güvenli çıktı
     $ad = $db->get_row("SELECT tam_isim FROM kullanicilar WHERE id = :id", ['id' => 1]);
-    echo isset($ad->tam_isim) ? nsql::escapeHtml($ad->tam_isim) : 'Kullanıcı bulunamadı';
-    if (Config::get('DEBUG_MODE', false)) {
+    echo isset($ad->tam_isim) ? nsql::escape_html($ad->tam_isim) : 'Kullanıcı bulunamadı';
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
 } catch (Exception $e) {
     // Hata mesajını kullanıcıya güvenli ve genel bir formatta göster
     $generic = 'Bir hata oluştu.';
-    echo nsql::escapeHtml($generic);
+    echo nsql::escape_html($generic);
 }

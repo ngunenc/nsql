@@ -169,7 +169,9 @@ class nsql extends PDO
         $this->initialize_pool();
         $this->initialize_connection();
         $this->load_cache_config();
-    }    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static
+    }
+
+    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static
     {
         // dsn'den host, db ve charset bilgilerini ayıkla
         $pattern = '/mysql:host=([^;]+);dbname=([^;]+);charset=([^;]+)/';
@@ -475,7 +477,6 @@ class nsql extends PDO
     public function get_row(string $query, array $params = []): ?object
     {
         $this->set_last_called_method();
-
         // LIMIT 1 ekle eğer yoksa
         if (! preg_match('/\bLIMIT\s+\d+(?:\s*,\s*\d+)?$/i', $query)) {
             $query .= ' LIMIT 1';
@@ -493,9 +494,12 @@ class nsql extends PDO
         // Sorguyu çalıştır
         $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
+            // Hata yönetimi: PDO hatasını tetikle
+            $errorInfo = $this->pdo ? $this->pdo->errorInfo() : ['Hata',0,'Sorgu çalıştırılamadı'];
+            trigger_error('get_row: Sorgu başarısız! PDO error: ' . print_r($errorInfo, true), E_USER_WARNING);
             return null;
         }
-
+        
         // Sonucu al ve cache'le
         $result = $stmt->fetch(PDO::FETCH_OBJ);
         if ($result && $this->query_cache_enabled) {
