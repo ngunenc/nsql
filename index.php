@@ -23,14 +23,7 @@ try {
     $kullanicilar = $db->get_results(
         "SELECT * FROM kullanicilar"
     );
-    if (!empty($kullanicilar)) {
-        foreach ($kullanicilar as $kullanici) {
-            // XSS'e karsi guvenli cikti ve satir ayirici
-            echo nsql::escape_html($kullanici->tam_isim) . "<br>\n";
-        }
-    } else {
-        echo "Kayit bulunamadi<br>\n";
-    }
+    
     if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
