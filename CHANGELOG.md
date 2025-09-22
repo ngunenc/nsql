@@ -4,6 +4,20 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.4.1] - 2024-12-19
+
+### 🐛 Kritik Hata Düzeltmeleri
+- **Cursor Tüketme Sorunu**: `execute_query()` metodunda sonuçların erken tüketilmesi sorunu düzeltildi
+- **get_results() Boş Dönme**: `get_results()` ve `get_row()` metodlarının boş sonuç döndürme sorunu çözüldü
+- **last_results Ataması**: Debug paneli için `last_results` ataması doğru yerlere taşındı
+- **PDOStatement Cursor**: Statement cursor'ının iki kez tüketilmesi sorunu giderildi
+
+### 🔧 İç Yapı İyileştirmeleri
+- **execute_query()**: Artık sonuçları tüketmiyor, sadece `prepare` + `bind` + `execute` yapıyor
+- **get_results()**: Sonuçları aldıktan sonra `last_results` ataması yapıyor
+- **get_row()**: Tek satır aldıktan sonra `last_results` ataması yapıyor
+- **Debug Uyumluluğu**: Debug paneli artık doğru sonuçları gösteriyor
+
 ## [1.4.0] - 2024-12-19
 
 ### 🚀 Performans Optimizasyonları
