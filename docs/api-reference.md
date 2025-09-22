@@ -92,9 +92,11 @@ delete(string $sql, array $params = []): bool
 
 // Tek satır alma
 get_row(string $query, array $params = []): ?object
+// Not: LIMIT 1 otomatik eklenir, last_results tek elemanlı dizi olarak set edilir
 
 // Tüm sonuçları alma
 get_results(string $query, array $params = []): array
+// Not: last_results tüm sonuçlar olarak set edilir, debug paneli için
 
 // Chunked fetch (büyük veri setleri için)
 get_chunk(string $query, array $params = [], int $chunk_size = 1000): Generator

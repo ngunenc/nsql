@@ -422,11 +422,7 @@ class nsql extends PDO
 
                 $stmt->execute();
 
-                // Sorgu sonuçlarını last_results'a kaydet
-                if ($fetch_mode === null) {
-                    $this->last_results = $stmt->fetchAll(PDO::FETCH_OBJ);
-                }
-
+                // Not: Sonuçlar burada TUKETILMEZ. last_results atamasi sonucu ceken metodlarda yapilir.
                 return $stmt;
 
             } catch (PDOException $e) {
@@ -500,8 +496,9 @@ class nsql extends PDO
             return null;
         }
         
-        // Sonucu al ve cache'le
+        // Sonucu al, last_results ve cache'i guncelle
         $result = $stmt->fetch(PDO::FETCH_OBJ);
+        $this->last_results = $result ? [$result] : [];
         if ($result && $this->query_cache_enabled) {
             $this->add_to_query_cache($cache_key, $result);
         }
@@ -540,8 +537,9 @@ class nsql extends PDO
             );
         }
 
-        // Sonuçları al ve cache'le
+        // Sonuçları al, last_results ve cache'i guncelle
         $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+        $this->last_results = $results;
         if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
             $this->add_to_query_cache($cache_key, $results);
         }

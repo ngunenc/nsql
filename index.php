@@ -19,10 +19,18 @@ try {
         $db->debug();
     }
 
-    // SELECT çoklu satır örneği
+    // SELECT çoklu satır örneği (dogru tablo ve guvenli cikti)
     $kullanicilar = $db->get_results(
-        "SELECT * FROM sayfalar"
+        "SELECT * FROM kullanicilar"
     );
+    if (!empty($kullanicilar)) {
+        foreach ($kullanicilar as $kullanici) {
+            // XSS'e karsi guvenli cikti ve satir ayirici
+            echo nsql::escape_html($kullanici->tam_isim) . "<br>\n";
+        }
+    } else {
+        echo "Kayit bulunamadi<br>\n";
+    }
     if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
