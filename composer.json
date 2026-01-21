@@ -3,7 +3,7 @@
 	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.4",
 	"type": "library",
 	"license": "MIT",
-	"version": "1.4.0",
+	"version": "1.4.1",
 	"authors": [
 		{
 			"name": "nsql contributors"
