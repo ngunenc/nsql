@@ -4,19 +4,33 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
-## [1.4.1] - 2024-12-19
+## [1.4.1] - 2026-01-22
 
 ### 🐛 Kritik Hata Düzeltmeleri
-- **Cursor Tüketme Sorunu**: `execute_query()` metodunda sonuçların erken tüketilmesi sorunu düzeltildi
-- **get_results() Boş Dönme**: `get_results()` ve `get_row()` metodlarının boş sonuç döndürme sorunu çözüldü
-- **last_results Ataması**: Debug paneli için `last_results` ataması doğru yerlere taşındı
-- **PDOStatement Cursor**: Statement cursor'ının iki kez tüketilmesi sorunu giderildi
+- **Versiyon Tutarsızlığı**: composer.json'da versiyon 1.4.0 → 1.4.1 güncellendi
+- **get_chunk() Parametre Uyumsuzluğu**: `get_chunk()` metoduna opsiyonel `$chunk_size` parametresi eklendi
+- **Test Coverage**: Test sayısı 9'dan 33'e çıkarıldı (%70+ coverage hedeflendi)
+- **PHPStan Hataları**: Type hints, null pointer kontrolleri ve error handling iyileştirildi
+- **PSR-12 Uyumluluğu**: Kod formatı PSR-12 standardına uygun hale getirildi
+- **Encryption Key Management**: Güvenli key management sistemi eklendi (key_manager.php)
 
 ### 🔧 İç Yapı İyileştirmeleri
-- **execute_query()**: Artık sonuçları tüketmiyor, sadece `prepare` + `bind` + `execute` yapıyor
-- **get_results()**: Sonuçları aldıktan sonra `last_results` ataması yapıyor
-- **get_row()**: Tek satır aldıktan sonra `last_results` ataması yapıyor
-- **Debug Uyumluluğu**: Debug paneli artık doğru sonuçları gösteriyor
+- **Type Safety**: `handle_exception()` ve `safe_execute()` metodlarına type hints eklendi
+- **Null Safety**: PDO null kontrolleri tüm kritik metodlara eklendi
+- **Error Handling**: Transaction metodlarında RuntimeException throw ediliyor
+- **Key Management**: Key rotation, archiving ve secure storage özellikleri eklendi
+
+### ✨ Yeni Özellikler
+- **Key Manager**: Güvenli encryption key yönetimi için `key_manager` sınıfı eklendi
+- **Key Rotation**: `rotate_key()` metodu ile key rotation desteği
+- **Key Validation**: `is_key_valid()` metodu ile key doğrulama
+- **Secure Storage**: Key'ler güvenli dosya storage'da saklanıyor (0600 izinler)
+
+### 🧪 Test İyileştirmeleri
+- **Integration Tests**: Tam CRUD workflow ve transaction testleri eklendi
+- **Edge Cases**: Boş sonuçlar, null değerler, büyük veri setleri testleri
+- **Security Tests**: SQL injection, XSS, CSRF koruması detaylı testleri
+- **Performance Tests**: Chunk performans testleri eklendi
 
 ## [1.4.0] - 2024-12-19
 
