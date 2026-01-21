@@ -9,6 +9,7 @@ class query_builder
     private array $columns = ['*'];
     private array $where = [];
     private array $group_by = [];
+    private array $having = [];
     private array $order_by = [];
     private ?int $limit = null;
     private int $offset = 0;
@@ -121,6 +122,25 @@ class query_builder
     }
 
     /**
+     * HAVING koşulu ekler (GROUP BY ile birlikte kullanılır)
+     *
+     * @param string $column Sütun adı veya aggregate fonksiyon (örn: COUNT(*))
+     * @param string $operator Operatör (=, >, <, >=, <=, etc.)
+     * @param mixed $value Değer
+     * @return self
+     */
+    public function having(string $column, string $operator, $value): self
+    {
+        $this->validate_operator($operator);
+
+        [$param_name, $param_value, $param_type] = $this->prepare_param($column, $value);
+        $this->having[] = "$column $operator $param_name";
+        $this->params[$param_name] = ['value' => $param_value, 'type' => $param_type];
+
+        return $this;
+    }
+
+    /**
      * Limit belirler
      *
      * @param int $limit Limit değeri
@@ -213,6 +233,10 @@ class query_builder
 
         if (! empty($this->group_by)) {
             $query .= " GROUP BY " . implode(", ", $this->group_by);
+        }
+
+        if (! empty($this->having)) {
+            $query .= " HAVING " . implode(" AND ", $this->having);
         }
 
         if (! empty($this->order_by)) {
