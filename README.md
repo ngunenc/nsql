@@ -49,9 +49,40 @@
 
 ### Composer ile Kurulum
 
-```bash
-composer require ngunenc/nsql
+**⚠️ Önemli**: Paket henüz Packagist'te yayınlanmadığı için, GitHub repository'yi direkt kullanmanız gerekiyor.
+
+#### Yöntem 1: Repository ile (Önerilen)
+
+Projenizin `composer.json` dosyasına şunu ekleyin:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/ngunenc/nsql.git"
+        }
+    ],
+    "require": {
+        "ngunenc/nsql": "^1.4.1"
+    }
+}
 ```
+
+Sonra:
+```bash
+composer require ngunenc/nsql:^1.4.1
+```
+
+#### Yöntem 2: Tek Komutla
+
+```bash
+composer require ngunenc/nsql:^1.4.1 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+```
+
+> 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
+> 
+> 📖 **Detaylı Kurulum Rehberi**: [INSTALLATION.md](INSTALLATION.md) dosyasına bakın.
 
 ### Manuel Kurulum
 
