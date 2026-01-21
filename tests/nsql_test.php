@@ -481,6 +481,33 @@ class nsql_test extends TestCase
         $this->assertGreaterThanOrEqual(1, $whereCount);
     }
 
+    public function testQueryBuilderGroupBy()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('category', 'COUNT(*) as count')
+            ->from('test_table')
+            ->group_by('category')
+            ->get_query();
+            
+        $this->assertStringContainsString('GROUP BY', $query);
+        $this->assertStringContainsString('category', $query);
+    }
+
+    public function testQueryBuilderGroupByMultiple()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('category', 'status', 'COUNT(*) as count')
+            ->from('test_table')
+            ->group_by('category', 'status')
+            ->get_query();
+            
+        $this->assertStringContainsString('GROUP BY', $query);
+        $this->assertStringContainsString('category', $query);
+        $this->assertStringContainsString('status', $query);
+    }
+
     // ========== PERFORMANCE TESTLERİ ==========
 
     public function testChunkPerformance()
