@@ -569,6 +569,23 @@
 - **Tahmini Süre**: 1 gün
 - **Tamamlanma Tarihi**: _Boş bırakın, tamamlandığında doldurun_
 
+### GELISTIRME-013: Composer Export Optimizasyonu
+- [ ] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
+- **Dosya**: `.gitattributes`, `composer.json`
+- **Sorun**: Composer ile indirildiğinde tüm dosyalar (test, benchmark, docs) indiriliyor
+- **Etki**: Gereksiz dosyalar production'a dahil ediliyor, paket boyutu büyük
+- **Çözüm**: 
+  - `.gitattributes` dosyası oluştur (`export-ignore` kullanarak)
+  - Test dosyalarını exclude et (`/tests`, `/phpunit.xml`)
+  - Benchmark dosyalarını exclude et (`/benchmarks`)
+  - Geliştirme araçlarını exclude et (`.php-cs-fixer.php`, `phpstan.neon`)
+  - Dokümantasyon dosyalarını exclude et (opsiyonel)
+  - `composer.json`'da `archive` bölümü ekle (opsiyonel)
+  - Sonuç: Sadece `src/` ve `composer.json` indirilecek
+- **Durum**: ⏳ Bekliyor → ✅ Tamamlandı (işaretleyince güncelleyin)
+- **Tahmini Süre**: 30 dakika
+- **Tamamlanma Tarihi**: _Boş bırakın, tamamlandığında doldurun_
+
 ---
 
 ## 🔵 DOKÜMANTASYON (Düşük Öncelik)
