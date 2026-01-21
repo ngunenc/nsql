@@ -252,7 +252,7 @@ class nsql extends PDO
      * @param string $generic_message Kullanıcıya gösterilecek genel mesaj (örn: "Bir hata oluştu.")
      * @return string Kullanıcıya gösterilecek mesaj
      */
-    public function handle_exception($e, string $generic_message = 'Bir hata oluştu.'): string
+    public function handle_exception(Exception|Throwable $e, string $generic_message = 'Bir hata oluştu.'): string
     {
         $this->log_error($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
         if ($this->debug_mode) {
@@ -270,7 +270,7 @@ class nsql extends PDO
      * @param string $generic_message
      * @return mixed
      */
-    public function safe_execute(callable $fn, string $generic_message = 'Bir hata oluştu.')
+    public function safe_execute(callable $fn, string $generic_message = 'Bir hata oluştu.'): mixed
     {
         try {
             return $fn();
@@ -310,6 +310,11 @@ class nsql extends PDO
      */
     public function ensure_connection(): void
     {
+        if ($this->pdo === null) {
+            $this->connect();
+            return;
+        }
+        
         try {
             $stmt = $this->pdo->query('SELECT 1');
             if ($stmt === false) {
@@ -381,6 +386,13 @@ class nsql extends PDO
     {
         $this->set_last_called_method();
         $this->ensure_connection();
+
+        // PDO bağlantısı kontrolü
+        if ($this->pdo === null) {
+            $this->last_error = 'PDO bağlantısı kurulamadı';
+            $this->log_error($this->last_error);
+            return false;
+        }
 
         // Sorgu türünü belirle ve kaydet
         $this->last_query = $sql;
@@ -461,7 +473,7 @@ class nsql extends PDO
         $this->last_insert_id = 0;
 
         $stmt = $this->execute_query($sql, $params);
-        if ($stmt !== false) {
+        if ($stmt !== false && $this->pdo !== null) {
             $this->last_insert_id = (int)$this->pdo->lastInsertId();
 
             return true;
@@ -491,7 +503,7 @@ class nsql extends PDO
         $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
             // Hata yönetimi: PDO hatasını tetikle
-            $errorInfo = $this->pdo ? $this->pdo->errorInfo() : ['Hata',0,'Sorgu çalıştırılamadı'];
+            $errorInfo = ($this->pdo !== null) ? $this->pdo->errorInfo() : ['Hata', 0, 'Sorgu çalıştırılamadı'];
             trigger_error('get_row: Sorgu başarısız! PDO error: ' . print_r($errorInfo, true), E_USER_WARNING);
             return null;
         }
@@ -566,6 +578,14 @@ class nsql extends PDO
         $offset = 0;
         $chunk_size = config::default_chunk_size;
         $total_rows = 0;
+
+        // PDO bağlantısı kontrolü
+        if ($this->pdo === null) {
+            $this->ensure_connection();
+            if ($this->pdo === null) {
+                return;
+            }
+        }
 
         // İlk sorgu için prepared statement oluştur
         $base_stmt = $this->pdo->prepare($query);
@@ -656,18 +676,27 @@ class nsql extends PDO
      * Bir veritabanı işlemi başlatır.
      *
      * @return void
+     * @throws RuntimeException PDO bağlantısı yoksa
      */
     public function begin(): void
     {
+        if ($this->pdo === null) {
+            throw new RuntimeException('PDO bağlantısı kurulamadı');
+        }
         $this->pdo->beginTransaction();
     }
 
     /**
      * Bir veritabanı işlemini tamamlar ve değişiklikleri kaydeder.
      *
-     * @return void
-     */    public function commit(): bool
+     * @return bool İşlem başarılıysa true, değilse false döndürür
+     * @throws RuntimeException PDO bağlantısı yoksa
+     */
+    public function commit(): bool
     {
+        if ($this->pdo === null) {
+            throw new RuntimeException('PDO bağlantısı kurulamadı');
+        }
         return $this->pdo->commit();
     }
 
@@ -678,6 +707,9 @@ class nsql extends PDO
      */
     public function rollback(): bool
     {
+        if ($this->pdo === null) {
+            throw new RuntimeException('PDO bağlantısı kurulamadı');
+        }
         return $this->pdo->rollBack();
     }
 
@@ -820,9 +852,10 @@ class nsql extends PDO
      *
      * @param string $query SQL sorgusu
      * @param array $params Sorgu parametreleri
+     * @param int|null $chunk_size Chunk boyutu (opsiyonel, verilmezse config'deki default değer kullanılır)
      * @return \Generator Her chunk için bir array döndürür
      */
-    public function get_chunk(string $query, array $params = []): \Generator
+    public function get_chunk(string $query, array $params = [], ?int $chunk_size = null): \Generator
     {
         $this->set_last_called_method();
 
@@ -832,9 +865,22 @@ class nsql extends PDO
         }
 
         $offset = 0;
-        self::$current_chunk_size = config::default_chunk_size;
+        // Chunk size belirtilmişse kullan, yoksa config'deki default değeri kullan
+        if ($chunk_size !== null && $chunk_size > 0) {
+            self::$current_chunk_size = $chunk_size;
+        } else {
+            self::$current_chunk_size = config::default_chunk_size;
+        }
         $total_rows = 0;
 
+        // PDO bağlantısı kontrolü
+        if ($this->pdo === null) {
+            $this->ensure_connection();
+            if ($this->pdo === null) {
+                return;
+            }
+        }
+        
         // Prepared statement hazırla
         $base_stmt = $this->pdo->prepare($query);
         if ($base_stmt === false) {
@@ -842,10 +888,17 @@ class nsql extends PDO
         }
 
         try {
+            // Chunk size sabit belirtilmişse auto-adjust'u devre dışı bırak
+            $use_auto_adjust = ($chunk_size === null);
+            
             while (true) {
-                // Memory ve chunk boyutu kontrolü
+                // Memory kontrolü
                 $this->check_memory_status();
-                $this->adjust_chunk_size();
+                
+                // Chunk size sabit belirtilmemişse auto-adjust kullan
+                if ($use_auto_adjust) {
+                    $this->adjust_chunk_size();
+                }
 
                 // Chunk sorgusu oluştur
                 $chunk_query = $query . " LIMIT " . self::$current_chunk_size . " OFFSET " . $offset;

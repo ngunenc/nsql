@@ -77,20 +77,43 @@ class encryption
 
     /**
      * Şifreleme anahtarını al veya oluştur
+     * 
+     * Key Manager kullanarak güvenli key yönetimi yapar
      */
     private function get_or_generate_key(): string
     {
-        // Config'den anahtarı almaya çalış
-        $key = \nsql\database\config::get('encryption_key');
+        return key_manager::get_key();
+    }
 
-        if (empty($key)) {
-            // Yeni anahtar oluştur
-            $key = base64_encode(random_bytes(32));
+    /**
+     * Key rotation yapar (yeni key oluşturur)
+     * 
+     * @return array Rotation bilgileri
+     */
+    public function rotate_key(): array
+    {
+        $rotation_info = key_manager::rotate_key($this->key);
+        $this->key = $rotation_info['new_key'];
+        
+        return $rotation_info;
+    }
 
-            // TODO: Anahtarı güvenli bir şekilde sakla
-            // Örneğin: özel bir dosyada veya environment variable'da
+    /**
+     * Mevcut key'in geçerli olup olmadığını kontrol eder
+     * 
+     * @return bool Key geçerli ise true
+     */
+    public function is_key_valid(): bool
+    {
+        try {
+            // Test encryption/decryption yaparak key'in geçerli olduğunu kontrol et
+            $test_data = 'test_key_validation_' . time();
+            $encrypted = $this->encrypt($test_data);
+            $decrypted = $this->decrypt($encrypted);
+            
+            return $decrypted === $test_data;
+        } catch (\Exception $e) {
+            return false;
         }
-
-        return (string)$key;
     }
 }
