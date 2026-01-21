@@ -1,0 +1,34 @@
+# Composer export-ignore: Bu dosyalar Composer ile indirildiğinde dahil edilmez
+# Sadece production için gerekli dosyalar (src/) indirilir
+
+# Test dosyaları
+/tests export-ignore
+/phpunit.xml export-ignore
+
+# Benchmark dosyaları
+/benchmarks export-ignore
+
+# Geliştirme araçları
+/.php-cs-fixer.php export-ignore
+/.php-cs-fixer.cache export-ignore
+/phpstan.neon export-ignore
+
+# Dokümantasyon (opsiyonel - eğer dahil edilmek istenirse kaldırılabilir)
+/docs export-ignore
+/README.md export-ignore
+/CHANGELOG.md export-ignore
+/INSTALLATION.md export-ignore
+/TROUBLESHOOTING.md export-ignore
+/GELISTIRME_PLANI.md export-ignore
+/PROJE_ANALIZ_RAPORU.md export-ignore
+
+# Geliştirme dosyaları
+/.github export-ignore
+/index.php export-ignore
+/env.example export-ignore
+
+# Composer lock (production'da gerekli değil)
+/composer.lock export-ignore
+
+# Not: src/ dizini dahil edilir (production için gerekli)
+# Not: composer.json dahil edilir (gerekli)

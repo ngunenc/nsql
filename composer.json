@@ -49,6 +49,26 @@
 		"optimize-autoloader": true,
 		"sort-packages": true
 	},
+	"archive": {
+		"exclude": [
+			"/tests",
+			"/benchmarks",
+			"/docs",
+			"/.github",
+			"/phpunit.xml",
+			"/phpstan.neon",
+			"/.php-cs-fixer.php",
+			"/.php-cs-fixer.cache",
+			"/README.md",
+			"/CHANGELOG.md",
+			"/INSTALLATION.md",
+			"/TROUBLESHOOTING.md",
+			"/GELISTIRME_PLANI.md",
+			"/PROJE_ANALIZ_RAPORU.md",
+			"/index.php",
+			"/env.example"
+		]
+	},
 	"minimum-stability": "stable",
 	"prefer-stable": true
 }
