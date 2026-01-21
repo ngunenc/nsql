@@ -8,6 +8,7 @@ class query_builder
     private string $table;
     private array $columns = ['*'];
     private array $where = [];
+    private array $group_by = [];
     private array $order_by = [];
     private ?int $limit = null;
     private int $offset = 0;
@@ -104,6 +105,22 @@ class query_builder
     }
 
     /**
+     * GROUP BY ekler
+     *
+     * @param string ...$columns Gruplanacak sütunlar
+     * @return self
+     */
+    public function group_by(string ...$columns): self
+    {
+        foreach ($columns as $column) {
+            $this->validate_column_name($column);
+            $this->group_by[] = $column;
+        }
+
+        return $this;
+    }
+
+    /**
      * Limit belirler
      *
      * @param int $limit Limit değeri
@@ -183,11 +200,19 @@ class query_builder
         $query .= " FROM {$this->table}";
 
         if (! empty($this->joins)) {
-            $query .= " " . implode(" ", $this->joins);
+            $join_clauses = [];
+            foreach ($this->joins as $join) {
+                $join_clauses[] = "{$join['type']} JOIN {$join['table']} ON {$join['condition']}";
+            }
+            $query .= " " . implode(" ", $join_clauses);
         }
 
         if (! empty($this->where)) {
             $query .= " WHERE " . implode(" AND ", $this->where);
+        }
+
+        if (! empty($this->group_by)) {
+            $query .= " GROUP BY " . implode(", ", $this->group_by);
         }
 
         if (! empty($this->order_by)) {

@@ -9,9 +9,9 @@
 ## 📊 Genel Durum
 
 - **Toplam Görev**: 45+
-- **Tamamlanan**: 6
+- **Tamamlanan**: 7
 - **Devam Eden**: 0
-- **Bekleyen**: 39+
+- **Bekleyen**: 38+
 
 ---
 
@@ -133,17 +133,19 @@
 ## 🟡 EKSİKLİKLER (Orta Öncelik)
 
 ### EKSIK-001: Query Builder - GROUP BY Desteği
-- [ ] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
+- [x] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
 - **Dosya**: `src/database/query_builder.php`
 - **Sorun**: GROUP BY desteği yok
 - **Etki**: Sınırlı sorgu oluşturma yeteneği
 - **Çözüm**: 
-  ```php
-  public function group_by(string ...$columns): self
-  ```
-- **Durum**: ⏳ Bekliyor → ✅ Tamamlandı (işaretleyince güncelleyin)
+  - ✅ `group_by` property eklendi (`private array $group_by = []`)
+  - ✅ `group_by(string ...$columns)` metodu eklendi
+  - ✅ Sütun validasyonu eklendi
+  - ✅ `build_query()` metodunda GROUP BY clause eklendi (WHERE'den sonra, ORDER BY'den önce)
+  - ✅ Çoklu sütun desteği (variadic parameter)
+- **Durum**: ✅ Tamamlandı
 - **Tahmini Süre**: 2 saat
-- **Tamamlanma Tarihi**: _Boş bırakın, tamamlandığında doldurun_
+- **Tamamlanma Tarihi**: 2026-01-22
 
 ### EKSIK-002: Query Builder - HAVING Desteği
 - [ ] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
@@ -676,11 +678,11 @@
 
 ```
 🔴 Kritik Hatalar:     6/6   (100%) ✅
-🟡 Eksiklikler:        0/21  (0%)
+🟡 Eksiklikler:        1/21  (5%)
 🟢 Geliştirmeler:      0/12  (0%)
 🔵 Dokümantasyon:      0/6   (0%)
 ─────────────────────────────
-Toplam:                6/45  (13%)
+Toplam:                7/45  (16%)
 ```
 
 ### Öncelik Sırası
