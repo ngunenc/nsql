@@ -9,9 +9,9 @@
 ## 📊 Genel Durum
 
 - **Toplam Görev**: 45+
-- **Tamamlanan**: 7
+- **Tamamlanan**: 8
 - **Devam Eden**: 0
-- **Bekleyen**: 38+
+- **Bekleyen**: 37+
 
 ---
 
@@ -148,17 +148,21 @@
 - **Tamamlanma Tarihi**: 2026-01-22
 
 ### EKSIK-002: Query Builder - HAVING Desteği
-- [ ] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
+- [x] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
 - **Dosya**: `src/database/query_builder.php`
 - **Sorun**: HAVING desteği yok
 - **Etki**: GROUP BY ile birlikte kullanılamıyor
 - **Çözüm**: 
-  ```php
-  public function having(string $column, string $operator, $value): self
-  ```
-- **Durum**: ⏳ Bekliyor → ✅ Tamamlandı (işaretleyince güncelleyin)
+  - ✅ `having` property eklendi (`private array $having = []`)
+  - ✅ `having(string $column, string $operator, $value)` metodu eklendi
+  - ✅ Operatör validasyonu eklendi
+  - ✅ Parametre hazırlama desteği (WHERE ile aynı mantık)
+  - ✅ `build_query()` metodunda HAVING clause eklendi (GROUP BY'den sonra, ORDER BY'den önce)
+  - ✅ Aggregate fonksiyon desteği (COUNT(*), SUM(), AVG(), etc.)
+  - ✅ Test metodları eklendi
+- **Durum**: ✅ Tamamlandı
 - **Tahmini Süre**: 2 saat
-- **Tamamlanma Tarihi**: _Boş bırakın, tamamlandığında doldurun_
+- **Tamamlanma Tarihi**: 2026-01-22
 
 ### EKSIK-003: Query Builder - UNION Desteği
 - [ ] **Tamamlandı mı?** (İşaretlemek için `[ ]` yerine `[x]` yazın)
@@ -678,11 +682,11 @@
 
 ```
 🔴 Kritik Hatalar:     6/6   (100%) ✅
-🟡 Eksiklikler:        1/21  (5%)
+🟡 Eksiklikler:        2/21  (10%)
 🟢 Geliştirmeler:      0/12  (0%)
 🔵 Dokümantasyon:      0/6   (0%)
 ─────────────────────────────
-Toplam:                7/45  (16%)
+Toplam:                8/45  (18%)
 ```
 
 ### Öncelik Sırası

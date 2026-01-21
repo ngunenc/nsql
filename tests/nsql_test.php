@@ -508,6 +508,37 @@ class nsql_test extends TestCase
         $this->assertStringContainsString('status', $query);
     }
 
+    public function testQueryBuilderHaving()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('category', 'COUNT(*) as count')
+            ->from('test_table')
+            ->group_by('category')
+            ->having('COUNT(*)', '>', 5)
+            ->get_query();
+            
+        $this->assertStringContainsString('GROUP BY', $query);
+        $this->assertStringContainsString('HAVING', $query);
+        $this->assertStringContainsString('COUNT(*)', $query);
+    }
+
+    public function testQueryBuilderGroupByWithHaving()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('category', 'SUM(price) as total')
+            ->from('test_table')
+            ->group_by('category')
+            ->having('SUM(price)', '>', 1000)
+            ->order_by('total', 'DESC')
+            ->get_query();
+            
+        $this->assertStringContainsString('GROUP BY', $query);
+        $this->assertStringContainsString('HAVING', $query);
+        $this->assertStringContainsString('ORDER BY', $query);
+    }
+
     // ========== PERFORMANCE TESTLERİ ==========
 
     public function testChunkPerformance()
