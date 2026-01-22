@@ -1,0 +1,33 @@
+version: '3.8'
+
+# Development ortamı için docker-compose override
+# Kullanım: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  app:
+    build:
+      target: development
+    volumes:
+      - .:/var/www/html
+      - ./vendor:/var/www/html/vendor
+    environment:
+      - APP_ENV=development
+      - DEBUG_MODE=true
+
+  mysql:
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  memcached:
+    ports:
+      - "11211:11211"

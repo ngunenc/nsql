@@ -48,4 +48,9 @@ class create_users_table implements migration
     {
         return 'Create users table';
     }
+
+    public function get_dependencies(): array
+    {
+        return []; // Bu migration bağımlılığı yok
+    }
 }

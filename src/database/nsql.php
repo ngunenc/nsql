@@ -6,10 +6,14 @@ use Exception;
 use Generator;
 use InvalidArgumentException;
 use nsql\database\security\session_manager;
+use nsql\database\drivers\driver_factory;
+use nsql\database\drivers\driver_interface;
 use nsql\database\traits\{
     cache_trait,
     connection_trait,
     debug_trait,
+    error_handling_trait,
+    log_path_trait,
     query_analyzer_trait,
     query_parameter_trait,
     statement_cache_trait,
@@ -30,6 +34,8 @@ class nsql extends PDO
     use connection_trait;
     use transaction_trait;
     use query_analyzer_trait;
+    use error_handling_trait;
+    use log_path_trait;
 
     // Debug özellikleri
     protected ?string $last_error = null;
@@ -38,6 +44,7 @@ class nsql extends PDO
     protected string $last_called_method = 'unknown';
     protected bool $debug_mode = false;
     protected string $log_file = 'error_log.txt';
+    private ?\nsql\database\logging\logger $logger = null;
 
     // Query analiz özellikleri trait içinde tanımlanmıştır
 
@@ -51,6 +58,7 @@ class nsql extends PDO
     private int $retry_limit = 2;
     private static bool $pool_initialized = false;
     private static array $pool_config = [];
+    private ?driver_interface $driver = null;
 
     // Cache özellikleri
     private array $query_cache = [];
@@ -136,28 +144,53 @@ class nsql extends PDO
         ?string $user = null,
         ?string $pass = null,
         ?string $charset = null,
-        ?bool $debug = null
+        ?bool $debug = null,
+        ?string $driver = null
     ) {
+        // Driver belirle (varsayılan: mysql)
+        $driver_name = $driver ?? config::get('db_driver', 'mysql');
+        $this->driver = driver_factory::create($driver_name);
+
         // Config sınıfından değerleri al
         $host = $host ?? config::get('db_host', 'localhost');
         $db = $db ?? config::get('db_name', 'etiyop');
         $user = $user ?? config::get('db_user', 'root');
         $pass = $pass ?? config::get('db_pass', '');
-        $charset = $charset ?? config::get('db_charset', 'utf8mb4');
+        $charset = $charset ?? config::get('db_charset', $this->get_default_charset($driver_name));
 
-        // PDO bağlantı seçeneklerini ayarla
-        $this->options = [
-            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-            \PDO::ATTR_EMULATE_PREPARES => false,
-            \PDO::ATTR_TIMEOUT => config::get('connection_timeout', 5),
-            \PDO::ATTR_PERSISTENT => config::get('persistent_connection', false),
+        // Driver'a göre DSN oluştur
+        $config = [
+            'host' => $host,
+            'dbname' => $db,
+            'charset' => $charset,
         ];
-
-        // DSN ve diğer özellikleri ayarla
-        $this->dsn = "mysql:host=" . (string)$host . ";dbname=" . (string)$db . ";charset=" . (string)$charset;
+        
+        // SQLite için path kullan
+        if ($driver_name === 'sqlite') {
+            $config['path'] = $db;
+            unset($config['host'], $config['charset']);
+        } else {
+            $config['port'] = config::get('db_port', $this->get_default_port($driver_name));
+        }
+        
+        $this->dsn = $this->driver->build_dsn($config);
         $this->user = (string)$user;
         $this->pass = (string)$pass;
+
+        // PDO bağlantı seçeneklerini ayarla (driver'a özel + genel)
+        $driver_options = $this->driver->get_pdo_options();
+        $this->options = array_merge($driver_options, [
+            \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', false),
+        ]);
+        
+        // MySQL için timeout DSN'e eklenir (PDO attribute olarak desteklenmez)
+        if ($driver_name === 'mysql' && config::has('connection_timeout')) {
+            $timeout = (int)config::get('connection_timeout', 5);
+            if (strpos($this->dsn, 'timeout=') === false) {
+                $this->dsn .= ";timeout={$timeout}";
+            }
+        }
+
         $this->debug_mode = (bool)($debug ?? config::get('debug_mode', false));
         $this->log_file = (string)config::get('log_file', 'error_log.txt');
         $this->statement_cache_limit = (int)config::get('statement_cache_limit', 100);
@@ -171,19 +204,55 @@ class nsql extends PDO
         $this->load_cache_config();
     }
 
+    /**
+     * Driver'a göre varsayılan charset döndürür
+     */
+    private function get_default_charset(string $driver): string
+    {
+        return match ($driver) {
+            'mysql', 'mariadb' => 'utf8mb4',
+            'pgsql', 'postgresql' => 'UTF8',
+            'sqlite' => 'UTF-8',
+            default => 'utf8mb4',
+        };
+    }
+
+    /**
+     * Driver'a göre varsayılan port döndürür
+     */
+    private function get_default_port(string $driver): int
+    {
+        return match ($driver) {
+            'mysql', 'mariadb' => 3306,
+            'pgsql', 'postgresql' => 5432,
+            default => 3306,
+        };
+    }
+
     public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static
     {
-        // dsn'den host, db ve charset bilgilerini ayıkla
-        $pattern = '/mysql:host=([^;]+);dbname=([^;]+);charset=([^;]+)/';
-        if (preg_match($pattern, $dsn, $matches)) {
-            $host = $matches[1];
-            $db = $matches[2];
-            $charset = $matches[3];
-
-            return new static($host, $db, $username, $password, $charset);
+        // DSN'den driver oluştur
+        $driver = driver_factory::create_from_dsn($dsn);
+        $parsed = $driver->parse_dsn($dsn);
+        
+        // Driver'a göre instance oluştur
+        $instance = new static(
+            host: $parsed['host'] ?? null,
+            db: $parsed['dbname'] ?? $parsed['path'] ?? null,
+            user: $username,
+            pass: $password,
+            charset: $parsed['charset'] ?? null,
+            driver: $parsed['driver']
+        );
+        
+        // Özel options varsa uygula
+        if ($options !== null) {
+            foreach ($options as $key => $value) {
+                $instance->pdo?->setAttribute($key, $value);
+            }
         }
-
-        throw new InvalidArgumentException('Geçersiz DSN formatı. Beklenen format: mysql:host=HOST;dbname=DB;charset=CHARSET');
+        
+        return $instance;
     }
 
     private function disconnect(): void
@@ -205,44 +274,23 @@ class nsql extends PDO
         return connection_pool::get_stats();
     }
 
-    private function log_error(string $message): void
+    private function log_error(string $message, array $context = [], int $level = \nsql\database\logging\logger::ERROR): void
     {
-        $timestamp = date('Y-m-d H:i:s');
-        $log_message = "[$timestamp] $message" . PHP_EOL;
-
-        $file = $this->resolve_log_path($this->log_file);
-        $this->ensure_log_directory(dirname($file));
-        $this->rotate_if_needed($file);
-
-        file_put_contents($file, $log_message, FILE_APPEND | LOCK_EX);
-    }
-
-    private function ensure_log_directory(string $dir): void
-    {
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+        // Yeni structured logger kullan
+        if ($this->logger === null) {
+            $this->logger = new \nsql\database\logging\logger(
+                $this->log_file,
+                null, // Environment-based level
+                true // Structured format
+            );
         }
+
+        $this->logger->log($level, $message, $context);
     }
 
-    private function resolve_log_path(string $path): string
-    {
-        if (preg_match('/^[A-Za-z]:\\\\|^\//', $path)) {
-            return $path;
-        }
-        $root = dirname(__DIR__, 1);
-        $dir = config::get('log_dir', dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
+    // Log path metodları artık log_path_trait'te (GELISTIRME-010)
 
-        return rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
-    }
-
-    private function rotate_if_needed(string $file): void
-    {
-        $max = (int)config::get('log_max_size', 1048576);
-        if (is_file($file) && filesize($file) > $max) {
-            $rotated = $file . '.' . date('Ymd_His');
-            @rename($file, $rotated);
-        }
-    }
+    // rotate_if_needed metodu artık logger sınıfında (GELISTIRME-005)
 
     /**
      * Üretim ortamında ayrıntılı hata mesajlarını gizler, sadece genel mesaj döndürür ve hatayı loglar.
@@ -254,7 +302,19 @@ class nsql extends PDO
      */
     public function handle_exception(Exception|Throwable $e, string $generic_message = 'Bir hata oluştu.'): string
     {
-        $this->log_error($e->getMessage() . (method_exists($e, 'getTraceAsString') ? "\n" . $e->getTraceAsString() : ''));
+        $context = [
+            'exception' => get_class($e),
+            'code' => $e->getCode(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ];
+        
+        if (method_exists($e, 'getTraceAsString')) {
+            $context['trace'] = $e->getTraceAsString();
+        }
+        
+        $this->log_error($e->getMessage(), $context, \nsql\database\logging\logger::ERROR);
+        
         if ($this->debug_mode) {
             return $e->getMessage();
         } else {
@@ -382,73 +442,126 @@ class nsql extends PDO
         return self::session()->validate_csrf_token((string)$token);
     }
 
+    /**
+     * Sorguyu çalıştırır (GELISTIRME-011: Complexity azaltma - helper metodlara bölündü)
+     */
     private function execute_query(string $sql, array $params = [], ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
     {
         $this->set_last_called_method();
         $this->ensure_connection();
 
         // PDO bağlantısı kontrolü
+        if (!$this->validate_pdo_connection()) {
+            return false;
+        }
+
+        // Sorgu bilgilerini kaydet
+        $this->prepare_query_context($sql, $params);
+        
+        // Parametreleri validate et
+        $this->validate_param_types($params);
+        
+        // Statement'ı hazırla veya cache'den al
+        $stmt = $this->prepare_or_get_cached_statement($sql, $params);
+        if ($stmt === false) {
+            return false;
+        }
+
+        // Parametreleri bağla
+        $this->bind_parameters($stmt, $params);
+
+        // Fetch mode ayarla
+        if ($fetch_mode !== null) {
+            $stmt->setFetchMode($fetch_mode, ...$fetch_mode_args);
+        }
+
+        // Sorguyu çalıştır (retry logic ile)
+        return $this->execute_with_retry($stmt, $sql);
+    }
+
+    /**
+     * PDO bağlantısını validate eder (GELISTIRME-011: Helper metod)
+     */
+    private function validate_pdo_connection(): bool
+    {
         if ($this->pdo === null) {
             $this->last_error = 'PDO bağlantısı kurulamadı';
             $this->log_error($this->last_error);
             return false;
         }
+        return true;
+    }
 
-        // Sorgu türünü belirle ve kaydet
+    /**
+     * Sorgu context'ini hazırlar (GELISTIRME-011: Helper metod)
+     */
+    private function prepare_query_context(string $sql, array $params): void
+    {
         $this->last_query = $sql;
         $this->last_params = $params;
         $this->last_error = null;
+    }
 
-        $this->validate_param_types($params);
+    /**
+     * Statement'ı hazırlar veya cache'den alır (GELISTIRME-011: Helper metod)
+     */
+    private function prepare_or_get_cached_statement(string $sql, array $params): PDOStatement|false
+    {
         $cache_key = $this->get_statement_cache_key($sql, $params);
 
+        if (!isset($this->statement_cache[$cache_key])) {
+            try {
+                $stmt = $this->pdo->prepare($sql);
+                $this->add_to_statement_cache($cache_key, $stmt);
+            } catch (PDOException $e) {
+                $this->handle_prepare_error($e);
+                return false;
+            }
+        } else {
+            $stmt = $this->statement_cache[$cache_key];
+        }
+
+        $this->statement_cache_usage[$cache_key] = microtime(true);
+        return $stmt;
+    }
+
+    /**
+     * Parametreleri statement'a bağlar (GELISTIRME-011: Helper metod)
+     */
+    private function bind_parameters(PDOStatement $stmt, array $params): void
+    {
+        foreach ($params as $key => $param) {
+            $param_name = $this->normalize_parameter_name($key);
+
+            if (is_array($param) && isset($param['value'], $param['type'])) {
+                // Query Builder'dan gelen yapılandırılmış parametre
+                $stmt->bindValue($param_name, $param['value'], $param['type']);
+            } else {
+                // Doğrudan değer olarak gelen parametre
+                $param_type = $this->determine_param_type($param);
+                $stmt->bindValue($param_name, $param, $param_type);
+            }
+        }
+    }
+
+    /**
+     * Retry logic ile sorguyu çalıştırır (GELISTIRME-011: Helper metod)
+     */
+    private function execute_with_retry(PDOStatement $stmt, string $sql): PDOStatement|false
+    {
         $attempts = 0;
+        
         do {
             try {
-                if (! isset($this->statement_cache[$cache_key])) {
-                    $stmt = $this->pdo->prepare($sql);
-                    $this->add_to_statement_cache($cache_key, $stmt);
-                } else {
-                    $stmt = $this->statement_cache[$cache_key];
-                }
-
-                $this->statement_cache_usage[$cache_key] = microtime(true);
-
-                // Parametreleri bağla
-                foreach ($params as $key => $param) {
-                    $param_name = is_int($key) ? ($key + 1) : (strpos($key, ':') === 0 ? $key : ":{$key}");
-
-                    if (is_array($param) && isset($param['value'], $param['type'])) {
-                        // Query Builder'dan gelen yapılandırılmış parametre
-                        $stmt->bindValue($param_name, $param['value'], $param['type']);
-                    } else {
-                        // Doğrudan değer olarak gelen parametre
-                        $param_type = $this->determine_param_type($param);
-                        $stmt->bindValue($param_name, $param, $param_type);
-                    }
-                }
-
-                if ($fetch_mode !== null) {
-                    $stmt->setFetchMode($fetch_mode, ...$fetch_mode_args);
-                }
-
                 $stmt->execute();
-
-                // Not: Sonuçlar burada TUKETILMEZ. last_results atamasi sonucu ceken metodlarda yapilir.
                 return $stmt;
-
             } catch (PDOException $e) {
                 $attempts++;
-
-                $error_message = $e->getMessage();
-                $this->last_error = $error_message;
-                $this->log_error($error_message);
-                $this->last_results = [];
+                $this->handle_execution_error($e);
 
                 $error_code = $e->errorInfo[1] ?? null;
-                if (in_array($error_code, [2006, 2013]) && $attempts <= $this->retry_limit) {
+                if ($this->should_retry($error_code, $attempts)) {
                     $this->initialize_connection();
-
                     continue;
                 }
 
@@ -459,14 +572,57 @@ class nsql extends PDO
         return false;
     }
 
+    /**
+     * Prepare hatasını handle eder (GELISTIRME-011: Helper metod)
+     */
+    private function handle_prepare_error(PDOException $e): void
+    {
+        $this->last_error = $e->getMessage();
+        $this->log_error($this->last_error);
+        $this->last_results = [];
+    }
+
+    /**
+     * Execution hatasını handle eder (GELISTIRME-011: Helper metod)
+     */
+    private function handle_execution_error(PDOException $e): void
+    {
+        $this->last_error = $e->getMessage();
+        $this->log_error($this->last_error);
+        $this->last_results = [];
+    }
+
+    /**
+     * Retry yapılmalı mı kontrol eder (GELISTIRME-011: Helper metod)
+     */
+    private function should_retry(?int $error_code, int $attempts): bool
+    {
+        $recoverable_codes = [2006, 2013]; // MySQL server has gone away, Lost connection
+        return in_array($error_code, $recoverable_codes, true) && $attempts <= $this->retry_limit;
+    }
+
     public function query(string $query, ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
     {
         $this->set_last_called_method();
-
-        return $this->execute_query($query, [], $fetch_mode, ...$fetch_mode_args);
+        
+        // GELISTIRME-009: Error handling - exception fırlatma
+        $result = $this->execute_query($query, [], $fetch_mode, ...$fetch_mode_args);
+        
+        if ($result === false && $this->last_error) {
+            // Exception fırlat (testErrorHandling için)
+            throw new \nsql\database\exceptions\QueryException(
+                $this->last_error,
+                $query,
+                [],
+                0,
+                new \PDOException($this->last_error)
+            );
+        }
+        
+        return $result;
     }
 
-    public function insert(string $sql, array $params = []): bool
+    public function insert(string $sql, array $params = []): int|false
     {
         $this->set_last_called_method();
         $this->last_results = [];
@@ -474,12 +630,189 @@ class nsql extends PDO
 
         $stmt = $this->execute_query($sql, $params);
         if ($stmt !== false && $this->pdo !== null) {
-            $this->last_insert_id = (int)$this->pdo->lastInsertId();
+            // Driver'a göre last insert ID al
+            if ($this->driver) {
+                $this->last_insert_id = $this->driver->get_last_insert_id($this->pdo);
+            } else {
+                $this->last_insert_id = (int)$this->pdo->lastInsertId();
+            }
 
-            return true;
+            // Cache invalidation: INSERT işlemi sonrası ilgili tabloların cache'ini temizle
+            if ($this->query_cache_enabled) {
+                $tables = $this->extract_tables_from_query($sql);
+                if (!empty($tables)) {
+                    $this->invalidate_cache_by_table($tables);
+                }
+            }
+
+            return $this->last_insert_id;
         }
 
         return false;
+    }
+
+    /**
+     * Batch insert işlemi yapar (toplu ekleme)
+     *
+     * @param string $table Tablo adı
+     * @param array $data İnsert edilecek veriler (her eleman bir satır)
+     * @param bool $use_transaction Transaction kullanılsın mı? (varsayılan: true)
+     * @return int Eklenen satır sayısı
+     * @throws exceptions\QueryException
+     */
+    public function batch_insert(string $table, array $data, bool $use_transaction = true): int
+    {
+        if (empty($data)) {
+            return 0;
+        }
+
+        // İlk satırdan sütun adlarını al
+        $first_row = reset($data);
+        if (! is_array($first_row)) {
+            throw new exceptions\QueryException('Batch insert için her satır bir array olmalıdır.');
+        }
+
+        $columns = array_keys($first_row);
+        $columns_str = implode(', ', array_map(fn($col) => $this->quote_identifier($col), $columns));
+        
+        // Placeholder'ları oluştur
+        $placeholders = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        
+        // Tüm satırlar için placeholder'ları birleştir
+        $all_placeholders = implode(', ', array_fill(0, count($data), $placeholders));
+        
+        // Tüm değerleri düzleştir
+        $values = [];
+        foreach ($data as $row) {
+            foreach ($columns as $col) {
+                $values[] = $row[$col] ?? null;
+            }
+        }
+
+        $sql = "INSERT INTO {$this->quote_identifier($table)} ({$columns_str}) VALUES {$all_placeholders}";
+
+        try {
+            if ($use_transaction) {
+                $this->begin();
+            }
+
+            $stmt = $this->execute_query($sql, $values);
+            
+            if ($stmt === false) {
+                if ($use_transaction) {
+                    $this->rollback();
+                }
+                throw new exceptions\QueryException('Batch insert başarısız oldu.', $sql, $values);
+            }
+
+            $affected_rows = $stmt->rowCount();
+
+            if ($use_transaction) {
+                $this->commit();
+            }
+
+            return $affected_rows;
+        } catch (\Exception $e) {
+            if ($use_transaction) {
+                $this->rollback();
+            }
+            
+            if ($e instanceof exceptions\QueryException) {
+                throw $e;
+            }
+            
+            throw new exceptions\QueryException('Batch insert hatası: ' . $e->getMessage(), $sql, $values, 0, $e);
+        }
+    }
+
+    /**
+     * Batch update işlemi yapar (toplu güncelleme)
+     *
+     * @param string $table Tablo adı
+     * @param array $data Güncellenecek veriler (her eleman bir satır, 'id' veya belirtilen key ile eşleşir)
+     * @param string $key_column Eşleştirme için kullanılacak sütun (varsayılan: 'id')
+     * @param bool $use_transaction Transaction kullanılsın mı? (varsayılan: true)
+     * @return int Güncellenen satır sayısı
+     * @throws exceptions\QueryException
+     */
+    public function batch_update(string $table, array $data, string $key_column = 'id', bool $use_transaction = true): int
+    {
+        if (empty($data)) {
+            return 0;
+        }
+
+        $total_affected = 0;
+
+        try {
+            if ($use_transaction) {
+                $this->begin();
+            }
+
+            foreach ($data as $row) {
+                if (! is_array($row) || ! isset($row[$key_column])) {
+                    continue;
+                }
+
+                $key_value = $row[$key_column];
+                unset($row[$key_column]);
+
+                if (empty($row)) {
+                    continue;
+                }
+
+                // SET clause oluştur
+                $set_parts = [];
+                $params = [];
+                foreach ($row as $column => $value) {
+                    $set_parts[] = $this->quote_identifier($column) . ' = ?';
+                    $params[] = $value;
+                }
+
+                $set_clause = implode(', ', $set_parts);
+                $params[] = $key_value;
+
+                $sql = "UPDATE {$this->quote_identifier($table)} SET {$set_clause} WHERE {$this->quote_identifier($key_column)} = ?";
+
+                $stmt = $this->execute_query($sql, $params);
+                
+                if ($stmt !== false) {
+                    $total_affected += $stmt->rowCount();
+                }
+            }
+
+            if ($use_transaction) {
+                $this->commit();
+            }
+
+            return $total_affected;
+        } catch (\Exception $e) {
+            if ($use_transaction) {
+                $this->rollback();
+            }
+            
+            if ($e instanceof exceptions\QueryException) {
+                throw $e;
+            }
+            
+            throw new exceptions\QueryException('Batch update hatası: ' . $e->getMessage(), '', [], 0, $e);
+        }
+    }
+
+    /**
+     * Identifier'ı quote eder (driver'a göre)
+     *
+     * @param string $identifier Identifier
+     * @return string Quoted identifier
+     */
+    private function quote_identifier(string $identifier): string
+    {
+        if ($this->driver) {
+            $quote = $this->driver->get_identifier_quote();
+            return $quote . $identifier . $quote;
+        }
+        
+        // Varsayılan: backtick (MySQL)
+        return '`' . $identifier . '`';
     }
 
     public function get_row(string $query, array $params = []): ?object
@@ -512,7 +845,8 @@ class nsql extends PDO
         $result = $stmt->fetch(PDO::FETCH_OBJ);
         $this->last_results = $result ? [$result] : [];
         if ($result && $this->query_cache_enabled) {
-            $this->add_to_query_cache($cache_key, $result);
+            $tables = $this->extract_tables_from_query($query);
+            $this->add_to_query_cache($cache_key, $result, [], $tables);
         }
 
         return $result ?: null;
@@ -651,7 +985,17 @@ class nsql extends PDO
         $this->set_last_called_method();
         $this->last_results = [];
 
-        return $this->execute_query($sql, $params) !== false;
+        $result = $this->execute_query($sql, $params) !== false;
+        
+        // Cache invalidation: UPDATE işlemi sonrası ilgili tabloların cache'ini temizle
+        if ($result && $this->query_cache_enabled) {
+            $tables = $this->extract_tables_from_query($sql);
+            if (!empty($tables)) {
+                $this->invalidate_cache_by_table($tables);
+            }
+        }
+        
+        return $result;
     }
 
     public function delete(string $sql, array $params = []): bool
@@ -659,7 +1003,17 @@ class nsql extends PDO
         $this->set_last_called_method();
         $this->last_results = [];
 
-        return $this->execute_query($sql, $params) !== false;
+        $result = $this->execute_query($sql, $params) !== false;
+        
+        // Cache invalidation: DELETE işlemi sonrası ilgili tabloların cache'ini temizle
+        if ($result && $this->query_cache_enabled) {
+            $tables = $this->extract_tables_from_query($sql);
+            if (!empty($tables)) {
+                $this->invalidate_cache_by_table($tables);
+            }
+        }
+        
+        return $result;
     }
 
     /**
@@ -667,13 +1021,18 @@ class nsql extends PDO
      *
      * @return int Son eklenen kaydın ID değeri.
      */
-    public function insert_id(): int
+    public function insert_id(): int|string
     {
+        if ($this->driver && $this->pdo) {
+            // Driver'a göre last insert ID al
+            return $this->driver->get_last_insert_id($this->pdo);
+        }
         return $this->last_insert_id;
     }
 
     /**
      * Bir veritabanı işlemi başlatır.
+     * Trait'teki begin() metodunu kullanır (nested transaction desteği ile)
      *
      * @return void
      * @throws RuntimeException PDO bağlantısı yoksa
@@ -683,11 +1042,20 @@ class nsql extends PDO
         if ($this->pdo === null) {
             throw new RuntimeException('PDO bağlantısı kurulamadı');
         }
-        $this->pdo->beginTransaction();
+        
+        // Trait'teki begin() metodunu kullan (nested transaction desteği ile)
+        // transaction_trait'teki begin() metodu zaten transaction_level kontrolü yapıyor
+        if ($this->transaction_level === 0) {
+            $this->pdo->beginTransaction();
+        } else {
+            $this->pdo->exec("SAVEPOINT trans{$this->transaction_level}");
+        }
+        $this->transaction_level++;
     }
 
     /**
      * Bir veritabanı işlemini tamamlar ve değişiklikleri kaydeder.
+     * Trait'teki commit() metodunu kullanır (nested transaction desteği ile)
      *
      * @return bool İşlem başarılıysa true, değilse false döndürür
      * @throws RuntimeException PDO bağlantısı yoksa
@@ -697,11 +1065,26 @@ class nsql extends PDO
         if ($this->pdo === null) {
             throw new RuntimeException('PDO bağlantısı kurulamadı');
         }
-        return $this->pdo->commit();
+        
+        // Trait'teki commit() metodunu kullan (nested transaction desteği ile)
+        if ($this->transaction_level === 0) {
+            return false; // Transaction yok
+        }
+        
+        $this->transaction_level--;
+        
+        if ($this->transaction_level === 0) {
+            return $this->pdo->commit();
+        } elseif ($this->transaction_level > 0) {
+            return $this->pdo->exec("RELEASE SAVEPOINT trans{$this->transaction_level}") !== false;
+        }
+        
+        return false;
     }
 
     /**
      * Bir veritabanı işlemini geri alır.
+     * Trait'teki rollback() metodunu kullanır (nested transaction desteği ile)
      *
      * @return bool İşlem başarılıysa true, değilse false döndürür
      */
@@ -710,7 +1093,19 @@ class nsql extends PDO
         if ($this->pdo === null) {
             throw new RuntimeException('PDO bağlantısı kurulamadı');
         }
-        return $this->pdo->rollBack();
+        
+        // Trait'teki rollback() metodunu kullan (nested transaction desteği ile)
+        if ($this->transaction_level === 0) {
+            return false; // Transaction yok
+        }
+        
+        $this->transaction_level--;
+        
+        if ($this->transaction_level === 0) {
+            return $this->pdo->rollBack();
+        } else {
+            return $this->pdo->exec("ROLLBACK TO SAVEPOINT trans{$this->transaction_level}") !== false;
+        }
     }
 
     /**
@@ -921,7 +1316,8 @@ class nsql extends PDO
 
                     // Küçük chunk'ları cache'le
                     if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
-                        $this->add_to_query_cache($cache_key, $results);
+                        $tables = $this->extract_tables_from_query($chunk_query);
+                        $this->add_to_query_cache($cache_key, $results, [], $tables);
                     }
                 }
 
@@ -965,11 +1361,45 @@ class nsql extends PDO
      */
     public function get_memory_stats(): array
     {
+        $limit = $this->get_memory_limit();
+        
         return array_merge(self::$memory_stats, [
             'current_usage' => memory_get_usage(true),
             'peak_usage' => memory_get_peak_usage(true),
+            'limit' => $limit,
             'current_chunk_size' => self::$current_chunk_size ?? config::default_chunk_size,
         ]);
+    }
+
+    /**
+     * Memory limit'i döndürür
+     */
+    private function get_memory_limit(): int
+    {
+        $limit = ini_get('memory_limit');
+        if ($limit === '-1') {
+            return PHP_INT_MAX;
+        }
+        
+        $limit_bytes = $this->parse_memory_limit($limit);
+        return $limit_bytes > 0 ? $limit_bytes : config::memory_limit_critical;
+    }
+
+    /**
+     * Memory limit string'ini bytes'a çevirir
+     */
+    private function parse_memory_limit(string $limit): int
+    {
+        $limit = trim($limit);
+        $unit = strtolower(substr($limit, -1));
+        $value = (int)$limit;
+        
+        return match ($unit) {
+            'g' => $value * 1024 * 1024 * 1024,
+            'm' => $value * 1024 * 1024,
+            'k' => $value * 1024,
+            default => $value,
+        };
     }
 
     /**
@@ -1016,16 +1446,25 @@ class nsql extends PDO
     }
 
     /**
-     * Debug bilgilerini loglar
+     * Debug bilgilerini loglar (structured logging ile)
      */
     public function log_debug_info(string $message, mixed $data = null): void
     {
         if ($this->debug_mode) {
-            $log_message = "[DEBUG] {$message}";
-            if ($data !== null) {
-                $log_message .= ": " . print_r($data, true);
+            if ($this->logger === null) {
+                $this->logger = new \nsql\database\logging\logger(
+                    $this->log_file,
+                    null,
+                    true
+                );
             }
-            error_log($log_message);
+            
+            $context = [];
+            if ($data !== null) {
+                $context['data'] = $data;
+            }
+            
+            $this->logger->debug($message, $context);
         }
     }
 
@@ -1041,6 +1480,100 @@ class nsql extends PDO
             'cache' => $this->get_all_cache_stats(),
             'query_analyzer' => $this->get_query_analyzer_stats(),
             'connection_pool' => $this->get_pool_stats(),
+        ];
+    }
+
+    /**
+     * Belirli bir sorguyu cache'e yükler (preload)
+     * nsql sınıfında override edilmiş versiyon
+     *
+     * @param string $query SQL sorgusu
+     * @param array $params Sorgu parametreleri
+     * @param array $tags Cache tags (opsiyonel)
+     * @param array $tables İlgili tablolar (opsiyonel, otomatik çıkarılır)
+     * @return bool Başarılı ise true
+     */
+    public function preload_query(string $query, array $params = [], array $tags = [], array $tables = []): bool
+    {
+        if (! $this->query_cache_enabled) {
+            return false;
+        }
+
+        $cache_key = $this->generate_query_cache_key($query, $params);
+        
+        // Zaten cache'de varsa true döndür
+        if (isset($this->query_cache[$cache_key])) {
+            return true;
+        }
+
+        try {
+            // Sorguyu çalıştır
+            $stmt = $this->execute_query($query, $params);
+            if ($stmt === false) {
+                return false;
+            }
+
+            // Sonuçları al
+            $results = $stmt->fetchAll(\PDO::FETCH_OBJ);
+            
+            // Tabloları otomatik çıkar (eğer belirtilmemişse)
+            if (empty($tables)) {
+                $tables = $this->extract_tables_from_query($query);
+            }
+
+            // Cache'e ekle
+            $this->add_to_query_cache($cache_key, $results, $tags, $tables);
+            
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Kayıtlı tüm warm query'leri cache'e yükler (nsql sınıfında override edilmiş versiyon)
+     *
+     * @param bool $force Yeniden yükle (zaten cache'de olsa bile)
+     * @return array Yüklenen cache entry sayısı ve hata bilgileri
+     */
+    public function warm_cache(bool $force = false): array
+    {
+        if (! $this->query_cache_enabled) {
+            return [
+                'success' => false,
+                'message' => 'Cache devre dışı',
+                'loaded' => 0,
+                'errors' => [],
+            ];
+        }
+
+        $loaded = 0;
+        $errors = [];
+
+        foreach ($this->warm_queries as $warm_query) {
+            try {
+                $success = $this->preload_query(
+                    $warm_query['query'],
+                    $warm_query['params'] ?? [],
+                    $warm_query['tags'] ?? [],
+                    $warm_query['tables'] ?? []
+                );
+                
+                if ($success) {
+                    $loaded++;
+                }
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'query' => $warm_query['query'],
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'success' => true,
+            'loaded' => $loaded,
+            'errors' => $errors,
         ];
     }
 }

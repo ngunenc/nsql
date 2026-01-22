@@ -79,53 +79,110 @@ new nsql(
 
 ```php
 // Sorgu çalıştırma
-query(string $sql, array $params = []): PDOStatement|false
+query(string $query, ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
+// Örnek: $stmt = $db->query("SELECT * FROM users WHERE id = ?", [1]);
 
-// Veri ekleme
-insert(string $sql, array $params = []): bool
+// Veri ekleme (son insert ID döndürür)
+insert(string $sql, array $params = []): int|false
+// Örnek: $id = $db->insert("INSERT INTO users (name, email) VALUES (?, ?)", ['John', 'john@example.com']);
+
+// Toplu veri ekleme
+batch_insert(string $table, array $data, bool $use_transaction = true): int
+// Örnek: $count = $db->batch_insert('users', [['name' => 'John'], ['name' => 'Jane']]);
 
 // Veri güncelleme
 update(string $sql, array $params = []): bool
+// Örnek: $db->update("UPDATE users SET name = ? WHERE id = ?", ['John Doe', 1]);
+
+// Toplu veri güncelleme
+batch_update(string $table, array $data, string $key_column = 'id', bool $use_transaction = true): int
+// Örnek: $count = $db->batch_update('users', [['id' => 1, 'name' => 'John'], ['id' => 2, 'name' => 'Jane']]);
 
 // Veri silme
 delete(string $sql, array $params = []): bool
+// Örnek: $db->delete("DELETE FROM users WHERE id = ?", [1]);
 
 // Tek satır alma
 get_row(string $query, array $params = []): ?object
 // Not: LIMIT 1 otomatik eklenir, last_results tek elemanlı dizi olarak set edilir
+// Örnek: $user = $db->get_row("SELECT * FROM users WHERE id = ?", [1]);
 
 // Tüm sonuçları alma
 get_results(string $query, array $params = []): array
 // Not: last_results tüm sonuçlar olarak set edilir, debug paneli için
+// Örnek: $users = $db->get_results("SELECT * FROM users WHERE active = ?", [1]);
+
+// Generator ile sonuçları alma (bellek dostu)
+get_yield(string $query, array $params = []): Generator
+// Örnek: foreach ($db->get_yield("SELECT * FROM users") as $user) { ... }
 
 // Chunked fetch (büyük veri setleri için)
-get_chunk(string $query, array $params = [], int $chunk_size = 1000): Generator
+get_chunk(string $query, array $params = [], ?int $chunk_size = null): Generator
+// Örnek: foreach ($db->get_chunk("SELECT * FROM users", [], 1000) as $chunk) { ... }
 ```
 
 #### Transaction Metodları
 
 ```php
-// Transaction başlatma
-begin_transaction(): void
+// Transaction başlatma (nested transaction destekler)
+begin(): void
+begin_transaction(): void  // Alias
 
 // Transaction commit
-commit_transaction(): bool
+commit(): bool
+commit_transaction(): bool  // Alias
 
 // Transaction rollback
-rollback_transaction(): bool
+rollback(): bool
+rollback_transaction(): bool  // Alias
+
+// Örnek:
+$db->begin();
+try {
+    $db->insert("INSERT INTO users (name) VALUES (?)", ['John']);
+    $db->insert("INSERT INTO posts (user_id, title) VALUES (?, ?)", [$id, 'Post']);
+    $db->commit();
+} catch (Exception $e) {
+    $db->rollback();
+}
 ```
 
 #### Utility Metodları
 
 ```php
 // Son insert ID
-insert_id(): int
+insert_id(): int|string
 
 // Son hata
 get_last_error(): ?string
 
 // Connection pool istatistikleri
 get_pool_stats(): array
+
+// Memory istatistikleri
+get_memory_stats(): array
+
+// Cache istatistikleri
+get_all_cache_stats(): array
+get_cache_stats(): array
+get_statement_cache_stats(): array
+
+// Tüm istatistikler
+get_all_stats(): array
+
+// Query Builder instance oluşturma
+table(?string $table = null): query_builder
+
+// Cache işlemleri
+preload_query(string $query, array $params = [], array $tags = [], array $tables = []): bool
+warm_cache(bool $force = false): array
+
+// Debug bilgileri
+log_debug_info(string $message, mixed $data = null): void
+
+// Hata yönetimi
+handle_exception(Exception|Throwable $e, string $generic_message = 'Bir hata oluştu.'): string
+safe_execute(callable $fn, string $generic_message = 'Bir hata oluştu.'): mixed
 ```
 
 #### Static Metodlar

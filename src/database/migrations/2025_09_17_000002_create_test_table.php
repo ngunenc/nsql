@@ -42,4 +42,9 @@ class create_test_table implements migration
     {
         return 'Create test_table for unit tests';
     }
+
+    public function get_dependencies(): array
+    {
+        return []; // Bu migration bağımlılığı yok
+    }
 }

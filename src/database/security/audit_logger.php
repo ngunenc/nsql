@@ -3,9 +3,12 @@
 namespace nsql\database\security;
 
 use nsql\database\config;
+use nsql\database\traits\log_path_trait;
 
 class audit_logger
 {
+    use log_path_trait;
+    
     private string $log_file;
     private array $sensitive_fields = [
         'password', 'token', 'secret', 'key', 'auth',
@@ -179,24 +182,7 @@ class audit_logger
         }
     }
 
-    private function ensure_log_directory(string $dir): void
-    {
-        if (! is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-    }
-
-    private function resolve_log_path(string $path): string
-    {
-        // Mutlak yol ise aynen kullan
-        if (preg_match('/^[A-Za-z]:\\\\|^\//', $path)) {
-            return $path;
-        }
-        $root = dirname(__DIR__, 3); // proje kökü
-        $dir = config::get('log_dir', $root . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'logs');
-
-        return rtrim((string)$dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
-    }
+    // Log path metodları artık log_path_trait'te (GELISTIRME-010)
 
     private function rotate_if_needed(string $file): void
     {
