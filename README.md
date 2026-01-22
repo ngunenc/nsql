@@ -508,7 +508,7 @@ $guvenli_metin = nsql::escape_html($kullanici_girisi);
 
 ### Statement Cache
 
-Sık kullanılan sorgular için otomatik önbellekleme yapılır ve LRU (Least Recently Used) algoritması ile yönetilir.
+Sık kullanılan sorgular için otomatik önbellekleme yapılır. LRU (Least Recently Used) ve LFU (Least Frequently Used) algoritmaları desteklenir. Memory kullanımına göre dinamik cache size ayarlaması yapılır.
 
 ### Connection Pool
 
