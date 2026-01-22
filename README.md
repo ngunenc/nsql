@@ -1,8 +1,8 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.4
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.0
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
-> **🚀 v1.4 Yeni Özellikler**: Connection Pool optimizasyonları, Memory Management iyileştirmeleri, Cache performans optimizasyonları, Query Analyzer caching ve gelişmiş Error Handling!
+> **🚀 v1.5.0 Yeni Özellikler**: Thread-safe connection pool, LFU cache algoritması, per-table TTL, cache warming, identifier quoting, güvenli IP/HTTPS tespiti, gelişmiş exception handling ve memory leak düzeltmeleri!
 
 ## 🌟 Özellikler
 
@@ -14,18 +14,21 @@
 - Migration sistemi
 
 ### Güvenlik
-- SQL injection koruması (PDO prepared statements)
+- SQL injection koruması (PDO prepared statements, identifier quoting)
 - XSS ve CSRF koruma mekanizmaları
 - Güvenli oturum yönetimi
 - Rate limiting ve DDoS koruması 
 - Hassas veri filtreleme
+- Thread-safe connection pool (file-based lock)
+- Güvenli IP/HTTPS tespiti (proxy/load balancer desteği)
 
-### Performans (v1.4 Optimizasyonları)
-- **Connection Pool**: Optimize edilmiş bağlantı yönetimi (60s health check, 15 max connections)
-- **Memory Management**: Gelişmiş bellek yönetimi (192MB warning, 384MB critical)
-- **Cache Performance**: O(1) LRU algoritması, 2x daha büyük cache boyutları
+### Performans (v1.5.0 Optimizasyonları)
+- **Connection Pool**: Thread-safe bağlantı yönetimi (file-based lock, circular buffer)
+- **Memory Management**: Gelişmiş bellek yönetimi (circular buffer, agresif cleanup)
+- **Cache Performance**: LFU algoritması desteği, dinamik cache size, per-table TTL
+- **Cache Warming**: Önceden yükleme stratejileri ile performans artışı
 - **Query Analyzer**: Analiz sonuçları cache'leme (100 analiz sonucu)
-- **Generator Desteği**: Düşük bellek kullanımı ile büyük veri setleri
+- **Generator Desteği**: Memory leak düzeltmeleri ile daha güvenli büyük veri işleme
 - **Otomatik Optimizasyon**: Akıllı chunk size ayarlaması
 
 ### Geliştirici Araçları
@@ -64,20 +67,20 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.4.1"
+        "ngunenc/nsql": "^1.5.0"
     }
 }
 ```
 
 Sonra:
 ```bash
-composer require ngunenc/nsql:^1.4.1
+composer require ngunenc/nsql:^1.5.0
 ```
 
 #### Yöntem 2: Tek Komutla
 
 ```bash
-composer require ngunenc/nsql:^1.4.1 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.0 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 > 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
@@ -857,7 +860,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 
 ### Statement Cache
 - Hazırlanmış sorguları önbellekleme
-- LRU (Least Recently Used) algoritması
+- LRU (Least Recently Used) ve LFU (Least Frequently Used) algoritmaları
+- Dinamik cache size (memory kullanımına göre otomatik ayarlama)
 - Otomatik boyut yönetimi
 - Performans optimizasyonu
 
@@ -871,6 +875,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 ### Güvenlik Özellikleri
 - **SQL Injection Koruması**
   - PDO prepared statements
+  - LIMIT/OFFSET parametreleştirme
+  - Identifier quoting (table/column name'ler backtick ile quote edilir)
   - Parametre tip kontrolü ve validasyonu
   - Otomatik parametre bağlama
 - **XSS ve CSRF Koruması**
@@ -882,6 +888,10 @@ $db->delete("DELETE FROM users WHERE id = :id", [
   - Session fixation koruması
   - HttpOnly, Secure ve SameSite cookie ayarları
   - Otomatik session ID rotasyonu
+  - Güvenli IP/HTTPS tespiti (proxy/load balancer desteği)
+- **Thread Safety**
+  - Connection pool file-based lock mekanizması
+  - Cache invalidation race condition koruması
 
 ### Performans Optimizasyonları
 - **Bağlantı Yönetimi**
@@ -889,18 +899,22 @@ $db->delete("DELETE FROM users WHERE id = :id", [
   - Otomatik bağlantı sağlığı kontrolü
   - Bağlantı sayısı optimizasyonu
 - **Önbellekleme Sistemleri**
-  - Statement Cache (LRU algoritması)
-  - Query Cache ile sorgu sonuçları önbellekleme
+  - Statement Cache (LRU ve LFU algoritmaları, dinamik cache size)
+  - Query Cache ile sorgu sonuçları önbellekleme (per-table TTL, cache warming)
+  - Thread-safe cache invalidation
   - Otomatik önbellek temizleme
 - **Bellek Optimizasyonu**
-  - Generator desteği ile düşük bellek kullanımı
+  - Generator desteği ile düşük bellek kullanımı (memory leak düzeltmeleri)
+  - Circular buffer ile verimli memory yönetimi
   - Büyük veri setleri için streaming
-  - Otomatik garbage collection
+  - Agresif cleanup ve otomatik garbage collection
 
 ### Hata Yönetimi
 - Üretim/Geliştirme modu ayrımı
 - Detaylı hata loglama
 - Güvenli hata mesajları
+- Exception wrapping (getPrevious() ile gerçek exception'a erişim)
+- get_last_exception() metodu ile hata takibi
 - try-catch wrapper
 
 ---
@@ -957,7 +971,7 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 
 ### 🧠 Yeni Özellikler
  
-## ⚡ Benchmark Sonuçları (v1.4)
+## ⚡ Benchmark Sonuçları (v1.5.0)
 
 Yerel ortam ölçümleri, `benchmarks/` betikleri ile alınmıştır (MySQL, PHP 8.2, Windows). Değerler yaklaşıktır ve ortalama tek çalıştırma sonuçlarını temsil eder.
 
@@ -1329,6 +1343,25 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v1.5.0 (2025-01-27)
+  - Thread-safe connection pool (file-based lock)
+  - SQL injection koruması iyileştirmeleri (LIMIT/OFFSET parametreleştirme, identifier quoting)
+  - Güvenli IP/HTTPS tespiti (get_client_ip, is_https)
+  - Exception handling iyileştirmeleri (exception wrapping, get_last_exception)
+  - Memory leak düzeltmeleri (generator, connection pool circular buffer)
+  - Cache invalidation race condition koruması
+  - LFU cache algoritması ve dinamik cache size
+  - Per-table TTL ve cache warming stratejileri
+  - Type hints ve PHPDoc iyileştirmeleri
+  - Magic number'lar config'e taşındı
+
+- v1.4.0
+  - Connection Pool optimizasyonları
+  - Memory Management iyileştirmeleri
+  - Cache performans optimizasyonları
+  - Query Analyzer caching
+  - Gelişmiş Error Handling
+
 - v1.1.0
   - Query Cache özelliği eklendi
   - Connection Pool desteği eklendi
@@ -1410,7 +1443,7 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE
 ---
 
 Geliştirici: [Necip Günenç](https://github.com/ngunenc)
-Son Güncelleme: 24 Mayıs 2025
+Son Güncelleme: 27 Ocak 2025
 
 ## 🎯 Planlanan Özellikler
 
