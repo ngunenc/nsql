@@ -36,7 +36,7 @@ class audit_logger
             'event_type' => $event_type,
             'severity' => $severity,
             'description' => $description,
-            'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
+            'ip_address' => \nsql\database\security\security_manager::get_client_ip(),
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
             'session_id' => session_id() ?: 'no_session',
             'context' => $this->sanitize_sensitive_data($context),

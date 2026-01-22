@@ -19,9 +19,17 @@ class connection_pool
     private static int $current_min_connections;
     private static int $current_max_connections;
     private static int $adaptive_health_check_interval;
-    private static array $load_history = []; // Son 10 dakikalık yük geçmişi
+    private static array $load_history = []; // Son 10 dakikalık yük geçmişi (circular buffer)
+    private static int $load_history_index = 0; // Circular buffer için index
+    private static int $load_history_size = 0; // Dolu eleman sayısı
     private static int $last_load_check = 0;
     private static float $current_load_factor = 0.0; // 0.0 - 1.0 arası yük faktörü
+    private const MAX_LOAD_HISTORY_ENTRIES = 60; // 10 dakika * 10 saniye = 60 entry (circular buffer boyutu)
+    
+    // Thread safety için lock mekanizması
+    private static ?string $lock_file = null;
+    private static ?resource $lock_handle = null;
+    private const LOCK_TIMEOUT = 5; // Saniye cinsinden lock timeout (config'den alınabilir ama constant olarak bırakıldı - kritik güvenlik değeri)
 
     private static array $stats = [
         'total_connections' => 0,
@@ -51,6 +59,9 @@ class connection_pool
         self::validate_configuration($config);
         self::$configuration = $config;
         
+        // Lock dosyasını hazırla
+        self::initialize_lock();
+        
         // Dinamik tuning için başlangıç değerleri
         self::$current_min_connections = $min_connections;
         self::$current_max_connections = $max_connections;
@@ -64,6 +75,77 @@ class connection_pool
 
         self::$initialized = true;
         self::$last_health_check = time();
+    }
+    
+    /**
+     * Lock dosyasını başlatır
+     */
+    private static function initialize_lock(): void
+    {
+        if (self::$lock_file !== null) {
+            return;
+        }
+        
+        // Lock dosyası için geçici dizin kullan
+        $lock_dir = sys_get_temp_dir();
+        $lock_file = $lock_dir . DIRECTORY_SEPARATOR . 'nsql_connection_pool.lock';
+        
+        // Lock dosyasını oluştur (yoksa)
+        if (!file_exists($lock_file)) {
+            touch($lock_file);
+            chmod($lock_file, 0666); // Read/write for all (lock dosyası için yeterli)
+        }
+        
+        self::$lock_file = $lock_file;
+    }
+    
+    /**
+     * Lock alır (exclusive lock)
+     * 
+     * @param int $timeout Timeout süresi (saniye)
+     * @return bool Lock alındıysa true
+     */
+    private static function acquire_lock(int $timeout = self::LOCK_TIMEOUT): bool
+    {
+        if (self::$lock_file === null) {
+            self::initialize_lock();
+        }
+        
+        // Lock handle'ı aç
+        if (self::$lock_handle === null) {
+            self::$lock_handle = fopen(self::$lock_file, 'r+');
+            if (self::$lock_handle === false) {
+                return false;
+            }
+        }
+        
+        $start_time = time();
+        
+        // Non-blocking lock dene
+        while (true) {
+            if (flock(self::$lock_handle, LOCK_EX | LOCK_NB)) {
+                return true;
+            }
+            
+            // Timeout kontrolü
+            if ((time() - $start_time) >= $timeout) {
+                return false;
+            }
+            
+            // Kısa bir bekleme (10ms)
+            usleep(10000);
+        }
+    }
+    
+    /**
+     * Lock'u serbest bırakır
+     */
+    private static function release_lock(): void
+    {
+        if (self::$lock_handle !== null) {
+            flock(self::$lock_handle, LOCK_UN);
+            // Handle'ı kapatma, tekrar kullanılabilir
+        }
     }
 
     /**
@@ -137,6 +219,7 @@ class connection_pool
     
     /**
      * Yük faktörünü günceller (load-based tuning için)
+     * Optimize edilmiş: Circular buffer kullanarak memory leak önlenir
      */
     private static function update_load_factor(): void
     {
@@ -152,23 +235,36 @@ class connection_pool
         // Aktif bağlantı oranı (0.0 - 1.0)
         $active_ratio = $active_connections / $total_connections;
         
-        // Yük geçmişine ekle (son 10 dakika)
-        self::$load_history[] = [
+        // Circular buffer kullanarak yük geçmişine ekle
+        $entry = [
             'timestamp' => $now,
             'active_ratio' => $active_ratio,
             'total_connections' => $total_connections,
             'active_connections' => $active_connections,
         ];
         
-        // 10 dakikadan eski kayıtları temizle
-        self::$load_history = array_filter(
-            self::$load_history,
-            fn($entry) => ($now - $entry['timestamp']) < 600
-        );
+        // Circular buffer'a ekle
+        if (self::$load_history_size < self::MAX_LOAD_HISTORY_ENTRIES) {
+            // Henüz dolu değilse sona ekle
+            self::$load_history[] = $entry;
+            self::$load_history_size++;
+        } else {
+            // Doluysa eski entry'yi üzerine yaz (circular buffer)
+            self::$load_history[self::$load_history_index] = $entry;
+            self::$load_history_index = (self::$load_history_index + 1) % self::MAX_LOAD_HISTORY_ENTRIES;
+        }
+        
+        // 10 dakikadan eski kayıtları filtrele (timestamp kontrolü)
+        $valid_entries = [];
+        foreach (self::$load_history as $entry) {
+            if (($now - $entry['timestamp']) < 600) {
+                $valid_entries[] = $entry;
+            }
+        }
         
         // Ortalama yük faktörünü hesapla
-        if (!empty(self::$load_history)) {
-            $avg_active_ratio = array_sum(array_column(self::$load_history, 'active_ratio')) / count(self::$load_history);
+        if (!empty($valid_entries)) {
+            $avg_active_ratio = array_sum(array_column($valid_entries, 'active_ratio')) / count($valid_entries);
             self::$current_load_factor = min(1.0, max(0.0, $avg_active_ratio));
         } else {
             self::$current_load_factor = $active_ratio;
@@ -268,24 +364,35 @@ class connection_pool
             throw new \RuntimeException('Connection pool başlatılmamış');
         }
 
-        // Sağlık kontrolü yap
-        self::perform_health_check();
-
-        // Bağlantı almayı dene
-        $conn = self::try_get_connection();
-
-        if ($conn === null) {
-            throw new \RuntimeException(
-                'Kullanılabilir bağlantı yok. Aktif: ' . count(self::$active_connections) .
-                ', Toplam: ' . count(self::$connections)
-            );
+        // Lock al (thread safety için)
+        if (!self::acquire_lock()) {
+            throw new \RuntimeException('Connection pool lock alınamadı (timeout)');
         }
+        
+        try {
+            // Sağlık kontrolü yap
+            self::perform_health_check();
 
-        return $conn;
+            // Bağlantı almayı dene
+            $conn = self::try_get_connection();
+
+            if ($conn === null) {
+                throw new \RuntimeException(
+                    'Kullanılabilir bağlantı yok. Aktif: ' . count(self::$active_connections) .
+                    ', Toplam: ' . count(self::$connections)
+                );
+            }
+
+            return $conn;
+        } finally {
+            // Lock'u her durumda serbest bırak
+            self::release_lock();
+        }
     }
 
     /**
      * Bağlantı alma denemesi yapar
+     * Not: Bu metod lock içinde çağrılmalıdır
      */
     private static function try_get_connection(int $attempt = 0): ?\PDO
     {
@@ -326,6 +433,7 @@ class connection_pool
 
     /**
      * Yeni bağlantı oluşturur
+     * Not: Bu metod lock içinde çağrılmalıdır
      */
     private static function create_connection(): \PDO
     {
@@ -516,31 +624,43 @@ class connection_pool
      */
     public static function release_connection(\PDO $connection): void
     {
-        $key = spl_object_hash($connection);
-
-        // Bağlantı zaten havuzda değilse işlem yapma
-        if (! isset(self::$connections[$key])) {
+        // Lock al (thread safety için)
+        if (!self::acquire_lock()) {
+            // Lock alınamazsa logla ama işlemi devam ettir (best effort)
+            error_log('Connection pool: Lock alınamadı release_connection sırasında');
             return;
         }
+        
+        try {
+            $key = spl_object_hash($connection);
 
-        // Bağlantının geçerli olduğunu kontrol et
-        if (! self::is_connection_valid($connection)) {
-            // Geçersiz bağlantıyı kaldır ve yerine yeni bir tane oluştur
-            unset(self::$connections[$key], self::$active_connections[$key]);
-            self::$stats['failed_health_checks']++;
-            self::create_connection();
+            // Bağlantı zaten havuzda değilse işlem yapma
+            if (! isset(self::$connections[$key])) {
+                return;
+            }
 
-            return;
-        }
+            // Bağlantının geçerli olduğunu kontrol et
+            if (! self::is_connection_valid($connection)) {
+                // Geçersiz bağlantıyı kaldır ve yerine yeni bir tane oluştur
+                unset(self::$connections[$key], self::$active_connections[$key]);
+                self::$stats['failed_health_checks']++;
+                self::create_connection();
 
-        // Bağlantıyı aktif listesinden çıkar
-        if (isset(self::$active_connections[$key])) {
-            unset(self::$active_connections[$key]);
-            self::$stats['active_connections']--;
+                return;
+            }
 
-            // Bağlantıyı boşta kalanlar listesine ekle
-            self::$idle_connections[$key] = time();
-            self::$stats['idle_connections']++;
+            // Bağlantıyı aktif listesinden çıkar
+            if (isset(self::$active_connections[$key])) {
+                unset(self::$active_connections[$key]);
+                self::$stats['active_connections']--;
+
+                // Bağlantıyı boşta kalanlar listesine ekle
+                self::$idle_connections[$key] = time();
+                self::$stats['idle_connections']++;
+            }
+        } finally {
+            // Lock'u her durumda serbest bırak
+            self::release_lock();
         }
     }
 
@@ -549,12 +669,29 @@ class connection_pool
      */
     public static function close_all(): void
     {
-        foreach (self::$connections as $key => $conn) {
-            unset(self::$connections[$key]);
-            unset(self::$active_connections[$key]);
-            unset(self::$idle_connections[$key]);
+        // Lock al (thread safety için)
+        if (!self::acquire_lock()) {
+            error_log('Connection pool: Lock alınamadı close_all sırasında');
+            return;
         }
-        self::$stats['active_connections'] = 0;
-        self::$stats['idle_connections'] = 0;
+        
+        try {
+            foreach (self::$connections as $key => $conn) {
+                unset(self::$connections[$key]);
+                unset(self::$active_connections[$key]);
+                unset(self::$idle_connections[$key]);
+            }
+            self::$stats['active_connections'] = 0;
+            self::$stats['idle_connections'] = 0;
+        } finally {
+            // Lock'u serbest bırak
+            self::release_lock();
+            
+            // Lock handle'ı kapat
+            if (self::$lock_handle !== null) {
+                fclose(self::$lock_handle);
+                self::$lock_handle = null;
+            }
+        }
     }
 }

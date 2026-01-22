@@ -4,6 +4,7 @@
 # Test dosyaları
 /tests export-ignore
 /phpunit.xml export-ignore
+/.phpunit.cache export-ignore
 
 # Benchmark dosyaları
 /benchmarks export-ignore
@@ -13,7 +14,7 @@
 /.php-cs-fixer.cache export-ignore
 /phpstan.neon export-ignore
 
-# Dokümantasyon (opsiyonel - eğer dahil edilmek istenirse kaldırılabilir)
+# Dokümantasyon
 /docs export-ignore
 /README.md export-ignore
 /CHANGELOG.md export-ignore
@@ -21,11 +22,34 @@
 /TROUBLESHOOTING.md export-ignore
 /GELISTIRME_PLANI.md export-ignore
 /PROJE_ANALIZ_RAPORU.md export-ignore
+/PROJE_GUNCEL_ANALIZ_RAPORU.md export-ignore
+/PROJE_TEST_RAPORU.md export-ignore
+/PACKAGIST_YAYINLAMA_REHBERI.md export-ignore
 
 # Geliştirme dosyaları
 /.github export-ignore
 /index.php export-ignore
 /env.example export-ignore
+/.env.example export-ignore
+/.env.testing export-ignore
+
+# Docker dosyaları (production'da gerekli değil)
+/Dockerfile export-ignore
+/docker-compose.yml export-ignore
+/docker-compose.dev.yml export-ignore
+/docker export-ignore
+
+# Scripts (production'da gerekli değil)
+/scripts export-ignore
+
+# Public endpoints (production'da gerekli değil)
+/public export-ignore
+
+# Bin dosyaları (CLI tools - production'da gerekli değil)
+/bin export-ignore
+
+# Storage (production'da gerekli değil - kullanıcı kendi storage'ını oluşturur)
+/storage export-ignore
 
 # Composer lock (production'da gerekli değil)
 /composer.lock export-ignore

@@ -18,6 +18,15 @@ trait cache_trait
     
     // Cache warming için
     private array $warm_queries = []; // [['query' => ..., 'params' => ..., 'tags' => ..., 'tables' => ...], ...]
+    
+    // Cache versioning için (race condition önleme)
+    private static int $cache_version = 0;
+    private static ?string $cache_lock_file = null;
+    private const CACHE_LOCK_TIMEOUT = 2; // Saniye (config'den alınabilir ama constant olarak bırakıldı - kritik güvenlik değeri)
+    
+    // Per-table TTL ayarları
+    private array $table_ttl_overrides = []; // table_name => ttl_seconds
+    private array $cache_warming_strategies = []; // table_name => strategy_config
 
     /**
      * Sorgudan benzersiz önbellek anahtarı oluşturur
@@ -83,7 +92,8 @@ trait cache_trait
         }
 
         // Sadece belirli aralıklarla expired cache temizle (performans optimizasyonu)
-        if (rand(1, 100) <= 10) { // %10 olasılıkla temizle
+        $cleanup_probability = \nsql\database\config::get('cache_cleanup_probability', 10);
+        if (rand(1, 100) <= $cleanup_probability) {
             $this->purge_expired_cache();
         }
 
@@ -141,7 +151,9 @@ trait cache_trait
 
         $cached = $this->query_cache[$key];
 
-        if (! $this->is_valid_cache($cached['time'])) {
+        // Per-table TTL kontrolü (tables bilgisi varsa kullan)
+        $tables = $cached['tables'] ?? [];
+        if (! $this->is_valid_cache($cached['time'], $tables)) {
             unset($this->query_cache[$key], $this->query_cache_usage[$key]);
             $this->remove_from_access_order($key);
             $this->query_cache_misses++;
@@ -158,11 +170,23 @@ trait cache_trait
     }
 
     /**
-     * Önbellek süre kontrolü
+     * Önbellek süre kontrolü (per-table TTL desteği ile)
      */
-    private function is_valid_cache(int $cache_time): bool
+    private function is_valid_cache(int $cache_time, array $tables = []): bool
     {
-        return (time() - $cache_time) <= $this->query_cache_timeout;
+        // Per-table TTL kontrolü
+        $ttl = $this->query_cache_timeout;
+        if (!empty($tables)) {
+            foreach ($tables as $table) {
+                $table = strtolower(trim($table));
+                if (isset($this->table_ttl_overrides[$table])) {
+                    $ttl = $this->table_ttl_overrides[$table];
+                    break; // İlk eşleşen table'ın TTL'ini kullan
+                }
+            }
+        }
+        
+        return (time() - $cache_time) <= $ttl;
     }
 
     private function load_cache_config(): void
@@ -209,64 +233,153 @@ trait cache_trait
      */
 
     /**
+     * Cache lock dosyasını başlatır
+     */
+    private static function initialize_cache_lock(): void
+    {
+        if (self::$cache_lock_file !== null) {
+            return;
+        }
+        
+        $lock_dir = sys_get_temp_dir();
+        $lock_file = $lock_dir . DIRECTORY_SEPARATOR . 'nsql_cache.lock';
+        
+        if (!file_exists($lock_file)) {
+            touch($lock_file);
+            chmod($lock_file, 0666);
+        }
+        
+        self::$cache_lock_file = $lock_file;
+    }
+    
+    /**
+     * Cache lock alır
+     */
+    private static function acquire_cache_lock(): ?resource
+    {
+        self::initialize_cache_lock();
+        
+        $handle = fopen(self::$cache_lock_file, 'r+');
+        if ($handle === false) {
+            return null;
+        }
+        
+        $start_time = time();
+        while (true) {
+            if (flock($handle, LOCK_EX | LOCK_NB)) {
+                return $handle;
+            }
+            
+            if ((time() - $start_time) >= self::CACHE_LOCK_TIMEOUT) {
+                fclose($handle);
+                return null;
+            }
+            
+            usleep(10000); // 10ms bekle
+        }
+    }
+    
+    /**
+     * Cache lock'u serbest bırakır
+     */
+    private static function release_cache_lock(?resource $handle): void
+    {
+        if ($handle !== null) {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
+    /**
      * Event-based invalidation: Belirli bir tabloyu etkileyen tüm cache'leri temizler
+     * Thread-safe: Lock mekanizması ile race condition önlenir
      *
      * @param string|array $tables Tablo adı veya tablo adları dizisi
      */
-    public function invalidate_cache_by_table($tables): void
+    public function invalidate_cache_by_table(string|array $tables): void
     {
         if (! $this->query_cache_enabled) {
             return;
         }
 
-        $tables = is_array($tables) ? $tables : [$tables];
-        $keys_to_remove = [];
-
-        foreach ($tables as $table) {
-            $table = strtolower(trim($table));
-            if (isset($this->table_to_keys[$table])) {
-                $keys_to_remove = array_merge($keys_to_remove, $this->table_to_keys[$table]);
-                unset($this->table_to_keys[$table]);
-            }
+        // Lock al (race condition önleme)
+        $lock_handle = self::acquire_cache_lock();
+        if ($lock_handle === null) {
+            // Lock alınamazsa logla ama devam et (best effort)
+            error_log('Cache: Lock alınamadı invalidate_cache_by_table sırasında');
         }
+        
+        try {
+            $tables = is_array($tables) ? $tables : [$tables];
+            $keys_to_remove = [];
 
-        // Duplicate'leri kaldır
-        $keys_to_remove = array_unique($keys_to_remove);
+            foreach ($tables as $table) {
+                $table = strtolower(trim($table));
+                if (isset($this->table_to_keys[$table])) {
+                    $keys_to_remove = array_merge($keys_to_remove, $this->table_to_keys[$table]);
+                    unset($this->table_to_keys[$table]);
+                }
+            }
 
-        // Cache'leri temizle
-        foreach ($keys_to_remove as $key) {
-            $this->remove_cache_entry($key);
+            // Duplicate'leri kaldır
+            $keys_to_remove = array_unique($keys_to_remove);
+
+            // Cache version'ı artır (cache versioning)
+            self::$cache_version++;
+
+            // Cache'leri temizle
+            foreach ($keys_to_remove as $key) {
+                $this->remove_cache_entry($key);
+            }
+        } finally {
+            // Lock'u serbest bırak
+            self::release_cache_lock($lock_handle);
         }
     }
 
     /**
      * Tag-based invalidation: Belirli bir tag'e sahip tüm cache'leri temizler
+     * Thread-safe: Lock mekanizması ile race condition önlenir
      *
      * @param string|array $tags Tag veya tag'ler dizisi
      */
-    public function invalidate_cache_by_tag($tags): void
+    public function invalidate_cache_by_tag(string|array $tags): void
     {
         if (! $this->query_cache_enabled) {
             return;
         }
 
-        $tags = is_array($tags) ? $tags : [$tags];
-        $keys_to_remove = [];
-
-        foreach ($tags as $tag) {
-            $tag = (string)$tag;
-            if (isset($this->tag_to_keys[$tag])) {
-                $keys_to_remove = array_merge($keys_to_remove, $this->tag_to_keys[$tag]);
-                unset($this->tag_to_keys[$tag]);
-            }
+        // Lock al (race condition önleme)
+        $lock_handle = self::acquire_cache_lock();
+        if ($lock_handle === null) {
+            error_log('Cache: Lock alınamadı invalidate_cache_by_tag sırasında');
         }
+        
+        try {
+            $tags = is_array($tags) ? $tags : [$tags];
+            $keys_to_remove = [];
 
-        // Duplicate'leri kaldır
-        $keys_to_remove = array_unique($keys_to_remove);
+            foreach ($tags as $tag) {
+                $tag = (string)$tag;
+                if (isset($this->tag_to_keys[$tag])) {
+                    $keys_to_remove = array_merge($keys_to_remove, $this->tag_to_keys[$tag]);
+                    unset($this->tag_to_keys[$tag]);
+                }
+            }
 
-        // Cache'leri temizle
-        foreach ($keys_to_remove as $key) {
-            $this->remove_cache_entry($key);
+            // Duplicate'leri kaldır
+            $keys_to_remove = array_unique($keys_to_remove);
+
+            // Cache version'ı artır
+            self::$cache_version++;
+
+            // Cache'leri temizle
+            foreach ($keys_to_remove as $key) {
+                $this->remove_cache_entry($key);
+            }
+        } finally {
+            // Lock'u serbest bırak
+            self::release_cache_lock($lock_handle);
         }
     }
 
@@ -316,10 +429,24 @@ trait cache_trait
 
     /**
      * Tüm cache'i temizler (clear_query_cache ile aynı)
+     * Thread-safe: Lock mekanizması ile race condition önlenir
      */
     public function invalidate_all_cache(): void
     {
-        $this->clear_query_cache();
+        // Lock al (race condition önleme)
+        $lock_handle = self::acquire_cache_lock();
+        if ($lock_handle === null) {
+            error_log('Cache: Lock alınamadı invalidate_all_cache sırasında');
+        }
+        
+        try {
+            // Cache version'ı artır
+            self::$cache_version++;
+            $this->clear_query_cache();
+        } finally {
+            // Lock'u serbest bırak
+            self::release_cache_lock($lock_handle);
+        }
     }
 
     /**
@@ -498,5 +625,155 @@ trait cache_trait
     public function clear_warm_queries(): void
     {
         $this->warm_queries = [];
+    }
+    
+    /**
+     * Belirli bir tablo için TTL ayarlar (per-table TTL)
+     * 
+     * @param string $table Tablo adı
+     * @param int $ttl_seconds TTL süresi (saniye)
+     * @return void
+     * @throws \InvalidArgumentException TTL negatif olamaz
+     */
+    public function set_table_ttl(string $table, int $ttl_seconds): void
+    {
+        $table = strtolower(trim($table));
+        $this->table_ttl_overrides[$table] = max(0, $ttl_seconds);
+    }
+    
+    /**
+     * Tablo TTL ayarını kaldırır (default TTL kullanılır)
+     * 
+     * @param string $table Tablo adı
+     * @return void
+     */
+    public function remove_table_ttl(string $table): void
+    {
+        $table = strtolower(trim($table));
+        unset($this->table_ttl_overrides[$table]);
+    }
+    
+    /**
+     * Tüm tablo TTL ayarlarını döndürür
+     * 
+     * @return array Tablo adı => TTL (saniye)
+     */
+    public function get_table_ttls(): array
+    {
+        return $this->table_ttl_overrides;
+    }
+    
+    /**
+     * Cache warming stratejisi ayarlar
+     * 
+     * @param string $table Tablo adı
+     * @param array{
+     *     enabled?: bool,
+     *     queries?: array<int, array{query: string, params?: array, tags?: array, tables?: array}>,
+     *     priority?: int
+     * } $strategy Strateji konfigürasyonu
+     * @return void
+     */
+    public function set_cache_warming_strategy(string $table, array $strategy): void
+    {
+        $table = strtolower(trim($table));
+        $this->cache_warming_strategies[$table] = [
+            'enabled' => $strategy['enabled'] ?? true,
+            'queries' => $strategy['queries'] ?? [],
+            'priority' => $strategy['priority'] ?? 0,
+        ];
+    }
+    
+    /**
+     * Cache warming stratejisini çalıştırır (belirli bir tablo için)
+     * 
+     * @param string $table Tablo adı
+     * @return array{
+     *     success: bool,
+     *     message?: string,
+     *     loaded: int,
+     *     errors: array<int, array{table: string, query: string, error: string}>
+     * }
+     */
+    public function warm_cache_for_table(string $table): array
+    {
+        $table = strtolower(trim($table));
+        
+        if (!isset($this->cache_warming_strategies[$table]) || 
+            !$this->cache_warming_strategies[$table]['enabled']) {
+            return [
+                'success' => false,
+                'message' => "Tablo için warming stratejisi bulunamadı veya devre dışı: {$table}",
+                'loaded' => 0,
+                'errors' => [],
+            ];
+        }
+        
+        $strategy = $this->cache_warming_strategies[$table];
+        $loaded = 0;
+        $errors = [];
+        
+        foreach ($strategy['queries'] as $query_config) {
+            try {
+                $query = $query_config['query'] ?? '';
+                $params = $query_config['params'] ?? [];
+                $tags = $query_config['tags'] ?? [];
+                $tables = $query_config['tables'] ?? [$table];
+                
+                // Query'yi cache'e kaydet (warm query olarak)
+                $this->register_warm_query($query, $params, $tags, $tables);
+                $loaded++;
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'table' => $table,
+                    'query' => $query_config['query'] ?? 'unknown',
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+        
+        // Warm cache'i çalıştır
+        $warm_result = $this->warm_cache(true);
+        
+        return [
+            'success' => true,
+            'loaded' => $loaded + ($warm_result['loaded'] ?? 0),
+            'errors' => array_merge($errors, $warm_result['errors'] ?? []),
+        ];
+    }
+    
+    /**
+     * Tüm tablolar için cache warming stratejilerini öncelik sırasına göre çalıştırır
+     * 
+     * @return array{
+     *     success: bool,
+     *     loaded: int,
+     *     errors: array<int, array{table: string, query: string, error: string}>
+     * }
+     */
+    public function warm_cache_all_tables(): array
+    {
+        // Stratejileri önceliğe göre sırala
+        $strategies = $this->cache_warming_strategies;
+        uasort($strategies, fn($a, $b) => ($b['priority'] ?? 0) <=> ($a['priority'] ?? 0));
+        
+        $total_loaded = 0;
+        $all_errors = [];
+        
+        foreach ($strategies as $table => $strategy) {
+            if (!$strategy['enabled']) {
+                continue;
+            }
+            
+            $result = $this->warm_cache_for_table($table);
+            $total_loaded += $result['loaded'];
+            $all_errors = array_merge($all_errors, $result['errors']);
+        }
+        
+        return [
+            'success' => true,
+            'loaded' => $total_loaded,
+            'errors' => $all_errors,
+        ];
     }
 }

@@ -25,7 +25,8 @@ class security_manager
     public static function secure_session_start(): void
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
-            $secure = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443;
+            // HTTPS kontrolü (proxy/load balancer desteği ile)
+            $secure = self::is_https();
             session_set_cookie_params([
                 'lifetime' => 0,
                 'path' => '/',
@@ -59,6 +60,111 @@ class security_manager
     public static function escape_html(mixed $string): string
     {
         return htmlspecialchars((string)$string, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * Güvenli şekilde istemci IP adresini alır
+     * 
+     * Proxy, load balancer veya CDN arkasında çalışırken doğru IP'yi döndürür.
+     * Öncelik sırası:
+     * 1. X-Forwarded-For (ilk IP, güvenilir proxy'ler için)
+     * 2. X-Real-IP (nginx ve bazı proxy'ler)
+     * 3. CF-Connecting-IP (Cloudflare)
+     * 4. REMOTE_ADDR (son çare)
+     * 
+     * @return string İstemci IP adresi veya 'unknown'
+     */
+    public static function get_client_ip(): string
+    {
+        // X-Forwarded-For header'ını kontrol et (proxy/load balancer)
+        // Format: "client_ip, proxy1_ip, proxy2_ip"
+        $forwarded_for = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
+        if (!empty($forwarded_for)) {
+            // İlk IP'yi al (gerçek istemci IP'si)
+            $ips = explode(',', $forwarded_for);
+            $ip = trim($ips[0]);
+            
+            // IP adresini validate et
+            if (self::is_valid_ip($ip)) {
+                return $ip;
+            }
+        }
+        
+        // X-Real-IP header'ını kontrol et (nginx ve bazı proxy'ler)
+        $real_ip = $_SERVER['HTTP_X_REAL_IP'] ?? '';
+        if (!empty($real_ip)) {
+            $ip = trim($real_ip);
+            if (self::is_valid_ip($ip)) {
+                return $ip;
+            }
+        }
+        
+        // CF-Connecting-IP header'ını kontrol et (Cloudflare)
+        $cf_ip = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? '';
+        if (!empty($cf_ip)) {
+            $ip = trim($cf_ip);
+            if (self::is_valid_ip($ip)) {
+                return $ip;
+            }
+        }
+        
+        // Son çare: REMOTE_ADDR
+        $remote_addr = $_SERVER['REMOTE_ADDR'] ?? '';
+        if (!empty($remote_addr)) {
+            $ip = trim($remote_addr);
+            if (self::is_valid_ip($ip)) {
+                return $ip;
+            }
+        }
+        
+        return 'unknown';
+    }
+    
+    /**
+     * IP adresinin geçerli olup olmadığını kontrol eder
+     * 
+     * @param string $ip Kontrol edilecek IP adresi
+     * @return bool Geçerli ise true
+     */
+    private static function is_valid_ip(string $ip): bool
+    {
+        // IPv4 ve IPv6 kontrolü
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false
+            || filter_var($ip, FILTER_VALIDATE_IP) !== false; // Private/reserved range'e de izin ver (local network için)
+    }
+    
+    /**
+     * HTTPS bağlantısı kontrolü yapar (proxy/load balancer desteği ile)
+     * 
+     * @return bool HTTPS ise true
+     */
+    public static function is_https(): bool
+    {
+        // X-Forwarded-Proto header'ını kontrol et (proxy/load balancer)
+        $forwarded_proto = $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '';
+        if (!empty($forwarded_proto)) {
+            return strtolower($forwarded_proto) === 'https';
+        }
+        
+        // X-Forwarded-Ssl header'ını kontrol et (bazı proxy'ler)
+        $forwarded_ssl = $_SERVER['HTTP_X_FORWARDED_SSL'] ?? '';
+        if (!empty($forwarded_ssl) && strtolower($forwarded_ssl) === 'on') {
+            return true;
+        }
+        
+        // HTTPS server variable'ını kontrol et
+        $https = $_SERVER['HTTPS'] ?? '';
+        if (!empty($https) && strtolower($https) !== 'off') {
+            return true;
+        }
+        
+        // SERVER_PORT kontrolü
+        $port = $_SERVER['SERVER_PORT'] ?? null;
+        if ($port == 443) {
+            return true;
+        }
+        
+        return false;
     }
 
     /**

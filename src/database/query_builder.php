@@ -133,7 +133,9 @@ class query_builder
         }
 
         [$param_name, $param_value, $param_type] = $this->prepare_param($column, $value);
-        $this->where[] = "$column $operator $param_name";
+        // Column'ı quote et (güvenlik için)
+        $quoted_column = $this->quote_identifier_safe($column);
+        $this->where[] = "$quoted_column $operator $param_name";
         $this->params[$param_name] = ['value' => $param_value, 'type' => $param_type];
 
         return $this;
@@ -269,7 +271,9 @@ class query_builder
         }
 
         [$param_name, $param_value, $param_type] = $this->prepare_param($column, $value);
-        $this->having[] = "$column $operator $param_name";
+        // Column'ı quote et (güvenlik için) - HAVING için aggregate fonksiyonlar olabilir
+        $quoted_column = $this->quote_identifier_safe($column);
+        $this->having[] = "$quoted_column $operator $param_name";
         $this->params[$param_name] = ['value' => $param_value, 'type' => $param_type];
 
         return $this;
@@ -351,10 +355,14 @@ class query_builder
         $this->validate_column_name($second);
         $this->validate_operator($operator);
 
+        // Column'ları quote et (güvenlik için)
+        $quoted_first = $this->quote_identifier_safe($first);
+        $quoted_second = $this->quote_identifier_safe($second);
+
         $this->joins[] = [
             'type' => $type,
-            'table' => $table,
-            'condition' => "$first $operator $second",
+            'table' => $table, // Table zaten validate edilmiş ve subquery olabilir
+            'condition' => "$quoted_first $operator $quoted_second",
         ];
 
         return $this;
@@ -486,14 +494,24 @@ class query_builder
      */
     private function build_query(): string
     {
-        $query = "SELECT " . implode(", ", $this->columns);
-        $query .= " FROM {$this->table}";
+        // Column'ları quote et (güvenlik için)
+        $quoted_columns = array_map(fn($col) => $this->quote_identifier_safe($col), $this->columns);
+        $query = "SELECT " . implode(", ", $quoted_columns);
+        
+        // Table'ı quote et (güvenlik için)
+        $quoted_table = $this->quote_identifier_safe($this->table);
+        $query .= " FROM {$quoted_table}";
 
         if (! empty($this->joins)) {
             $join_clauses = [];
             foreach ($this->joins as $join) {
                 $join_type = strtoupper($join['type']);
                 $table = $join['table'];
+                
+                // Table'ı quote et (subquery değilse)
+                if (!preg_match('/^\(/', $table)) { // Subquery değilse
+                    $table = $this->quote_identifier_safe($table);
+                }
                 
                 // CROSS JOIN için ON condition yok
                 if ($join_type === 'CROSS') {
@@ -514,11 +532,14 @@ class query_builder
         }
 
         if (! empty($this->where)) {
+            // WHERE clause'ları zaten quote edilmiş olmalı (where() metodunda)
             $query .= " WHERE " . implode(" AND ", $this->where);
         }
 
         if (! empty($this->group_by)) {
-            $query .= " GROUP BY " . implode(", ", $this->group_by);
+            // GROUP BY column'larını quote et
+            $quoted_group_by = array_map(fn($col) => $this->quote_identifier_safe($col), $this->group_by);
+            $query .= " GROUP BY " . implode(", ", $quoted_group_by);
         }
 
         if (! empty($this->having)) {
@@ -543,14 +564,30 @@ class query_builder
         }
 
         if (! empty($this->order_by)) {
-            $query .= " ORDER BY " . implode(", ", $this->order_by);
+            // ORDER BY column'larını quote et (column ASC/DESC formatı)
+            $quoted_order_by = array_map(function($order) {
+                // "column ASC" veya "column DESC" formatını parse et
+                if (preg_match('/^(.+?)\s+(ASC|DESC)$/i', $order, $matches)) {
+                    $column = trim($matches[1]);
+                    $direction = strtoupper(trim($matches[2]));
+                    return $this->quote_identifier_safe($column) . ' ' . $direction;
+                }
+                // Sadece column adı varsa
+                return $this->quote_identifier_safe($order);
+            }, $this->order_by);
+            $query .= " ORDER BY " . implode(", ", $quoted_order_by);
         }
 
         if ($this->limit !== null) {
-            $query .= " LIMIT {$this->limit}";
+            // LIMIT ve OFFSET değerlerini parametre olarak bağla (SQL injection koruması)
+            $limit_param = $this->normalize_parameter_name('limit_' . $this->param_counter++);
+            $this->params[$limit_param] = ['value' => $this->limit, 'type' => \PDO::PARAM_INT];
+            $query .= " LIMIT {$limit_param}";
 
             if ($this->offset > 0) {
-                $query .= " OFFSET {$this->offset}";
+                $offset_param = $this->normalize_parameter_name('offset_' . $this->param_counter++);
+                $this->params[$offset_param] = ['value' => $this->offset, 'type' => \PDO::PARAM_INT];
+                $query .= " OFFSET {$offset_param}";
             }
         }
 
@@ -565,6 +602,77 @@ class query_builder
     public function get_params(): array
     {
         return $this->params;
+    }
+    
+    /**
+     * Identifier'ı quote eder (güvenlik için)
+     * 
+     * @param string $identifier Identifier (tablo veya sütun adı)
+     * @return string Quoted identifier
+     */
+    private function quote_identifier(string $identifier): string
+    {
+        // Zaten quote edilmişse olduğu gibi döndür
+        if ((str_starts_with($identifier, '`') && str_ends_with($identifier, '`')) ||
+            (str_starts_with($identifier, '"') && str_ends_with($identifier, '"')) ||
+            (str_starts_with($identifier, '[') && str_ends_with($identifier, ']'))) {
+            return $identifier;
+        }
+        
+        // Tablo.sütun formatını handle et
+        if (str_contains($identifier, '.')) {
+            $parts = explode('.', $identifier, 2);
+            return '`' . $parts[0] . '`.`' . $parts[1] . '`';
+        }
+        
+        // Basit identifier
+        return '`' . $identifier . '`';
+    }
+    
+    /**
+     * Identifier'ı quote eder (eğer basit identifier ise)
+     * Aggregate fonksiyonlar, wildcard gibi özel durumları olduğu gibi bırakır
+     * 
+     * @param string $identifier Identifier
+     * @return string Quoted identifier veya olduğu gibi
+     */
+    private function quote_identifier_safe(string $identifier): string
+    {
+        $identifier = trim($identifier);
+        
+        // Zaten quote edilmişse olduğu gibi döndür
+        if ((str_starts_with($identifier, '`') && str_ends_with($identifier, '`')) ||
+            (str_starts_with($identifier, '"') && str_ends_with($identifier, '"'))) {
+            return $identifier;
+        }
+        
+        // Wildcard
+        if ($identifier === '*' || preg_match('/^[a-zA-Z0-9_]+\.\*$/', $identifier)) {
+            return $identifier;
+        }
+        
+        // Aggregate fonksiyonlar veya parantez içeren ifadeler
+        if (preg_match('/\b(COUNT|SUM|AVG|MAX|MIN|GROUP_CONCAT)\s*\(/i', $identifier) ||
+            preg_match('/\(/', $identifier)) {
+            return $identifier;
+        }
+        
+        // Alias içeren ifadeler (AS keyword)
+        if (preg_match('/\s+as\s+/i', $identifier)) {
+            $parts = preg_split('/\s+as\s+/i', $identifier, 2);
+            if (count($parts) === 2) {
+                $quoted_expr = $this->quote_identifier_safe(trim($parts[0]));
+                $alias = trim($parts[1]);
+                // Alias'ı quote et (eğer zaten quote edilmemişse)
+                if (!preg_match('/^[`"]/', $alias)) {
+                    $alias = '`' . $alias . '`';
+                }
+                return $quoted_expr . ' AS ' . $alias;
+            }
+        }
+        
+        // Basit identifier veya tablo.sütun formatı - quote et
+        return $this->quote_identifier($identifier);
     }
 
     /**
