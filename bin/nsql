@@ -1,0 +1,207 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * NSQL CLI Tool
+ * 
+ * Migration ve seed işlemleri için komut satırı aracı
+ */
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use nsql\database\nsql;
+use nsql\database\migration_manager;
+
+class nsql_cli
+{
+    private migration_manager $migration_manager;
+
+    public function __construct()
+    {
+        $db = new nsql();
+        $this->migration_manager = new migration_manager($db);
+    }
+
+    public function run(array $args): void
+    {
+        if (empty($args) || ! isset($args[1])) {
+            $this->show_help();
+            return;
+        }
+
+        $command = $args[1];
+
+        match ($command) {
+            'migrate' => $this->migrate(),
+            'migrate:rollback' => $this->rollback(),
+            'migrate:status' => $this->migrate_status(),
+            'migrate:create' => $this->migrate_create($args[2] ?? null),
+            'seed' => $this->seed($args[2] ?? null),
+            'seed:create' => $this->seed_create($args[2] ?? null),
+            'db:status' => $this->db_status(),
+            'help', '--help', '-h' => $this->show_help(),
+            default => $this->error("Bilinmeyen komut: {$command}"),
+        };
+    }
+
+    private function migrate(): void
+    {
+        echo "Migration'lar çalıştırılıyor...\n";
+        try {
+            $executed = $this->migration_manager->migrate();
+            if (empty($executed)) {
+                echo "Çalıştırılacak migration yok.\n";
+            } else {
+                echo "Başarıyla çalıştırılan migration'lar:\n";
+                foreach ($executed as $migration) {
+                    echo "  - {$migration}\n";
+                }
+            }
+        } catch (\Exception $e) {
+            $this->error("Migration hatası: " . $e->getMessage());
+        }
+    }
+
+    private function rollback(): void
+    {
+        echo "Son batch rollback ediliyor...\n";
+        try {
+            $rolled_back = $this->migration_manager->rollback();
+            if (empty($rolled_back)) {
+                echo "Rollback edilecek migration yok.\n";
+            } else {
+                echo "Başarıyla rollback edilen migration'lar:\n";
+                foreach ($rolled_back as $migration) {
+                    echo "  - {$migration}\n";
+                }
+            }
+        } catch (\Exception $e) {
+            $this->error("Rollback hatası: " . $e->getMessage());
+        }
+    }
+
+    private function migrate_status(): void
+    {
+        echo "Migration durumu:\n\n";
+        try {
+            $report = $this->migration_manager->get_status_report();
+            echo "Toplam Migration: {$report['total_migrations']}\n";
+            echo "Uygulanan: {$report['applied_count']}\n";
+            echo "Bekleyen: {$report['pending_count']}\n";
+            echo "Son Batch: {$report['last_batch']}\n\n";
+            
+            if (! empty($report['pending_migrations'])) {
+                echo "Bekleyen migration'lar:\n";
+                foreach ($report['pending_migrations'] as $migration) {
+                    echo "  - {$migration}\n";
+                }
+            }
+        } catch (\Exception $e) {
+            $this->error("Status hatası: " . $e->getMessage());
+        }
+    }
+
+    private function migrate_create(?string $name): void
+    {
+        if (empty($name)) {
+            $this->error("Migration adı belirtilmedi. Kullanım: php bin/nsql migrate:create migration_name");
+            return;
+        }
+
+        try {
+            $path = $this->migration_manager->create($name);
+            echo "Migration oluşturuldu: {$path}\n";
+        } catch (\Exception $e) {
+            $this->error("Migration oluşturma hatası: " . $e->getMessage());
+        }
+    }
+
+    private function seed(?string $class): void
+    {
+        echo "Seed verileri yükleniyor...\n";
+        try {
+            $this->migration_manager->seed($class);
+            echo "Seed işlemi tamamlandı.\n";
+        } catch (\Exception $e) {
+            $this->error("Seed hatası: " . $e->getMessage());
+        }
+    }
+
+    private function seed_create(?string $name): void
+    {
+        if (empty($name)) {
+            $this->error("Seeder adı belirtilmedi. Kullanım: php bin/nsql seed:create seeder_name");
+            return;
+        }
+
+        try {
+            $path = $this->migration_manager->create_seeder($name);
+            echo "Seeder oluşturuldu: {$path}\n";
+        } catch (\Exception $e) {
+            $this->error("Seeder oluşturma hatası: " . $e->getMessage());
+        }
+    }
+
+    private function db_status(): void
+    {
+        echo "Veritabanı durumu:\n\n";
+        try {
+            $db = new nsql();
+            $stats = $db->get_all_stats();
+            
+            echo "Cache:\n";
+            $cache = $stats['cache'] ?? [];
+            echo "  Enabled: " . ($cache['enabled'] ?? false ? 'Yes' : 'No') . "\n";
+            echo "  Hit Rate: " . ($cache['hit_rate'] ?? 0) . "%\n";
+            echo "  Size: " . ($cache['size'] ?? 0) . "/" . ($cache['limit'] ?? 0) . "\n\n";
+            
+            echo "Memory:\n";
+            $memory = $stats['memory'] ?? [];
+            echo "  Current: " . $this->format_bytes($memory['current_usage'] ?? 0) . "\n";
+            echo "  Peak: " . $this->format_bytes($memory['peak_usage'] ?? 0) . "\n\n";
+            
+            echo "Connection Pool:\n";
+            $pool = $stats['connection_pool'] ?? [];
+            echo "  Active: " . ($pool['active_connections'] ?? 0) . "\n";
+            echo "  Total: " . ($pool['total_connections'] ?? 0) . "\n";
+        } catch (\Exception $e) {
+            $this->error("Status hatası: " . $e->getMessage());
+        }
+    }
+
+    private function format_bytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $i = 0;
+        while ($bytes >= 1024 && $i < count($units) - 1) {
+            $bytes /= 1024;
+            $i++;
+        }
+        return round($bytes, 2) . ' ' . $units[$i];
+    }
+
+    private function show_help(): void
+    {
+        echo "NSQL CLI Tool\n\n";
+        echo "Kullanım: php bin/nsql <komut> [argümanlar]\n\n";
+        echo "Komutlar:\n";
+        echo "  migrate              Tüm bekleyen migration'ları çalıştır\n";
+        echo "  migrate:rollback     Son batch'i rollback et\n";
+        echo "  migrate:status       Migration durumunu göster\n";
+        echo "  migrate:create <ad>  Yeni migration oluştur\n";
+        echo "  seed [class]         Seed verilerini yükle\n";
+        echo "  seed:create <ad>     Yeni seeder oluştur\n";
+        echo "  db:status            Veritabanı durumunu göster\n";
+        echo "  help                 Bu yardım mesajını göster\n";
+    }
+
+    private function error(string $message): void
+    {
+        echo "HATA: {$message}\n";
+        exit(1);
+    }
+}
+
+// CLI'yi çalıştır
+$cli = new nsql_cli();
+$cli->run($argv);

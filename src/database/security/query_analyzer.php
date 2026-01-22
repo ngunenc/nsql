@@ -16,6 +16,22 @@ class query_analyzer
         'union_query' => '/UNION\s+(?:ALL\s+)?SELECT/i',
         'subquery_exists' => '/EXISTS\s*\(\s*SELECT/i',
         'large_in_clause' => '/IN\s*\([^)]{1000,}\)/i',
+        // GELISTIRME-008: Yeni pattern'ler
+        'drop_database' => '/DROP\s+(?:DATABASE|SCHEMA)\s+[`\w.]+/i',
+        'create_database' => '/CREATE\s+(?:DATABASE|SCHEMA)\s+[`\w.]+/i',
+        'drop_index' => '/DROP\s+INDEX\s+[`\w.]+/i',
+        'drop_view' => '/DROP\s+VIEW\s+[`\w.]+/i',
+        'drop_procedure' => '/DROP\s+(?:PROCEDURE|FUNCTION)\s+[`\w.]+/i',
+        'create_user' => '/CREATE\s+USER\s+/i',
+        'alter_user' => '/ALTER\s+USER\s+/i',
+        'grant_privileges' => '/GRANT\s+[^;]+ON\s+/i',
+        'revoke_privileges' => '/REVOKE\s+[^;]+ON\s+/i',
+        'flush_privileges' => '/FLUSH\s+PRIVILEGES/i',
+        'set_password' => '/SET\s+PASSWORD\s+/i',
+        'lock_tables' => '/LOCK\s+TABLES\s+/i',
+        'unlock_tables' => '/UNLOCK\s+TABLES/i',
+        'kill_process' => '/KILL\s+(?:PROCESS|QUERY|CONNECTION)/i',
+        'shutdown' => '/SHUTDOWN/i',
     ];
 
     private array $performance_patterns = [
@@ -33,6 +49,21 @@ class query_analyzer
         'multiple_statements' => '/;\s*\w+/i',
         'potential_injection' => '/EXEC\(|EXECUTE\(|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD\s+DATA|LOAD\s+XML/i',
         'privilege_escalation' => '/GRANT\s+|REVOKE\s+|CREATE\s+USER|DROP\s+USER/i',
+        // GELISTIRME-008: Yeni güvenlik pattern'leri
+        'hex_encoding' => '/0x[0-9a-fA-F]+/i', // Hex encoding (SQL injection tekniği)
+        'char_function' => '/CHAR\s*\([^)]+\)/i', // CHAR() function (SQL injection tekniği)
+        'concat_function' => '/CONCAT\s*\([^)]+\)/i', // CONCAT() function (SQL injection tekniği)
+        'benchmark_function' => '/BENCHMARK\s*\(/i', // BENCHMARK() (time-based SQL injection)
+        'sleep_function' => '/SLEEP\s*\(/i', // SLEEP() (time-based SQL injection)
+        'waitfor_delay' => '/WAITFOR\s+DELAY/i', // SQL Server time-based injection
+        'pg_sleep' => '/PG_SLEEP\s*\(/i', // PostgreSQL time-based injection
+        'information_schema_access' => '/FROM\s+information_schema\./i', // Information schema access
+        'union_based_injection' => '/UNION\s+(?:ALL\s+)?SELECT\s+.*(?:NULL|0x|CHAR|CONCAT)/i', // Union-based injection pattern
+        'boolean_based_injection' => '/\b(?:AND|OR)\s+(?:\d+\s*=\s*\d+|1\s*=\s*1|1\s*=\s*0)/i', // Boolean-based injection
+        'time_based_injection' => '/\b(?:AND|OR)\s+(?:SLEEP|BENCHMARK|WAITFOR|PG_SLEEP)\s*\(/i', // Time-based injection
+        'stacked_queries' => '/;\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)/i', // Stacked queries
+        'second_order_injection' => '/\'\s*\+\s*[^+]*\+\s*\'/i', // Second-order injection pattern
+        'encoded_payload' => '/%[0-9a-fA-F]{2}|\\x[0-9a-fA-F]{2}/i', // URL/Hex encoded payload
     ];
 
     private array $risk_levels = [
@@ -66,6 +97,36 @@ class query_analyzer
         'multiple_statements' => 'critical',
         'potential_injection' => 'critical',
         'privilege_escalation' => 'critical',
+        // GELISTIRME-008: Yeni pattern risk seviyeleri
+        'drop_database' => 'critical',
+        'create_database' => 'high',
+        'drop_index' => 'high',
+        'drop_view' => 'high',
+        'drop_procedure' => 'high',
+        'create_user' => 'critical',
+        'alter_user' => 'critical',
+        'grant_privileges' => 'critical',
+        'revoke_privileges' => 'critical',
+        'flush_privileges' => 'critical',
+        'set_password' => 'critical',
+        'lock_tables' => 'high',
+        'unlock_tables' => 'high',
+        'kill_process' => 'high',
+        'shutdown' => 'critical',
+        'hex_encoding' => 'high',
+        'char_function' => 'high',
+        'concat_function' => 'high',
+        'benchmark_function' => 'critical',
+        'sleep_function' => 'critical',
+        'waitfor_delay' => 'critical',
+        'pg_sleep' => 'critical',
+        'information_schema_access' => 'medium',
+        'union_based_injection' => 'critical',
+        'boolean_based_injection' => 'critical',
+        'time_based_injection' => 'critical',
+        'stacked_queries' => 'critical',
+        'second_order_injection' => 'high',
+        'encoded_payload' => 'high',
     ];
 
     /**
@@ -137,6 +198,22 @@ class query_analyzer
             'union_query' => 'UNION sorguları performans sorunlarına yol açabilir',
             'subquery_exists' => 'EXISTS alt sorgusu tespit edildi',
             'large_in_clause' => 'Çok büyük IN bloğu tespit edildi',
+            // GELISTIRME-008: Yeni risk mesajları
+            'drop_database' => 'DROP DATABASE sorgusu tüm veritabanını siler',
+            'create_database' => 'CREATE DATABASE sorgusu yeni veritabanı oluşturur',
+            'drop_index' => 'DROP INDEX sorgusu index\'i siler',
+            'drop_view' => 'DROP VIEW sorgusu view\'ı siler',
+            'drop_procedure' => 'DROP PROCEDURE/FUNCTION sorgusu stored procedure\'ü siler',
+            'create_user' => 'CREATE USER sorgusu yeni kullanıcı oluşturur',
+            'alter_user' => 'ALTER USER sorgusu kullanıcı bilgilerini değiştirir',
+            'grant_privileges' => 'GRANT sorgusu yetki verir',
+            'revoke_privileges' => 'REVOKE sorgusu yetki kaldırır',
+            'flush_privileges' => 'FLUSH PRIVILEGES sorgusu yetki tablolarını yeniler',
+            'set_password' => 'SET PASSWORD sorgusu şifre değiştirir',
+            'lock_tables' => 'LOCK TABLES sorgusu tabloları kilitler',
+            'unlock_tables' => 'UNLOCK TABLES sorgusu tablo kilidini açar',
+            'kill_process' => 'KILL sorgusu işlemi sonlandırır',
+            'shutdown' => 'SHUTDOWN sorgusu veritabanı sunucusunu kapatır',
         ];
 
         return $messages[$type] ?? 'Bilinmeyen risk türü';
@@ -170,6 +247,21 @@ class query_analyzer
             'multiple_statements' => 'Çoklu SQL sorgusu tespit edildi',
             'potential_injection' => 'Potansiyel SQL injection riski',
             'privilege_escalation' => 'Yetki yükseltme riski tespit edildi',
+            // GELISTIRME-008: Yeni güvenlik mesajları
+            'hex_encoding' => 'Hex encoding tespit edildi (SQL injection tekniği)',
+            'char_function' => 'CHAR() fonksiyonu tespit edildi (SQL injection tekniği)',
+            'concat_function' => 'CONCAT() fonksiyonu tespit edildi (SQL injection tekniği)',
+            'benchmark_function' => 'BENCHMARK() fonksiyonu tespit edildi (time-based SQL injection)',
+            'sleep_function' => 'SLEEP() fonksiyonu tespit edildi (time-based SQL injection)',
+            'waitfor_delay' => 'WAITFOR DELAY tespit edildi (SQL Server time-based injection)',
+            'pg_sleep' => 'PG_SLEEP() fonksiyonu tespit edildi (PostgreSQL time-based injection)',
+            'information_schema_access' => 'Information schema erişimi tespit edildi',
+            'union_based_injection' => 'Union-based SQL injection pattern tespit edildi',
+            'boolean_based_injection' => 'Boolean-based SQL injection pattern tespit edildi',
+            'time_based_injection' => 'Time-based SQL injection pattern tespit edildi',
+            'stacked_queries' => 'Stacked queries tespit edildi (çoklu sorgu)',
+            'second_order_injection' => 'Second-order SQL injection pattern tespit edildi',
+            'encoded_payload' => 'Encoded payload tespit edildi (URL/Hex encoding)',
         ];
 
         return $messages[$type] ?? 'Bilinmeyen güvenlik sorunu';
