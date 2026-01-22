@@ -26,6 +26,15 @@ class nsql_test extends TestCase
             $this->runMigrations();
             self::$migrated = true;
         }
+        
+        // Test izolasyonu için her test öncesi verileri temizle
+        try {
+            $this->db->query('TRUNCATE TABLE test_table');
+            // users tablosunu temizleme (eğer test verisi ekleniyorsa)
+            // $this->db->query('TRUNCATE TABLE users');
+        } catch (\Exception $e) {
+            // Tablo yoksa veya hata varsa sessizce devam et
+        }
     }
 
     private function runMigrations(): void
@@ -43,9 +52,8 @@ class nsql_test extends TestCase
     protected function tearDown(): void
     {
         if ($this->db) {
-            // Test verilerini korumak için tearDown'ı devre dışı bırak
-            // $this->db->query('TRUNCATE TABLE users');
-            // $this->db->query('TRUNCATE TABLE test_table');
+            // Test izolasyonu için veriler setUp()'da temizleniyor
+            // Burada sadece bağlantıyı temizle
             $this->db = null;
         }
     }
@@ -105,13 +113,15 @@ class nsql_test extends TestCase
     {
         $this->db->begin_transaction();
         
-        $result = $this->db->insert(
+        $id = $this->db->insert(
             "INSERT INTO test_table (name) VALUES (:name)",
             ['name' => 'Transaction Test']
         );
-        $this->assertTrue($result);
-        $id = $this->db->insert_id();
         $this->assertIsInt($id);
+        $this->assertTrue($id > 0);
+        
+        $insertId = $this->db->insert_id();
+        $this->assertEquals($id, $insertId);
         
         $this->db->rollback_transaction();
         
@@ -408,19 +418,23 @@ class nsql_test extends TestCase
     public function testNullValues()
     {
         // NULL değer içeren kayıt ekle (eğer tablo NULL destekliyorsa)
+        // test_table'da name sütunu NOT NULL olabilir, bu yüzden value sütununu kullan
         $id = $this->db->insert(
-            "INSERT INTO test_table (name) VALUES (:name)",
-            ['name' => null]
+            "INSERT INTO test_table (name, value) VALUES (:name, :value)",
+            ['name' => 'test', 'value' => null]
         );
         
-        if ($id) {
-            $row = $this->db->get_row(
-                "SELECT * FROM test_table WHERE id = :id",
-                ['id' => $id]
-            );
-            // NULL değerlerin doğru şekilde işlendiğini kontrol et
-            $this->assertNotNull($row);
-        }
+        $this->assertIsInt($id);
+        $this->assertTrue($id > 0);
+        
+        $row = $this->db->get_row(
+            "SELECT * FROM test_table WHERE id = :id",
+            ['id' => $id]
+        );
+        
+        // NULL değerlerin doğru şekilde işlendiğini kontrol et
+        $this->assertNotNull($row);
+        $this->assertNull($row->value); // NULL değerin doğru işlendiğini kontrol et
     }
 
     public function testLargeDataSet()
@@ -537,6 +551,249 @@ class nsql_test extends TestCase
         $this->assertStringContainsString('GROUP BY', $query);
         $this->assertStringContainsString('HAVING', $query);
         $this->assertStringContainsString('ORDER BY', $query);
+    }
+
+    public function testQueryBuilderUnion()
+    {
+        $builder1 = new \nsql\database\query_builder($this->db);
+        $builder1->select('name')
+            ->from('test_table')
+            ->where('id', '>', 0);
+
+        $builder2 = new \nsql\database\query_builder($this->db);
+        $builder2->select('name')
+            ->from('users')
+            ->where('id', '>', 0);
+
+        $query = $builder1->union($builder2)->get_query();
+        
+        $this->assertStringContainsString('UNION', $query);
+        $this->assertStringContainsString('test_table', $query);
+        $this->assertStringContainsString('users', $query);
+    }
+
+    public function testQueryBuilderUnionAll()
+    {
+        $builder1 = new \nsql\database\query_builder($this->db);
+        $builder1->select('name')
+            ->from('test_table');
+
+        $builder2 = new \nsql\database\query_builder($this->db);
+        $builder2->select('name')
+            ->from('users');
+
+        $query = $builder1->union($builder2, true)->get_query();
+        
+        $this->assertStringContainsString('UNION ALL', $query);
+    }
+
+    public function testQueryBuilderLeftJoin()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('test_table.*', 'users.name as user_name')
+            ->from('test_table')
+            ->left_join('users', 'test_table.user_id', '=', 'users.id')
+            ->get_query();
+            
+        $this->assertStringContainsString('LEFT JOIN', $query);
+        $this->assertStringContainsString('users', $query);
+    }
+
+    public function testQueryBuilderRightJoin()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->right_join('users', 'test_table.user_id', '=', 'users.id')
+            ->get_query();
+            
+        $this->assertStringContainsString('RIGHT JOIN', $query);
+    }
+
+    public function testQueryBuilderFullJoin()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->full_join('users', 'test_table.user_id', '=', 'users.id')
+            ->get_query();
+            
+        $this->assertStringContainsString('FULL JOIN', $query);
+    }
+
+    public function testQueryBuilderInnerJoin()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->inner_join('users', 'test_table.user_id', '=', 'users.id')
+            ->get_query();
+            
+        $this->assertStringContainsString('INNER JOIN', $query);
+    }
+
+    public function testQueryBuilderCrossJoin()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->cross_join('users')
+            ->get_query();
+            
+        $this->assertStringContainsString('CROSS JOIN', $query);
+        $this->assertStringNotContainsString('ON', $query); // CROSS JOIN'de ON condition yok
+    }
+
+    public function testQueryBuilderMultipleJoins()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->left_join('users', 'test_table.user_id', '=', 'users.id')
+            ->right_join('categories', 'test_table.category_id', '=', 'categories.id')
+            ->get_query();
+            
+        $this->assertStringContainsString('LEFT JOIN', $query);
+        $this->assertStringContainsString('RIGHT JOIN', $query);
+        $this->assertStringContainsString('users', $query);
+        $this->assertStringContainsString('categories', $query);
+    }
+
+    public function testQueryBuilderJoinWithClosure()
+    {
+        $builder = new \nsql\database\query_builder($this->db);
+        
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->left_join('users', function($q) {
+                return 'test_table.user_id = users.id AND users.active = 1';
+            })
+            ->get_query();
+            
+        $this->assertStringContainsString('LEFT JOIN', $query);
+        $this->assertStringContainsString('users.active = 1', $query);
+    }
+
+    public function testQueryBuilderWhereSubquery()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('id')
+            ->from('users')
+            ->where('active', '=', 1);
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->where('user_id', 'IN', $subquery)
+            ->get_query();
+            
+        $this->assertStringContainsString('user_id', $query);
+        $this->assertStringContainsString('SELECT', $query);
+        $this->assertStringContainsString('users', $query);
+    }
+
+    public function testQueryBuilderWhereInSubquery()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('id')
+            ->from('users')
+            ->where('active', '=', 1);
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->where_in_subquery('user_id', $subquery)
+            ->get_query();
+            
+        $this->assertStringContainsString('IN', $query);
+        $this->assertStringContainsString('user_id', $query);
+    }
+
+    public function testQueryBuilderWhereExists()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('1')
+            ->from('users')
+            ->where('users.id', '=', 'test_table.user_id');
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->where_exists($subquery)
+            ->get_query();
+            
+        $this->assertStringContainsString('EXISTS', $query);
+    }
+
+    public function testQueryBuilderWhereNotExists()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('1')
+            ->from('users')
+            ->where('users.id', '=', 'test_table.user_id');
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('*')
+            ->from('test_table')
+            ->where_not_exists($subquery)
+            ->get_query();
+            
+        $this->assertStringContainsString('NOT EXISTS', $query);
+    }
+
+    public function testQueryBuilderSelectSubquery()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('COUNT(*)')
+            ->from('users')
+            ->where('active', '=', 1);
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('name', $subquery)
+            ->from('test_table')
+            ->get_query();
+            
+        $this->assertStringContainsString('SELECT', $query);
+        $this->assertStringContainsString('COUNT(*)', $query);
+    }
+
+    public function testQueryBuilderFromSubquery()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('*')
+            ->from('users')
+            ->where('active', '=', 1);
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('*')
+            ->from($subquery, 'active_users')
+            ->get_query();
+            
+        $this->assertStringContainsString('FROM', $query);
+        $this->assertStringContainsString('active_users', $query);
+    }
+
+    public function testQueryBuilderHavingSubquery()
+    {
+        $subquery = new \nsql\database\query_builder($this->db);
+        $subquery->select('AVG(price)')
+            ->from('test_table');
+
+        $builder = new \nsql\database\query_builder($this->db);
+        $query = $builder->select('category', 'SUM(price) as total')
+            ->from('test_table')
+            ->group_by('category')
+            ->having('SUM(price)', '>', $subquery)
+            ->get_query();
+            
+        $this->assertStringContainsString('HAVING', $query);
+        $this->assertStringContainsString('AVG(price)', $query);
     }
 
     // ========== PERFORMANCE TESTLERİ ==========
