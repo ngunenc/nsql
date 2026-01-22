@@ -58,10 +58,8 @@ class session_manager
             session_destroy();
         }
 
-        // HTTPS kontrolü
-        $secure = $this->config['secure'] ||
-                 (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
-                 $_SERVER['SERVER_PORT'] == 443;
+        // HTTPS kontrolü (proxy/load balancer desteği ile)
+        $secure = $this->config['secure'] || \nsql\database\security\security_manager::is_https();
 
         // Cookie parametreleri ayarla
         session_set_cookie_params([

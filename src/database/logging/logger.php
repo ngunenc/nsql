@@ -110,8 +110,9 @@ class logger
         ];
 
         // IP, user agent gibi ek bilgiler (eğer mevcutsa)
-        if (isset($_SERVER['REMOTE_ADDR'])) {
-            $log_entry['ip_address'] = $_SERVER['REMOTE_ADDR'];
+        $client_ip = \nsql\database\security\security_manager::get_client_ip();
+        if ($client_ip !== 'unknown') {
+            $log_entry['ip_address'] = $client_ip;
         }
         if (isset($_SERVER['HTTP_USER_AGENT'])) {
             $log_entry['user_agent'] = $_SERVER['HTTP_USER_AGENT'];

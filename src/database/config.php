@@ -166,37 +166,56 @@ class config
         return $root !== '' ? $root : (getcwd() ?: __DIR__);
     }
 
-    /** .env dosyasını okuyup self::$config içine yükler */
+    /** .env dosyasını okuyup self::$config içine yükler (stream-based okuma ile optimize edilmiş) */
     private static function load_env_file(string $env_path): void
     {
         if (! is_file($env_path) || ! is_readable($env_path)) {
             return;
         }
 
-        $lines = @file($env_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if ($lines === false) {
+        // Stream-based okuma (büyük dosyalar için memory-friendly)
+        $handle = @fopen($env_path, 'r');
+        if ($handle === false) {
             return;
         }
 
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '' || str_starts_with($line, '#')) {
-                continue;
-            }
-            // KEY=VALUE formatı
-            $pos = strpos($line, '=');
-            if ($pos === false) {
-                continue;
-            }
-            $key = strtoupper(trim(substr($line, 0, $pos)));
-            $value = trim(substr($line, $pos + 1));
+        try {
+            $line_number = 0;
+            $max_lines = 10000; // Güvenlik: maksimum satır sayısı (dosya boyutu kontrolü)
+            
+            while (($line = fgets($handle)) !== false && $line_number < $max_lines) {
+                $line_number++;
+                $line = trim($line);
+                
+                // Boş satır veya yorum satırı
+                if ($line === '' || str_starts_with($line, '#')) {
+                    continue;
+                }
+                
+                // KEY=VALUE formatı
+                $pos = strpos($line, '=');
+                if ($pos === false) {
+                    continue;
+                }
+                
+                $key = strtoupper(trim(substr($line, 0, $pos)));
+                $value = trim(substr($line, $pos + 1));
 
-            // Çift tırnak/tek tırnakları temizle
-            if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
-                $value = substr($value, 1, -1);
-            }
+                // Çift tırnak/tek tırnakları temizle
+                if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || 
+                    (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+                    $value = substr($value, 1, -1);
+                }
 
-            self::$config[$key] = self::cast_value($value);
+                self::$config[$key] = self::cast_value($value);
+            }
+            
+            // Maksimum satır sayısı aşıldıysa uyar
+            if ($line_number >= $max_lines) {
+                error_log("Config: .env dosyası çok büyük (max {$max_lines} satır), kalan satırlar okunmadı");
+            }
+        } finally {
+            fclose($handle);
         }
     }
 

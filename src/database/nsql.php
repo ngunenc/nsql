@@ -323,44 +323,99 @@ class nsql extends PDO
     }
 
     /**
+     * Son yakalanan exception'ı saklar (hata ayıklama için)
+     */
+    private ?\Throwable $last_exception = null;
+
+    /**
+     * Son yakalanan exception'ı döndürür
+     * 
+     * @return \Throwable|null Son exception veya null
+     */
+    public function get_last_exception(): ?\Throwable
+    {
+        return $this->last_exception;
+    }
+
+    /**
      * Uygulama genelinde güvenli try-catch örüntüsü için yardımcı fonksiyon.
      * Kapatıcı (callable) fonksiyonu güvenli şekilde çalıştırır, hata olursa handleException ile işler.
+     * 
+     * İyileştirme: Exception'ı wrap edip döndürür, böylece hata türü korunur ve getPrevious() ile erişilebilir.
      *
      * @param callable $fn
      * @param string $generic_message
-     * @return mixed
+     * @return mixed Başarılı ise fonksiyon sonucu, hata durumunda false veya wrapped exception (debug mode)
+     * @throws \RuntimeException Debug mode'da exception fırlatır
      */
     public function safe_execute(callable $fn, string $generic_message = 'Bir hata oluştu.'): mixed
     {
         try {
+            $this->last_exception = null; // Başarılı çağrıda temizle
             return $fn();
+        } catch (\nsql\database\exceptions\DatabaseException $e) {
+            // Database exception'ları doğrudan kullan (zaten wrap edilmiş)
+            $this->last_error = $e->getMessage();
+            $this->last_exception = $e;
+            $this->log_error("Database Exception: " . $e->getMessage(), [
+                'exception' => get_class($e),
+                'code' => $e->getCode(),
+                'query' => $e->getQuery(),
+            ]);
+            
+            if ($this->debug_mode) {
+                throw $e; // Debug mode'da exception'ı olduğu gibi fırlat
+            }
+            
+            // Production'da wrapped exception döndür (getPrevious() ile erişilebilir)
+            return new \RuntimeException($generic_message, 0, $e);
         } catch (PDOException $e) {
             $this->last_error = $e->getMessage();
-            $this->log_error("PDO Error: " . $e->getMessage());
+            $this->last_exception = $e;
+            $this->log_error("PDO Error: " . $e->getMessage(), [
+                'exception' => get_class($e),
+                'code' => $e->getCode(),
+                'error_info' => $e->errorInfo ?? [],
+            ]);
             
             if ($this->debug_mode) {
                 throw new \RuntimeException($generic_message . ': ' . $e->getMessage(), 0, $e);
             }
             
-            return false;
+            // Production'da wrapped exception döndür
+            return new \RuntimeException($generic_message, 0, $e);
         } catch (Exception $e) {
             $this->last_error = $e->getMessage();
-            $this->log_error("General Error: " . $e->getMessage());
+            $this->last_exception = $e;
+            $this->log_error("General Error: " . $e->getMessage(), [
+                'exception' => get_class($e),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             
             if ($this->debug_mode) {
                 throw $e;
             }
             
-            return false;
+            // Production'da wrapped exception döndür
+            return new \RuntimeException($generic_message, 0, $e);
         } catch (Throwable $e) {
             $this->last_error = $e->getMessage();
-            $this->log_error("Fatal Error: " . $e->getMessage());
+            $this->last_exception = $e;
+            $this->log_error("Fatal Error: " . $e->getMessage(), [
+                'exception' => get_class($e),
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             
             if ($this->debug_mode) {
                 throw $e;
             }
             
-            return false;
+            // Production'da wrapped exception döndür
+            return new \RuntimeException($generic_message, 0, $e);
         }
     }
 
@@ -912,6 +967,7 @@ class nsql extends PDO
         $offset = 0;
         $chunk_size = config::default_chunk_size;
         $total_rows = 0;
+        $stmt = null;
 
         // PDO bağlantısı kontrolü
         if ($this->pdo === null) {
@@ -921,62 +977,72 @@ class nsql extends PDO
             }
         }
 
-        // İlk sorgu için prepared statement oluştur
-        $base_stmt = $this->pdo->prepare($query);
-        if ($base_stmt === false) {
-            return;
-        }
+        try {
+            while (true) {
+                $this->check_memory_status();
+                $this->adjust_chunk_size();
 
-        while (true) {
-            $this->check_memory_status();
-            $this->adjust_chunk_size();
-
-            // Chunk sorgusu oluştur ve çalıştır
-            $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
-            $stmt = $this->execute_query($chunk_query, $params);
-
-            if ($stmt === false) {
-                return;
-            }
-
-            // Satırları yield et
-            $found_rows = false;
-            while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
-                $found_rows = true;
-                $total_rows++;
-
-                // Memory optimizasyonu
-                if ($total_rows % 1000 === 0) {
-                    $this->cleanup_resources();
+                // Önceki statement'ı temizle (memory leak önleme)
+                if ($stmt !== null) {
+                    $stmt->closeCursor();
+                    $stmt = null;
                 }
 
-                yield $row;
+                // Chunk sorgusu oluştur ve çalıştır
+                $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
+                $stmt = $this->execute_query($chunk_query, $params);
+
+                if ($stmt === false) {
+                    break;
+                }
+
+                // Satırları yield et
+                $found_rows = false;
+                while ($row = $stmt->fetch(PDO::FETCH_OBJ)) {
+                    $found_rows = true;
+                    $total_rows++;
+
+                    // Memory optimizasyonu (config'den al)
+                    $cleanup_interval = \nsql\database\config::get('generator_cleanup_interval', 1000);
+                    if ($total_rows % $cleanup_interval === 0) {
+                        $this->cleanup_resources();
+                    }
+
+                    yield $row;
+                }
+
+                // Tüm satırlar okunduysa çık
+                if (! $found_rows) {
+                    break;
+                }
+
+                $offset += $chunk_size;
+
+                // Maksimum limit kontrolü
+                if ($offset >= config::max_result_set_size) {
+                    throw new \RuntimeException(
+                        sprintf(
+                            'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
+                            config::max_result_set_size
+                        )
+                    );
+                }
+
+                // Her chunk'tan sonra GC çağır (daha agresif cleanup)
+                $gc_interval_multiplier = \nsql\database\config::get('generator_gc_interval_multiplier', 5);
+                if ($offset % (config::default_chunk_size * $gc_interval_multiplier) === 0) {
+                    gc_collect_cycles();
+                }
             }
-
-            // Tüm satırlar okunduysa çık
-            if (! $found_rows) {
-                break;
+        } finally {
+            // Explicit cleanup: Statement'ı temizle
+            if ($stmt !== null) {
+                $stmt->closeCursor();
+                $stmt = null;
             }
-
-            $offset += $chunk_size;
-
-            // Maksimum limit kontrolü
-            if ($offset >= config::max_result_set_size) {
-                throw new \RuntimeException(
-                    sprintf(
-                        'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                        config::max_result_set_size
-                    )
-                );
-            }
-
-            // Statement'ı temizle
-            $stmt = null;
-
-            // GC çağır
-            if ($offset % (config::default_chunk_size * 10) === 0) {
-                gc_collect_cycles();
-            }
+            
+            // Final GC çağrısı
+            gc_collect_cycles();
         }
     }
 
