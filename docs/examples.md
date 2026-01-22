@@ -894,4 +894,349 @@ $userId = $userService->createUser([
 
 ---
 
+## 🎯 Best Practices Örnekleri
+
+### 1. Prepared Statements Kullanımı
+
+✅ **DOĞRU:**
+```php
+$user = $db->get_row(
+    "SELECT * FROM users WHERE id = ? AND active = ?",
+    [$userId, 1]
+);
+```
+
+❌ **YANLIŞ:**
+```php
+$user = $db->get_row("SELECT * FROM users WHERE id = $userId AND active = 1");
+```
+
+### 2. Transaction Kullanımı
+
+✅ **DOĞRU:**
+```php
+$db->begin();
+try {
+    $userId = $db->insert("INSERT INTO users (name) VALUES (?)", ['John']);
+    $db->insert("INSERT INTO posts (user_id, title) VALUES (?, ?)", [$userId, 'Post']);
+    $db->commit();
+} catch (Exception $e) {
+    $db->rollback();
+    throw $e;
+}
+```
+
+❌ **YANLIŞ:**
+```php
+$userId = $db->insert("INSERT INTO users (name) VALUES (?)", ['John']);
+$db->insert("INSERT INTO posts (user_id, title) VALUES (?, ?)", [$userId, 'Post']);
+// Hata durumunda veri tutarsızlığı oluşabilir
+```
+
+### 3. Büyük Veri Setleri İçin Generator Kullanımı
+
+✅ **DOĞRU:**
+```php
+foreach ($db->get_chunk("SELECT * FROM large_table", [], 1000) as $chunk) {
+    foreach ($chunk as $row) {
+        process_row($row);
+    }
+}
+```
+
+❌ **YANLIŞ:**
+```php
+$all = $db->get_results("SELECT * FROM large_table"); // Tüm veriyi belleğe yükler
+foreach ($all as $row) {
+    process_row($row);
+}
+```
+
+### 4. Batch İşlemler
+
+✅ **DOĞRU:**
+```php
+$users = [
+    ['name' => 'John', 'email' => 'john@example.com'],
+    ['name' => 'Jane', 'email' => 'jane@example.com'],
+    // ... 1000+ kayıt
+];
+$count = $db->batch_insert('users', $users, true); // Transaction ile
+```
+
+❌ **YANLIŞ:**
+```php
+foreach ($users as $user) {
+    $db->insert("INSERT INTO users (name, email) VALUES (?, ?)", [$user['name'], $user['email']]);
+    // Her insert ayrı sorgu, yavaş
+}
+```
+
+### 5. Cache Kullanımı
+
+✅ **DOĞRU:**
+```php
+// Sık kullanılan sorguları cache'le
+$db->enable_query_cache();
+$users = $db->get_results("SELECT * FROM users WHERE active = ?", [1]);
+// İkinci çağrı cache'den gelecek
+```
+
+❌ **YANLIŞ:**
+```php
+// Her seferinde veritabanına sorgu atar
+$users = $db->get_results("SELECT * FROM users WHERE active = ?", [1]);
+$users = $db->get_results("SELECT * FROM users WHERE active = ?", [1]);
+```
+
+## ⚠️ Anti-Pattern Örnekleri
+
+### 1. SQL Injection Riski
+
+❌ **YANLIŞ:**
+```php
+$query = "SELECT * FROM users WHERE name = '{$_GET['name']}'";
+$result = $db->query($query);
+```
+
+✅ **DOĞRU:**
+```php
+$result = $db->get_results("SELECT * FROM users WHERE name = ?", [$_GET['name']]);
+```
+
+### 2. N+1 Query Problemi
+
+❌ **YANLIŞ:**
+```php
+$posts = $db->get_results("SELECT * FROM posts");
+foreach ($posts as $post) {
+    $user = $db->get_row("SELECT * FROM users WHERE id = ?", [$post->user_id]);
+    // Her post için ayrı sorgu
+}
+```
+
+✅ **DOĞRU:**
+```php
+$posts = $db->get_results("
+    SELECT p.*, u.name, u.email 
+    FROM posts p 
+    JOIN users u ON p.user_id = u.id
+");
+```
+
+### 3. Gereksiz Transaction Kullanımı
+
+❌ **YANLIŞ:**
+```php
+$db->begin();
+$user = $db->get_row("SELECT * FROM users WHERE id = ?", [1]);
+$db->commit();
+// SELECT için transaction gereksiz
+```
+
+✅ **DOĞRU:**
+```php
+$user = $db->get_row("SELECT * FROM users WHERE id = ?", [1]);
+```
+
+### 4. Büyük Sonuç Setlerini Belleğe Yükleme
+
+❌ **YANLIŞ:**
+```php
+$all_users = $db->get_results("SELECT * FROM users"); // 1M kayıt
+foreach ($all_users as $user) {
+    // Memory overflow riski
+}
+```
+
+✅ **DOĞRU:**
+```php
+foreach ($db->get_chunk("SELECT * FROM users", [], 1000) as $chunk) {
+    foreach ($chunk as $user) {
+        // Bellek dostu
+    }
+}
+```
+
+### 5. Hata Yönetimi Eksikliği
+
+❌ **YANLIŞ:**
+```php
+$result = $db->insert("INSERT INTO users (name) VALUES (?)", ['John']);
+// Hata kontrolü yok
+```
+
+✅ **DOĞRU:**
+```php
+try {
+    $id = $db->insert("INSERT INTO users (name) VALUES (?)", ['John']);
+    if ($id === false) {
+        throw new Exception("Insert başarısız: " . $db->get_last_error());
+    }
+} catch (QueryException $e) {
+    error_log("Database error: " . $e->getMessage());
+    throw $e;
+}
+```
+
+## 🔧 Gelişmiş Senaryolar
+
+### 1. Pagination ile Büyük Veri Setleri
+
+```php
+function getUsersPaginated(nsql $db, int $page = 1, int $perPage = 50): array
+{
+    $offset = ($page - 1) * $perPage;
+    
+    $users = $db->get_results(
+        "SELECT * FROM users ORDER BY id LIMIT ? OFFSET ?",
+        [$perPage, $offset]
+    );
+    
+    $total = $db->get_row("SELECT COUNT(*) as count FROM users");
+    
+    return [
+        'data' => $users,
+        'pagination' => [
+            'current_page' => $page,
+            'per_page' => $perPage,
+            'total' => $total->count,
+            'total_pages' => ceil($total->count / $perPage)
+        ]
+    ];
+}
+```
+
+### 2. Soft Delete Pattern
+
+```php
+class UserRepository
+{
+    private nsql $db;
+    
+    public function delete(int $id): bool
+    {
+        return $db->update(
+            "UPDATE users SET deleted_at = NOW(), active = 0 WHERE id = ?",
+            [$id]
+        );
+    }
+    
+    public function restore(int $id): bool
+    {
+        return $db->update(
+            "UPDATE users SET deleted_at = NULL, active = 1 WHERE id = ?",
+            [$id]
+        );
+    }
+    
+    public function find(int $id): ?object
+    {
+        return $db->get_row(
+            "SELECT * FROM users WHERE id = ? AND deleted_at IS NULL",
+            [$id]
+        );
+    }
+}
+```
+
+### 3. Event Sourcing Pattern
+
+```php
+class EventStore
+{
+    private nsql $db;
+    
+    public function append(string $aggregateId, string $eventType, array $data): void
+    {
+        $this->db->insert(
+            "INSERT INTO events (aggregate_id, event_type, event_data, occurred_at) 
+             VALUES (?, ?, ?, NOW())",
+            [$aggregateId, $eventType, json_encode($data)]
+        );
+    }
+    
+    public function getEvents(string $aggregateId): array
+    {
+        return $this->db->get_results(
+            "SELECT * FROM events WHERE aggregate_id = ? ORDER BY occurred_at ASC",
+            [$aggregateId]
+        );
+    }
+}
+```
+
+### 4. Repository Pattern
+
+```php
+abstract class BaseRepository
+{
+    protected nsql $db;
+    protected string $table;
+    
+    public function __construct(nsql $db)
+    {
+        $this->db = $db;
+    }
+    
+    public function find(int $id): ?object
+    {
+        return $this->db->get_row(
+            "SELECT * FROM {$this->table} WHERE id = ?",
+            [$id]
+        );
+    }
+    
+    public function findAll(array $conditions = []): array
+    {
+        $builder = $this->db->table($this->table);
+        
+        foreach ($conditions as $column => $value) {
+            $builder->where($column, '=', $value);
+        }
+        
+        return $builder->get();
+    }
+    
+    public function create(array $data): int
+    {
+        $columns = implode(', ', array_keys($data));
+        $placeholders = implode(', ', array_fill(0, count($data), '?'));
+        
+        return $this->db->insert(
+            "INSERT INTO {$this->table} ({$columns}) VALUES ({$placeholders})",
+            array_values($data)
+        );
+    }
+    
+    public function update(int $id, array $data): bool
+    {
+        $set = [];
+        $values = [];
+        
+        foreach ($data as $column => $value) {
+            $set[] = "{$column} = ?";
+            $values[] = $value;
+        }
+        
+        $values[] = $id;
+        
+        return $this->db->update(
+            "UPDATE {$this->table} SET " . implode(', ', $set) . " WHERE id = ?",
+            $values
+        );
+    }
+    
+    public function delete(int $id): bool
+    {
+        return $this->db->delete(
+            "DELETE FROM {$this->table} WHERE id = ?",
+            [$id]
+        );
+    }
+}
+```
+
+---
+
 Bu örnekler nsql kütüphanesinin tüm özelliklerini kapsamlı bir şekilde göstermektedir. Daha fazla bilgi için [API Referansı](api-reference.md) ve [Kullanım Klavuzu](kullanim-klavuzu.md) dokümantasyonlarına bakın.

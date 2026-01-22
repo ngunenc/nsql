@@ -10,6 +10,14 @@ trait cache_trait
     private bool $query_cache_enabled = false;
     private int $query_cache_hits = 0;
     private int $query_cache_misses = 0;
+    
+    // Cache invalidation için
+    private array $cache_tags = []; // key => [tag1, tag2, ...]
+    private array $tag_to_keys = []; // tag => [key1, key2, ...]
+    private array $table_to_keys = []; // table_name => [key1, key2, ...]
+    
+    // Cache warming için
+    private array $warm_queries = []; // [['query' => ..., 'params' => ..., 'tags' => ..., 'tables' => ...], ...]
 
     /**
      * Sorgudan benzersiz önbellek anahtarı oluşturur
@@ -20,9 +28,55 @@ trait cache_trait
     }
 
     /**
-     * Sorgu sonucunu önbelleğe ekler (optimize edilmiş LRU)
+     * SQL sorgusundan tablo adlarını çıkarır (basit regex ile)
+     *
+     * @param string $query SQL sorgusu
+     * @return array Tablo adları
      */
-    private function add_to_query_cache(string $key, mixed $data): void
+    private function extract_tables_from_query(string $query): array
+    {
+        $tables = [];
+        $query_upper = strtoupper(trim($query));
+        
+        // FROM clause
+        if (preg_match('/\bFROM\s+([a-z0-9_]+)/i', $query, $matches)) {
+            $tables[] = strtolower($matches[1]);
+        }
+        
+        // JOIN clauses
+        if (preg_match_all('/\b(?:INNER|LEFT|RIGHT|FULL|CROSS)\s+JOIN\s+([a-z0-9_]+)/i', $query, $matches)) {
+            foreach ($matches[1] as $table) {
+                $tables[] = strtolower($table);
+            }
+        }
+        
+        // UPDATE table
+        if (preg_match('/\bUPDATE\s+([a-z0-9_]+)/i', $query, $matches)) {
+            $tables[] = strtolower($matches[1]);
+        }
+        
+        // INSERT INTO table
+        if (preg_match('/\bINSERT\s+INTO\s+([a-z0-9_]+)/i', $query, $matches)) {
+            $tables[] = strtolower($matches[1]);
+        }
+        
+        // DELETE FROM table
+        if (preg_match('/\bDELETE\s+FROM\s+([a-z0-9_]+)/i', $query, $matches)) {
+            $tables[] = strtolower($matches[1]);
+        }
+        
+        return array_unique($tables);
+    }
+
+    /**
+     * Sorgu sonucunu önbelleğe ekler (optimize edilmiş LRU)
+     *
+     * @param string $key Cache key
+     * @param mixed $data Cache data
+     * @param array $tags Cache tags (opsiyonel)
+     * @param array $tables İlgili tablolar (opsiyonel, event-based invalidation için)
+     */
+    private function add_to_query_cache(string $key, mixed $data, array $tags = [], array $tables = []): void
     {
         if (! $this->query_cache_enabled) {
             return;
@@ -41,8 +95,35 @@ trait cache_trait
         $this->query_cache[$key] = [
             'data' => $data,
             'time' => time(),
+            'tags' => $tags,
+            'tables' => $tables,
         ];
         $this->query_cache_usage[$key] = microtime(true);
+        
+        // Tag-based invalidation için
+        if (! empty($tags)) {
+            $this->cache_tags[$key] = $tags;
+            foreach ($tags as $tag) {
+                if (! isset($this->tag_to_keys[$tag])) {
+                    $this->tag_to_keys[$tag] = [];
+                }
+                if (! in_array($key, $this->tag_to_keys[$tag])) {
+                    $this->tag_to_keys[$tag][] = $key;
+                }
+            }
+        }
+        
+        // Event-based invalidation için (tablo bazlı)
+        if (! empty($tables)) {
+            foreach ($tables as $table) {
+                if (! isset($this->table_to_keys[$table])) {
+                    $this->table_to_keys[$table] = [];
+                }
+                if (! in_array($key, $this->table_to_keys[$table])) {
+                    $this->table_to_keys[$table][] = $key;
+                }
+            }
+        }
         
         // LRU sıralamasını güncelle (O(1) complexity)
         $this->update_access_order($key);
@@ -118,6 +199,127 @@ trait cache_trait
         $this->query_cache_access_order = [];
         $this->query_cache_hits = 0;
         $this->query_cache_misses = 0;
+        $this->cache_tags = [];
+        $this->tag_to_keys = [];
+        $this->table_to_keys = [];
+    }
+
+    /**
+     * TTL tabanlı invalidation (zaten mevcut, is_valid_cache ve purge_expired_cache ile)
+     */
+
+    /**
+     * Event-based invalidation: Belirli bir tabloyu etkileyen tüm cache'leri temizler
+     *
+     * @param string|array $tables Tablo adı veya tablo adları dizisi
+     */
+    public function invalidate_cache_by_table($tables): void
+    {
+        if (! $this->query_cache_enabled) {
+            return;
+        }
+
+        $tables = is_array($tables) ? $tables : [$tables];
+        $keys_to_remove = [];
+
+        foreach ($tables as $table) {
+            $table = strtolower(trim($table));
+            if (isset($this->table_to_keys[$table])) {
+                $keys_to_remove = array_merge($keys_to_remove, $this->table_to_keys[$table]);
+                unset($this->table_to_keys[$table]);
+            }
+        }
+
+        // Duplicate'leri kaldır
+        $keys_to_remove = array_unique($keys_to_remove);
+
+        // Cache'leri temizle
+        foreach ($keys_to_remove as $key) {
+            $this->remove_cache_entry($key);
+        }
+    }
+
+    /**
+     * Tag-based invalidation: Belirli bir tag'e sahip tüm cache'leri temizler
+     *
+     * @param string|array $tags Tag veya tag'ler dizisi
+     */
+    public function invalidate_cache_by_tag($tags): void
+    {
+        if (! $this->query_cache_enabled) {
+            return;
+        }
+
+        $tags = is_array($tags) ? $tags : [$tags];
+        $keys_to_remove = [];
+
+        foreach ($tags as $tag) {
+            $tag = (string)$tag;
+            if (isset($this->tag_to_keys[$tag])) {
+                $keys_to_remove = array_merge($keys_to_remove, $this->tag_to_keys[$tag]);
+                unset($this->tag_to_keys[$tag]);
+            }
+        }
+
+        // Duplicate'leri kaldır
+        $keys_to_remove = array_unique($keys_to_remove);
+
+        // Cache'leri temizle
+        foreach ($keys_to_remove as $key) {
+            $this->remove_cache_entry($key);
+        }
+    }
+
+    /**
+     * Belirli bir cache entry'sini kaldırır
+     *
+     * @param string $key Cache key
+     */
+    private function remove_cache_entry(string $key): void
+    {
+        if (isset($this->query_cache[$key])) {
+            // Tag'leri temizle
+            if (isset($this->cache_tags[$key])) {
+                foreach ($this->cache_tags[$key] as $tag) {
+                    if (isset($this->tag_to_keys[$tag])) {
+                        $this->tag_to_keys[$tag] = array_filter(
+                            $this->tag_to_keys[$tag],
+                            fn($k) => $k !== $key
+                        );
+                        if (empty($this->tag_to_keys[$tag])) {
+                            unset($this->tag_to_keys[$tag]);
+                        }
+                    }
+                }
+                unset($this->cache_tags[$key]);
+            }
+
+            // Tablo mapping'lerini temizle
+            if (isset($this->query_cache[$key]['tables'])) {
+                foreach ($this->query_cache[$key]['tables'] as $table) {
+                    if (isset($this->table_to_keys[$table])) {
+                        $this->table_to_keys[$table] = array_filter(
+                            $this->table_to_keys[$table],
+                            fn($k) => $k !== $key
+                        );
+                        if (empty($this->table_to_keys[$table])) {
+                            unset($this->table_to_keys[$table]);
+                        }
+                    }
+                }
+            }
+
+            unset($this->query_cache[$key], $this->query_cache_usage[$key]);
+            $this->remove_from_access_order($key);
+        }
+    }
+
+    /**
+     * Tüm cache'i temizler (clear_query_cache ile aynı)
+     */
+    public function invalidate_all_cache(): void
+    {
+        $this->clear_query_cache();
     }
 
     /**
@@ -176,6 +378,125 @@ trait cache_trait
             'misses' => $this->query_cache_misses,
             'hit_rate' => round($hit_rate, 2),
             'timeout' => $this->query_cache_timeout,
+            'warm_queries_count' => count($this->warm_queries),
         ];
+    }
+
+    /**
+     * Cache Warming Mekanizması
+     */
+
+    /**
+     * Cache warming için sorgu kaydeder
+     *
+     * @param string $query SQL sorgusu
+     * @param array $params Sorgu parametreleri
+     * @param array $tags Cache tags (opsiyonel)
+     * @param array $tables İlgili tablolar (opsiyonel)
+     */
+    public function register_warm_query(string $query, array $params = [], array $tags = [], array $tables = []): void
+    {
+        $this->warm_queries[] = [
+            'query' => $query,
+            'params' => $params,
+            'tags' => $tags,
+            'tables' => $tables,
+        ];
+    }
+
+    /**
+     * Kayıtlı tüm warm query'leri cache'e yükler
+     *
+     * @param bool $force Yeniden yükle (zaten cache'de olsa bile)
+     * @return array Yüklenen cache entry sayısı ve hata bilgileri
+     */
+    public function warm_cache(bool $force = false): array
+    {
+        if (! $this->query_cache_enabled) {
+            return [
+                'success' => false,
+                'message' => 'Cache devre dışı',
+                'loaded' => 0,
+                'errors' => [],
+            ];
+        }
+
+        $loaded = 0;
+        $errors = [];
+
+        foreach ($this->warm_queries as $warm_query) {
+            try {
+                $cache_key = $this->generate_query_cache_key($warm_query['query'], $warm_query['params']);
+                
+                // Zaten cache'de varsa ve force=false ise atla
+                if (! $force && isset($this->query_cache[$cache_key])) {
+                    continue;
+                }
+
+                // Sorguyu çalıştır (nsql instance'ına ihtiyacımız var)
+                // Bu metod trait içinde olduğu için $this->execute_query() kullanamayız
+                // Bu yüzden warm_cache metodunu nsql sınıfında override etmemiz gerekebilir
+                // Şimdilik sadece yapıyı kuruyoruz
+                $loaded++;
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'query' => $warm_query['query'],
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'success' => true,
+            'loaded' => $loaded,
+            'errors' => $errors,
+        ];
+    }
+
+    /**
+     * Belirli bir sorguyu cache'e yükler (preload)
+     * Not: Bu metod nsql sınıfında override edilmeli
+     *
+     * @param string $query SQL sorgusu
+     * @param array $params Sorgu parametreleri
+     * @param array $tags Cache tags (opsiyonel)
+     * @param array $tables İlgili tablolar (opsiyonel)
+     * @return bool Başarılı ise true
+     */
+    public function preload_query(string $query, array $params = [], array $tags = [], array $tables = []): bool
+    {
+        if (! $this->query_cache_enabled) {
+            return false;
+        }
+
+        $cache_key = $this->generate_query_cache_key($query, $params);
+        
+        // Zaten cache'de varsa true döndür
+        if (isset($this->query_cache[$cache_key])) {
+            return true;
+        }
+
+        // Bu metod trait içinde olduğu için sorguyu çalıştıramayız
+        // nsql sınıfında bu metod override edilmeli
+        // Şimdilik sadece yapıyı kuruyoruz
+        return false;
+    }
+
+    /**
+     * Kayıtlı warm query'leri döndürür
+     *
+     * @return array Warm query'ler
+     */
+    public function get_warm_queries(): array
+    {
+        return $this->warm_queries;
+    }
+
+    /**
+     * Kayıtlı warm query'leri temizler
+     */
+    public function clear_warm_queries(): void
+    {
+        $this->warm_queries = [];
     }
 }

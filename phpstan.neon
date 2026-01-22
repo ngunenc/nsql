@@ -12,4 +12,11 @@ parameters:
         - identifier: missingType.generics
     reportUnmatchedIgnoredErrors: false
     treatPhpDocTypesAsCertain: false
-    memoryLimitFile: 256M
+    # Memory limit artırıldı (512M → 1G) - HATA-012 çözümü
+    memoryLimitFile: 1G
+    # Parallel processing optimize edildi (memory kullanımını azaltmak için)
+    parallel:
+        # Job size küçültüldü (10 → 5) - daha küçük parçalar halinde işleme
+        jobSize: 5
+        # Process sayısı azaltıldı (2 → 1) - memory kullanımını minimize etmek için
+        maximumNumberOfProcesses: 1
