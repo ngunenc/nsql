@@ -96,6 +96,22 @@ class security_manager
     {
         return self::validate_sql_params($params);
     }
+    
+    /**
+     * Input validation için validator kullanır (GELISTIRME-007)
+     */
+    public static function validate_input(mixed $value, array $rules): bool
+    {
+        return \nsql\database\validation\validator::validate($value, $rules);
+    }
+    
+    /**
+     * Birden fazla input'u validate eder
+     */
+    public static function validate_inputs(array $data, array $rules): array
+    {
+        return \nsql\database\validation\validator::validate_many($data, $rules);
+    }
 
     /**
      * Güvenli SQL sorgusu oluşturur (değiştirmez). Tehlikeli kalıpları tespit eder.
@@ -231,13 +247,15 @@ class security_manager
     /**
      * Parametrelerin güvenlik kontrolü (mutasyon yok). Diziler/objeler reddedilir.
      * Strict mode: şüpheli param içerikte istisna; değilse audit log.
+     * GELISTIRME-007: Validator entegrasyonu ile genişletildi
      */
     public static function validate_sql_params(array $params): array
     {
         $validated_params = [];
         foreach ($params as $key => $value) {
-            if (is_array($value) || is_object($value)) {
-                throw new \InvalidArgumentException('Dizi/nesne tipinde parametre kullanılamaz');
+            // Validator kullanarak SQL parametre validation
+            if (!\nsql\database\validation\validator::validate_sql_param($value)) {
+                throw new \InvalidArgumentException("Geçersiz parametre tipi: $key (array/object/resource kullanılamaz)");
             }
 
             if (is_string($value)) {

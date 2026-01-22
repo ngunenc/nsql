@@ -1,0 +1,528 @@
+openapi: 3.0.3
+info:
+  title: nsql Database Library API
+  description: |
+    nsql PHP veritabanı kütüphanesi için OpenAPI dokümantasyonu.
+    
+    Bu dokümantasyon, nsql kütüphanesinin tüm metodlarını ve kullanım örneklerini içerir.
+  version: 1.4.0
+  contact:
+    name: nsql Support
+    url: https://github.com/your-repo/nsql
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: https://api-staging.example.com/v1
+    description: Staging server
+
+tags:
+  - name: Connection
+    description: Veritabanı bağlantı işlemleri
+  - name: Query
+    description: SQL sorgu işlemleri
+  - name: Transaction
+    description: Transaction yönetimi
+  - name: Cache
+    description: Cache işlemleri
+  - name: Security
+    description: Güvenlik işlemleri
+  - name: Migration
+    description: Migration yönetimi
+
+paths:
+  /connection:
+    post:
+      tags:
+        - Connection
+      summary: Veritabanı bağlantısı oluştur
+      description: Yeni bir veritabanı bağlantısı oluşturur
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - host
+                - database
+                - username
+                - password
+              properties:
+                host:
+                  type: string
+                  example: localhost
+                database:
+                  type: string
+                  example: my_database
+                username:
+                  type: string
+                  example: db_user
+                password:
+                  type: string
+                  format: password
+                charset:
+                  type: string
+                  default: utf8mb4
+      responses:
+        '200':
+          description: Bağlantı başarılı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  connection_id:
+                    type: string
+        '400':
+          description: Geçersiz parametreler
+        '500':
+          description: Bağlantı hatası
+
+  /query:
+    post:
+      tags:
+        - Query
+      summary: SQL sorgusu çalıştır
+      description: Prepared statement ile güvenli SQL sorgusu çalıştırır
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+              properties:
+                sql:
+                  type: string
+                  example: SELECT * FROM users WHERE id = ?
+                params:
+                  type: array
+                  items:
+                    type: string
+                  example: ["1"]
+                fetch_mode:
+                  type: string
+                  enum: [FETCH_ASSOC, FETCH_OBJ, FETCH_NUM]
+                  default: FETCH_OBJ
+      responses:
+        '200':
+          description: Sorgu başarılı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  row_count:
+                    type: integer
+        '400':
+          description: Geçersiz sorgu
+        '500':
+          description: Sorgu hatası
+
+  /insert:
+    post:
+      tags:
+        - Query
+      summary: Veri ekle
+      description: Yeni kayıt ekler ve son insert ID'yi döndürür
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+                - params
+              properties:
+                sql:
+                  type: string
+                  example: INSERT INTO users (name, email) VALUES (?, ?)
+                params:
+                  type: array
+                  items:
+                    type: string
+                  example: ["John Doe", "john@example.com"]
+      responses:
+        '200':
+          description: Ekleme başarılı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  insert_id:
+                    type: integer
+        '400':
+          description: Geçersiz parametreler
+        '500':
+          description: Ekleme hatası
+
+  /batch-insert:
+    post:
+      tags:
+        - Query
+      summary: Toplu veri ekle
+      description: Birden fazla kaydı tek seferde ekler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - table
+                - data
+              properties:
+                table:
+                  type: string
+                  example: users
+                data:
+                  type: array
+                  items:
+                    type: object
+                  example:
+                    - name: "John"
+                      email: "john@example.com"
+                    - name: "Jane"
+                      email: "jane@example.com"
+                use_transaction:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Toplu ekleme başarılı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  inserted_count:
+                    type: integer
+        '400':
+          description: Geçersiz veri
+        '500':
+          description: Ekleme hatası
+
+  /update:
+    post:
+      tags:
+        - Query
+      summary: Veri güncelle
+      description: Mevcut kaydı günceller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+                - params
+              properties:
+                sql:
+                  type: string
+                  example: UPDATE users SET name = ? WHERE id = ?
+                params:
+                  type: array
+                  items:
+                    type: string
+                  example: ["John Doe", "1"]
+      responses:
+        '200':
+          description: Güncelleme başarılı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  affected_rows:
+                    type: integer
+        '400':
+          description: Geçersiz parametreler
+        '500':
+          description: Güncelleme hatası
+
+  /delete:
+    post:
+      tags:
+        - Query
+      summary: Veri sil
+      description: Kaydı siler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+                - params
+              properties:
+                sql:
+                  type: string
+                  example: DELETE FROM users WHERE id = ?
+                params:
+                  type: array
+                  items:
+                    type: string
+                  example: ["1"]
+      responses:
+        '200':
+          description: Silme başarılı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  affected_rows:
+                    type: integer
+        '400':
+          description: Geçersiz parametreler
+        '500':
+          description: Silme hatası
+
+  /transaction/begin:
+    post:
+      tags:
+        - Transaction
+      summary: Transaction başlat
+      description: Yeni bir transaction başlatır (nested transaction destekler)
+      responses:
+        '200':
+          description: Transaction başlatıldı
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  transaction_level:
+                    type: integer
+        '500':
+          description: Transaction başlatma hatası
+
+  /transaction/commit:
+    post:
+      tags:
+        - Transaction
+      summary: Transaction commit
+      description: Transaction'ı commit eder
+      responses:
+        '200':
+          description: Transaction commit edildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Aktif transaction yok
+        '500':
+          description: Commit hatası
+
+  /transaction/rollback:
+    post:
+      tags:
+        - Transaction
+      summary: Transaction rollback
+      description: Transaction'ı geri alır
+      responses:
+        '200':
+          description: Transaction rollback edildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+        '400':
+          description: Aktif transaction yok
+        '500':
+          description: Rollback hatası
+
+  /cache/enable:
+    post:
+      tags:
+        - Cache
+      summary: Query cache'i etkinleştir
+      description: Query cache özelliğini etkinleştirir
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                timeout:
+                  type: integer
+                  default: 3600
+                  description: Cache timeout (saniye)
+                size_limit:
+                  type: integer
+                  default: 100
+                  description: Maksimum cache boyutu
+      responses:
+        '200':
+          description: Cache etkinleştirildi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /cache/clear:
+    post:
+      tags:
+        - Cache
+      summary: Cache'i temizle
+      description: Tüm query cache'ini temizler
+      responses:
+        '200':
+          description: Cache temizlendi
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+
+  /cache/stats:
+    get:
+      tags:
+        - Cache
+      summary: Cache istatistikleri
+      description: Query cache istatistiklerini döndürür
+      responses:
+        '200':
+          description: Cache istatistikleri
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  size:
+                    type: integer
+                  hits:
+                    type: integer
+                  misses:
+                    type: integer
+                  hit_rate:
+                    type: number
+                    format: float
+
+  /security/validate-input:
+    post:
+      tags:
+        - Security
+      summary: Input doğrulama
+      description: Kullanıcı girdisini doğrular
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - value
+                - rules
+              properties:
+                value:
+                  type: string
+                  example: "user@example.com"
+                rules:
+                  type: array
+                  items:
+                    type: string
+                  example: ["required", "email"]
+      responses:
+        '200':
+          description: Doğrulama sonucu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  errors:
+                    type: array
+                    items:
+                      type: string
+
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+          description: Hata kodu
+        message:
+          type: string
+          description: Hata mesajı
+        details:
+          type: object
+          description: Ek hata detayları
+
+    ConnectionConfig:
+      type: object
+      required:
+        - host
+        - database
+        - username
+        - password
+      properties:
+        host:
+          type: string
+        database:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        charset:
+          type: string
+          default: utf8mb4
+
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - ApiKey: []

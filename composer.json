@@ -3,7 +3,7 @@
 	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.4",
 	"type": "library",
 	"license": "MIT",
-	"version": "1.4.1",
+	"version": "1.4.3",
 	"authors": [
 		{
 			"name": "nsql contributors"
@@ -42,7 +42,7 @@
 			"@test:cleanup"
 		],
 		"lint": "phpcs --standard=PSR12 src tests",
-		"stan": "phpstan analyse src --level=max --memory-limit=256M",
+		"stan": "phpstan analyse src --level=max --memory-limit=1G",
 		"fix": "php-cs-fixer fix --config=.php-cs-fixer.php"
 	},
 	"config": {

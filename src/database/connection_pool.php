@@ -14,6 +14,14 @@ class connection_pool
     private static bool $initialized = false;
     private static ?int $last_health_check = null;
     private static array $retry_counts = [];
+    
+    // Dinamik tuning için değişkenler
+    private static int $current_min_connections;
+    private static int $current_max_connections;
+    private static int $adaptive_health_check_interval;
+    private static array $load_history = []; // Son 10 dakikalık yük geçmişi
+    private static int $last_load_check = 0;
+    private static float $current_load_factor = 0.0; // 0.0 - 1.0 arası yük faktörü
 
     private static array $stats = [
         'total_connections' => 0,
@@ -27,6 +35,8 @@ class connection_pool
         'peak_connections' => 0,
         'total_queries' => 0,
         'slow_queries' => 0,
+        'pool_adjustments' => 0, // Dinamik ayarlama sayısı
+        'health_check_interval_adjustments' => 0, // Health check interval ayarlama sayısı
     ];
 
     /**
@@ -40,6 +50,12 @@ class connection_pool
 
         self::validate_configuration($config);
         self::$configuration = $config;
+        
+        // Dinamik tuning için başlangıç değerleri
+        self::$current_min_connections = $min_connections;
+        self::$current_max_connections = $max_connections;
+        self::$adaptive_health_check_interval = config::health_check_interval;
+        self::$last_load_check = time();
 
         // Başlangıç bağlantılarını oluştur
         for ($i = 0; $i < $min_connections; $i++) {
@@ -51,19 +67,24 @@ class connection_pool
     }
 
     /**
-     * Sağlık kontrolü yapar (optimize edilmiş)
+     * Sağlık kontrolü yapar (optimize edilmiş, adaptive interval ile)
      */
     private static function perform_health_check(): void
     {
         $now = time();
 
+        // Adaptive health check interval kullan
         if (self::$last_health_check !== null &&
-            ($now - self::$last_health_check) < config::health_check_interval) {
+            ($now - self::$last_health_check) < self::$adaptive_health_check_interval) {
             return;
         }
 
         self::$last_health_check = $now;
         self::$stats['health_checks']++;
+        
+        // Yük faktörünü güncelle ve adaptive interval'ı ayarla
+        self::update_load_factor();
+        self::adjust_health_check_interval();
 
         // Sadece aktif olmayan bağlantıları kontrol et (performans optimizasyonu)
         $connections_to_check = array_diff_key(self::$connections, self::$active_connections);
@@ -73,8 +94,8 @@ class connection_pool
                 self::$stats['failed_health_checks']++;
                 unset(self::$connections[$key], self::$active_connections[$key]);
                 
-                // Sadece minimum bağlantı sayısının altındaysa yeni bağlantı oluştur
-                if (count(self::$connections) < config::min_connections) {
+                // Dinamik minimum bağlantı sayısını kullan
+                if (count(self::$connections) < self::$current_min_connections) {
                     self::create_connection();
                 }
             }
@@ -82,6 +103,9 @@ class connection_pool
 
         // Boşta kalan bağlantıları yönet
         self::manage_idle_connections();
+        
+        // Dinamik pool tuning
+        self::adjust_pool_size();
 
         // Timeout olan bağlantıları temizle (daha az sıklıkta)
         if (rand(1, 100) <= config::cleanup_probability) {
@@ -101,11 +125,134 @@ class connection_pool
                 if (! isset(self::$idle_connections[$key])) {
                     self::$idle_connections[$key] = $now;
                 } elseif (($now - self::$idle_connections[$key]) > config::connection_idle_timeout) {
-                    // Boşta kalma süresi aşıldıysa ve minimum bağlantı sayısının üzerindeyse kapat
-                    if (count(self::$connections) > config::min_connections) {
+                    // Boşta kalma süresi aşıldıysa ve dinamik minimum bağlantı sayısının üzerindeyse kapat
+                    if (count(self::$connections) > self::$current_min_connections) {
                         unset(self::$connections[$key], self::$idle_connections[$key]);
                         self::$stats['idle_connections']--;
                     }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Yük faktörünü günceller (load-based tuning için)
+     */
+    private static function update_load_factor(): void
+    {
+        $now = time();
+        $total_connections = count(self::$connections);
+        $active_connections = count(self::$active_connections);
+        
+        if ($total_connections === 0) {
+            self::$current_load_factor = 0.0;
+            return;
+        }
+        
+        // Aktif bağlantı oranı (0.0 - 1.0)
+        $active_ratio = $active_connections / $total_connections;
+        
+        // Yük geçmişine ekle (son 10 dakika)
+        self::$load_history[] = [
+            'timestamp' => $now,
+            'active_ratio' => $active_ratio,
+            'total_connections' => $total_connections,
+            'active_connections' => $active_connections,
+        ];
+        
+        // 10 dakikadan eski kayıtları temizle
+        self::$load_history = array_filter(
+            self::$load_history,
+            fn($entry) => ($now - $entry['timestamp']) < 600
+        );
+        
+        // Ortalama yük faktörünü hesapla
+        if (!empty(self::$load_history)) {
+            $avg_active_ratio = array_sum(array_column(self::$load_history, 'active_ratio')) / count(self::$load_history);
+            self::$current_load_factor = min(1.0, max(0.0, $avg_active_ratio));
+        } else {
+            self::$current_load_factor = $active_ratio;
+        }
+    }
+    
+    /**
+     * Adaptive health check interval'ı ayarlar (GELISTIRME-002)
+     */
+    private static function adjust_health_check_interval(): void
+    {
+        $base_interval = config::health_check_interval;
+        $min_interval = 30; // Minimum 30 saniye
+        $max_interval = 300; // Maximum 5 dakika
+        
+        // Yük faktörüne göre interval'ı ayarla
+        // Yüksek yük → daha sık kontrol (küçük interval)
+        // Düşük yük → daha seyrek kontrol (büyük interval)
+        if (self::$current_load_factor > 0.8) {
+            // Yüksek yük: interval'ı azalt (daha sık kontrol)
+            $new_interval = max($min_interval, (int)($base_interval * 0.5));
+        } elseif (self::$current_load_factor > 0.5) {
+            // Orta yük: normal interval
+            $new_interval = $base_interval;
+        } else {
+            // Düşük yük: interval'ı artır (daha seyrek kontrol)
+            $new_interval = min($max_interval, (int)($base_interval * 1.5));
+        }
+        
+        // Interval değiştiyse güncelle
+        if ($new_interval !== self::$adaptive_health_check_interval) {
+            self::$adaptive_health_check_interval = $new_interval;
+            self::$stats['health_check_interval_adjustments']++;
+        }
+    }
+    
+    /**
+     * Pool size'ı dinamik olarak ayarlar (GELISTIRME-001)
+     */
+    private static function adjust_pool_size(): void
+    {
+        $total_connections = count(self::$connections);
+        $active_connections = count(self::$active_connections);
+        $base_min = config::min_connections;
+        $base_max = config::max_connections;
+        
+        // Yük faktörüne göre min/max connection'ları ayarla
+        if (self::$current_load_factor > 0.8) {
+            // Yüksek yük: pool size'ı artır
+            $new_min = min($base_max, (int)($base_min * 1.5));
+            $new_max = min($base_max * 2, (int)($base_max * 1.5));
+        } elseif (self::$current_load_factor > 0.5) {
+            // Orta yük: normal pool size
+            $new_min = $base_min;
+            $new_max = $base_max;
+        } else {
+            // Düşük yük: pool size'ı azalt (kaynak tasarrufu)
+            $new_min = max(1, (int)($base_min * 0.75));
+            $new_max = max($new_min + 1, (int)($base_max * 0.75));
+        }
+        
+        // Min/Max değerleri güncelle
+        $min_changed = false;
+        $max_changed = false;
+        
+        if ($new_min !== self::$current_min_connections) {
+            self::$current_min_connections = $new_min;
+            $min_changed = true;
+        }
+        
+        if ($new_max !== self::$current_max_connections) {
+            self::$current_max_connections = $new_max;
+            $max_changed = true;
+        }
+        
+        // Eğer ayarlama yapıldıysa istatistikleri güncelle
+        if ($min_changed || $max_changed) {
+            self::$stats['pool_adjustments']++;
+            
+            // Minimum bağlantı sayısının altındaysa yeni bağlantılar oluştur
+            if ($total_connections < self::$current_min_connections) {
+                $needed = self::$current_min_connections - $total_connections;
+                for ($i = 0; $i < $needed && $total_connections + $i < self::$current_max_connections; $i++) {
+                    self::create_connection();
                 }
             }
         }
@@ -156,8 +303,8 @@ class connection_pool
                 }
             }
 
-            // Yeni bağlantı oluştur
-            if (count(self::$connections) < config::max_connections) {
+            // Yeni bağlantı oluştur (dinamik max_connections kullan)
+            if (count(self::$connections) < self::$current_max_connections) {
                 return self::create_connection();
             }
 
@@ -187,9 +334,9 @@ class connection_pool
             $default_options = [
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
                 \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-                \PDO::ATTR_EMULATE_PREPARES => false,
-                \PDO::ATTR_TIMEOUT => config::get('connection_timeout', 5),
-                \PDO::ATTR_PERSISTENT => config::get('persistent_connection', false),
+                \PDO::ATTR_EMULATE_PREPARES => 0, // PHP 8.4 için int gerekiyor
+                \PDO::ATTR_TIMEOUT => (int)config::get('connection_timeout', 5),
+                \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', false),
             ];
 
             $final_options = $default_options;
@@ -296,10 +443,10 @@ class connection_pool
 
         // Boşta kalan bağlantıları kontrol et
         foreach (self::$idle_connections as $key => $timestamp) {
-            // Boşta kalma süresi kontrolü
+                // Boşta kalma süresi kontrolü
             if (($now - $timestamp) > config::connection_idle_timeout) {
-                // Minimum bağlantı sayısını koru
-                if (count(self::$connections) > config::min_connections) {
+                // Dinamik minimum bağlantı sayısını koru
+                if (count(self::$connections) > self::$current_min_connections) {
                     unset(self::$connections[$key], self::$idle_connections[$key]);
                     self::$stats['idle_connections']--;
                 }
@@ -315,11 +462,11 @@ class connection_pool
             }
         }
 
-        // Yeterli aktif bağlantı yoksa yeni bağlantılar oluştur
+        // Yeterli aktif bağlantı yoksa yeni bağlantılar oluştur (dinamik min_connections kullan)
         $total_connections = count(self::$connections);
-        if ($total_connections < config::min_connections) {
-            $needed = config::min_connections - $total_connections;
-            for ($i = 0; $i < $needed; $i++) {
+        if ($total_connections < self::$current_min_connections) {
+            $needed = self::$current_min_connections - $total_connections;
+            for ($i = 0; $i < $needed && ($total_connections + $i) < self::$current_max_connections; $i++) {
                 self::create_connection();
             }
         }
@@ -355,6 +502,12 @@ class connection_pool
             'idle_connections' => count(self::$connections) - count(self::$active_connections),
             'memory_usage' => memory_get_usage(true),
             'peak_memory' => memory_get_peak_usage(true),
+            // Dinamik tuning istatistikleri
+            'current_min_connections' => self::$current_min_connections ?? config::min_connections,
+            'current_max_connections' => self::$current_max_connections ?? config::max_connections,
+            'adaptive_health_check_interval' => self::$adaptive_health_check_interval ?? config::health_check_interval,
+            'current_load_factor' => self::$current_load_factor,
+            'load_history_size' => count(self::$load_history),
         ]);
     }
 
