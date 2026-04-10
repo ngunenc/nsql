@@ -4,6 +4,11 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.1] - 2026-04-10
+
+### Düzeltmeler
+- **PHP 8.4**: `connection_pool` ve `cache_trait` içinde dosya kilit stream tutamaçları için özellik/metot imzalarından `resource` native tipi kaldırıldı; `@var resource|null`, `@param resource|null`, `@return resource|null` PHPDoc ile belgelendi. `fopen()` dönüşü özelliklere güvenli şekilde atanabiliyor.
+
 ## [1.4.3] - 2026-01-22
 
 ### 📊 Proje Analiz ve Raporlama

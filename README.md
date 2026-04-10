@@ -1,8 +1,10 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.1
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
 > **🚀 v1.5.0 Yeni Özellikler**: Thread-safe connection pool, LFU cache algoritması, per-table TTL, cache warming, identifier quoting, güvenli IP/HTTPS tespiti, gelişmiş exception handling ve memory leak düzeltmeleri!
+>
+> **v1.5.1**: PHP 8.4 uyumluluğu — kilit dosyası stream tutamaçlarında native `resource` tipleri kaldırıldı; PHPDoc ile belgelendi (`connection_pool`, `cache_trait`).
 
 ## 🌟 Özellikler
 
@@ -67,20 +69,20 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.0"
+        "ngunenc/nsql": "^1.5.1"
     }
 }
 ```
 
 Sonra:
 ```bash
-composer require ngunenc/nsql:^1.5.0
+composer require ngunenc/nsql:^1.5.1
 ```
 
 #### Yöntem 2: Tek Komutla
 
 ```bash
-composer require ngunenc/nsql:^1.5.0 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.1 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 > 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
@@ -971,7 +973,7 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 
 ### 🧠 Yeni Özellikler
  
-## ⚡ Benchmark Sonuçları (v1.5.0)
+## ⚡ Benchmark Sonuçları (v1.5.1)
 
 Yerel ortam ölçümleri, `benchmarks/` betikleri ile alınmıştır (MySQL, PHP 8.2, Windows). Değerler yaklaşıktır ve ortalama tek çalıştırma sonuçlarını temsil eder.
 
@@ -1342,6 +1344,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.1 (2026-04-10)
+  - PHP 8.4: connection pool ve cache lock için stream tutamaçlarında tip/PHPDoc düzeltmesi
 
 - v1.5.0 (2025-01-27)
   - Thread-safe connection pool (file-based lock)
