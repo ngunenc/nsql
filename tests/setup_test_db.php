@@ -11,8 +11,9 @@ use nsql\database\config;
 
 // Test ortamını ayarla
 config::set_environment('testing');
+config::set_project_root(dirname(__DIR__));
 
-// Veritabanı bağlantı bilgileri
+// Veritabanı bağlantı bilgileri (.env veya aşağıdaki varsayılanlar)
 $host = config::get('db_host', 'localhost');
 $user = config::get('db_user', 'root');
 $pass = config::get('db_pass', '');

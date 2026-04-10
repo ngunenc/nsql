@@ -28,7 +28,8 @@ Production ortamında nsql kütüphanesini kullanırken dikkat edilmesi gereken 
 ### Environment Variables
 
 ```php
-// .env.production
+// .env.production (anahtarlar büyük harf; isteğe bağlı uygulama kökü)
+// NSQL_PROJECT_ROOT=/var/www/app
 DB_HOST=production-db.example.com
 DB_NAME=production_db
 DB_USER=app_user

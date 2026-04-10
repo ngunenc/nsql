@@ -10,6 +10,7 @@ use nsql\database\config;
 
 // Test ortamını ayarla
 config::set_environment('testing');
+config::set_project_root(dirname(__DIR__));
 
 // Veritabanı bağlantı bilgileri
 $host = config::get('db_host', 'localhost');

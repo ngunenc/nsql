@@ -22,10 +22,12 @@ require_once 'vendor/autoload.php';
 use nsql\database\nsql;
 use nsql\database\config;
 
+config::set_project_root(__DIR__); // bu dosya proje kökündeyse; public/index.php ise dirname(__DIR__)
+
 // Yapılandırma
 config::set_environment('development');
 
-// Veritabanı bağlantısı
+// Veritabanı bağlantısı (.env: DB_HOST, DB_NAME, …)
 $db = new nsql();
 
 // Basit sorgu
