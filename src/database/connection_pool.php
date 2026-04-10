@@ -28,7 +28,8 @@ class connection_pool
     
     // Thread safety için lock mekanizması
     private static ?string $lock_file = null;
-    private static ?resource $lock_handle = null;
+    /** @var resource|null */
+    private static $lock_handle = null;
     private const LOCK_TIMEOUT = 5; // Saniye cinsinden lock timeout (config'den alınabilir ama constant olarak bırakıldı - kritik güvenlik değeri)
 
     private static array $stats = [
@@ -113,10 +114,11 @@ class connection_pool
         
         // Lock handle'ı aç
         if (self::$lock_handle === null) {
-            self::$lock_handle = fopen(self::$lock_file, 'r+');
-            if (self::$lock_handle === false) {
+            $handle = fopen(self::$lock_file, 'r+');
+            if ($handle === false) {
                 return false;
             }
+            self::$lock_handle = $handle;
         }
         
         $start_time = time();
