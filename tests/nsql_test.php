@@ -14,10 +14,11 @@ class nsql_test extends TestCase
     {
         // Test ortamını ayarla
         \nsql\database\config::set_environment('testing');
+        \nsql\database\config::set_project_root(dirname(__DIR__));
 
         $this->db = new nsql(
             host: \nsql\database\config::get('db_host', 'localhost'),
-            db: \nsql\database\config::get('db_name', 'etiyop'),
+            db: \nsql\database\config::get('db_name', 'nsql_test_db'),
             user: \nsql\database\config::get('db_user', 'root'),
             pass: \nsql\database\config::get('db_pass', '')
         );

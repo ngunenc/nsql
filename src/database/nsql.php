@@ -153,7 +153,7 @@ class nsql extends PDO
 
         // Config sınıfından değerleri al
         $host = $host ?? config::get('db_host', 'localhost');
-        $db = $db ?? config::get('db_name', 'etiyop');
+        $db = $db ?? config::get('db_name', 'nsql');
         $user = $user ?? config::get('db_user', 'root');
         $pass = $pass ?? config::get('db_pass', '');
         $charset = $charset ?? config::get('db_charset', $this->get_default_charset($driver_name));

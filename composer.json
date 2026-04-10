@@ -1,7 +1,7 @@
 {
 	"name": "nsql/nsql",
-	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.5.1",
-	"version": "1.5.1",
+	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.5.2",
+	"version": "1.5.2",
 	"type": "library",
 	"license": "MIT",
 	"authors": [

@@ -46,13 +46,16 @@ Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıd
 
 ```php
 // Örnek kullanım
+config::set_project_root(__DIR__); // uygulama kökü — .env burada aranır (önerilir)
 config::set_environment('development');
-$db_host = config::get('db_host');
+$db_host = config::get('db_host'); // .env içindeki DB_HOST
 
-// Önerilen Pratikler:
-// - Environment bazlı config yönetimi
-// - Hassas bilgilerin .env dosyasında tutulması
-// - config değerlerinin tip güvenliği
+// Proje kökü tespiti (set_project_root yoksa):
+// NSQL_PROJECT_ROOT ortam değişkeni → getcwd()/.env → vendor üst dizinlerde .env → paket kökü
+
+// Önerilen pratikler:
+// - Hassas bilgiler yalnızca .env veya ortam değişkeninde
+// - Vendor ile kurulumda mutlaka set_project_root veya NSQL_PROJECT_ROOT kullanın
 ```
 
 **Optimizasyon İpuçları:**

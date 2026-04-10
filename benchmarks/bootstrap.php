@@ -7,6 +7,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use nsql\database\config;
 use nsql\database\nsql;
 
+config::set_project_root(dirname(__DIR__));
+
 /**
  * Ortak bağlantıları hazırlar ve yardımcı fonksiyonlar sağlar
  */
@@ -16,7 +18,7 @@ config::set_environment(getenv('ENV') ?: 'development');
 
 // Bağlantı bilgileri (.env veya varsayılanlar)
 $db_host = config::get('db_host', 'localhost');
-$db_name = config::get('db_name', 'etiyop');
+$db_name = config::get('db_name', 'nsql');
 $db_user = config::get('db_user', 'root');
 $db_pass = config::get('db_pass', '');
 $db_charset = config::get('db_charset', 'utf8mb4');
