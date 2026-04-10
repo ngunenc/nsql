@@ -254,8 +254,10 @@ trait cache_trait
     
     /**
      * Cache lock alır
+     *
+     * @return resource|null
      */
-    private static function acquire_cache_lock(): ?resource
+    private static function acquire_cache_lock()
     {
         self::initialize_cache_lock();
         
@@ -281,8 +283,10 @@ trait cache_trait
     
     /**
      * Cache lock'u serbest bırakır
+     *
+     * @param resource|null $handle
      */
-    private static function release_cache_lock(?resource $handle): void
+    private static function release_cache_lock($handle): void
     {
         if ($handle !== null) {
             flock($handle, LOCK_UN);
