@@ -8,6 +8,8 @@ Bu dosya, nsql performansını temel senaryolarda ölçmek ve PDO ile karşıla�
 composer install
 ```
 
+Proje kökünde `.env` tanımlayın (`DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, …). Benchmark betikleri `benchmarks/bootstrap.php` içinde `config::set_project_root` kullanır.
+
 Veritabanında `users` tablosu ve yeterli örnek kayıtların olduğundan emin olun.
 
 ## Çalıştırma

@@ -1,7 +1,7 @@
 # 📋 nsql Proje Analiz Raporu
 
 **Tarih:** 2025-01-27  
-**Versiyon:** 1.5.1  
+**Versiyon:** 1.5.2  
 **Analiz Kapsamı:** Güvenlik, Performans, Kod Kalitesi, Eksiklikler
 
 ---
