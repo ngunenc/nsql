@@ -1,4 +1,4 @@
-# 📚 nsql API Referansı v1.4
+# 📚 nsql API Referansı v1.5
 
 ## 📑 İçindekiler
 
@@ -23,7 +23,10 @@ Yapılandırma yönetimi için merkezi sınıf.
 // Ortam ayarlama
 config::set_environment(string $env): void
 
-// Değer alma
+// .env dosyasının okunacağı uygulama kökü (autoload sonrası, ilk config::get öncesi)
+config::set_project_root(?string $path): void
+
+// Değer alma (.env ve ortam değişkeni anahtarları büyük harf: DB_HOST vb.)
 config::get(string $key, mixed $default = null): mixed
 
 // Değer ayarlama
@@ -35,28 +38,16 @@ config::has(string $key): bool
 // Tüm yapılandırma
 config::all(): array
 
-// Proje kök dizini
+// Proje kök dizini (bootstrap sonrası)
 config::get_project_root(): string
+
+// .env önbelleğini sıfırlayıp yeniden yükler
+config::refresh(): void
 ```
 
-#### Sabitler
+#### Not — Veritabanı ve yapılandırma anahtarları
 
-```php
-// Veritabanı ayarları
-config::db_host = 'localhost'
-config::db_name = 'database_name'
-config::db_user = 'username'
-config::db_pass = 'password'
-
-// Güvenlik ayarları
-config::SECURITY_STRICT_MODE = false
-config::ENCRYPTION_KEY = 'your_encryption_key'
-
-// Performans ayarları
-config::STATEMENT_CACHE_LIMIT = 100
-config::QUERY_CACHE_LIMIT = 1000
-config::default_chunk_size = 1000
-```
+Veritabanı bilgileri `.env` içinde `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_CHARSET`, `DB_PORT`, `DB_DRIVER` olarak tanımlanır. Kodda `config::get('db_host')` kullanılır (içeride `DB_HOST` okunur). Sayısal ve boolean sabitler `config` sınıfının `public const` alanlarında tanımlıdır (ör. `config::default_chunk_size`).
 
 ### nsql Sınıfı
 
@@ -71,7 +62,8 @@ new nsql(
     ?string $user = null,
     ?string $pass = null,
     ?string $charset = null,
-    ?bool $debug = null
+    ?bool $debug = null,
+    ?string $driver = null
 )
 ```
 
@@ -507,35 +499,28 @@ $manager->seed();
 
 ### .env Dosyası
 
+Anahtarlar **büyük harf** yazılmalıdır. Tam liste için depodaki `.env.example` dosyasına bakın.
+
 ```ini
-# Ortam
 ENV=production
 
-# Veritabanı
-db_host=localhost
-db_name=my_database
-db_user=username
-db_pass=password
+NSQL_PROJECT_ROOT=/var/www/myapp
 
-# Debug
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=my_database
+DB_USER=username
+DB_PASS=secret
+DB_CHARSET=utf8mb4
+DB_DRIVER=mysql
+
 DEBUG_MODE=false
-
-# Güvenlik
 SECURITY_STRICT_MODE=true
 ENCRYPTION_KEY=your_secret_key_here
 
-# Performans
 STATEMENT_CACHE_LIMIT=100
-QUERY_CACHE_LIMIT=1000
-default_chunk_size=1000
+QUERY_CACHE_SIZE_LIMIT=1000
 
-# Rate Limiting
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_MAX_REQUESTS=100
-RATE_LIMIT_WINDOW=60
-
-# Log
-LOG_DIR=storage/logs
 LOG_FILE=app.log
 ```
 

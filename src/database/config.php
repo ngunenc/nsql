@@ -7,6 +7,7 @@ namespace nsql\database;
  *
  * Basit bir yapılandırma yöneticisi.
  * - .env dosyasını otomatik yükler (harici paket gerekmez)
+ * - Proje kökü: NSQL_PROJECT_ROOT, ardından getcwd()/.env, sonra config.php üzerinden yukarı yürüyerek .env aranır
  * - Ortam (environment) yönetimi: production/development/testing
  * - Tip güvenli get/set (bool/int/float otomatik dönüştürme)
  * - Varsayılanlar ve önbellekleme
@@ -18,6 +19,8 @@ class config
     private static bool $env_loaded = false;
     private static string $environment = 'production';
     private static ?string $project_root = null;
+    /** @var string|null Uygulama kökü (set_project_root veya tespit) */
+    private static ?string $project_root_override = null;
 
     // Sık kullanılan varsayılan sabitler
     public const default_chunk_size = 1000;
@@ -133,6 +136,25 @@ class config
         return self::$project_root ?? (getcwd() ?: __DIR__);
     }
 
+    /**
+     * .env ve göreli yollar için proje kök dizinini sabitler (ör. index.php içinde `__DIR__`).
+     * Çağrılmazsa NSQL_PROJECT_ROOT, getcwd() veya vendor üstünde .env aranır.
+     */
+    public static function set_project_root(?string $path): void
+    {
+        self::$env_loaded = false;
+        self::$config = [];
+        self::$project_root = null;
+        if ($path === null || trim($path) === '') {
+            self::$project_root_override = null;
+
+            return;
+        }
+        $trimmed = rtrim(trim($path), '/\\');
+        $real = realpath($trimmed);
+        self::$project_root_override = $real !== false ? $real : $trimmed;
+    }
+
     /** Yüklenen .env ve config önbelleğini sıfırlar */
     public static function refresh(): void
     {
@@ -157,13 +179,55 @@ class config
         self::$env_loaded = true;
     }
 
-    /** Proje kök dizinini kaba tahmin ile bulur */
+    /** Proje kök dizinini bulur (.env dosyasının aranacağı dizin) */
     private static function detect_project_root(): string
     {
-        // src/database/config.php -> projeKökü = 2 seviye yukarı
+        if (self::$project_root_override !== null) {
+            return self::$project_root_override;
+        }
+
+        $fromEnv = getenv('NSQL_PROJECT_ROOT');
+        if (is_string($fromEnv) && trim($fromEnv) !== '') {
+            $base = rtrim(trim($fromEnv), '/\\');
+            if (is_dir($base)) {
+                return $base;
+            }
+        }
+
+        $cwd = getcwd();
+        if ($cwd !== false && is_file($cwd . DIRECTORY_SEPARATOR . '.env')) {
+            return $cwd;
+        }
+
+        $dir = __DIR__;
+        for ($i = 0; $i < 14; $i++) {
+            if (is_file($dir . DIRECTORY_SEPARATOR . '.env')) {
+                return $dir;
+            }
+            $parent = dirname($dir);
+            if ($parent === $dir) {
+                break;
+            }
+            $dir = $parent;
+        }
+
+        if ($cwd !== false) {
+            $dir = $cwd;
+            for ($i = 0; $i < 14; $i++) {
+                if (is_file($dir . DIRECTORY_SEPARATOR . '.env')) {
+                    return $dir;
+                }
+                $parent = dirname($dir);
+                if ($parent === $dir) {
+                    break;
+                }
+                $dir = $parent;
+            }
+        }
+
         $root = dirname(__DIR__, 2);
 
-        return $root !== '' ? $root : (getcwd() ?: __DIR__);
+        return $root !== '' ? $root : (getcwd() !== false ? $cwd : __DIR__);
     }
 
     /** .env dosyasını okuyup self::$config içine yükler (stream-based okuma ile optimize edilmiş) */

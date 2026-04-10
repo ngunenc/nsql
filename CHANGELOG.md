@@ -4,6 +4,13 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.2] - 2026-04-10
+
+### İyileştirmeler
+- **Yapılandırma**: Veritabanı bilgileri için `.env` tespiti güçlendirildi (`NSQL_PROJECT_ROOT`, `getcwd()`, paket yolundan yukarı arama). `config::set_project_root(?string)` eklendi.
+- **nsql**: Varsayılan veritabanı adı `config` ile hizalandı; örnek ve testlerde `set_project_root` kullanımı.
+- **Dokümantasyon**: `docs/kullanim-klavuzu.md`, `api-reference.md`, `teknik-detay.md`, `examples.md`, `production-scenarios.md`, `benchmarks.md` ve `.env.example` güncellendi.
+
 ## [1.5.1] - 2026-04-10
 
 ### Düzeltmeler

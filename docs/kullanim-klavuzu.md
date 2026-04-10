@@ -27,33 +27,47 @@ composer require ngunenc/nsql
 
 ### Yapılandırma
 
-1. `.env` dosyasını oluşturun (`.env.example` dosyasından kopyalayabilirsiniz):
+1. Proje kökünde `.env` oluşturun (`.env.example` dosyasından kopyalayın). Anahtarlar **büyük harf** olmalıdır; `config::get('db_host')` gibi çağrılar içeride `DB_HOST` ile eşleşir.
+
+2. **Kütüphane `vendor` ile kuruluysa** `.env` genelde uygulama kökündedir. nsql şu sırayla kök dizini arar:
+   - Ortam değişkeni `NSQL_PROJECT_ROOT`
+   - `getcwd()` altında `.env` varsa o dizin
+   - `config.php` konumundan yukarı doğru `.env` aranması
+   - Son çare: paket kökü
+
+3. Önerilen: giriş dosyanızda (ör. `public/index.php`) autoload sonrası:
+
+```php
+\nsql\database\config::set_project_root(__DIR__); // veya proje kökü
+```
+
+Örnek `.env` içeriği:
 
 ```ini
-# Veritabanı Ayarları
-db_host=localhost
-db_name=veritabani_adi
-db_user=kullanici_adi
-db_pass=sifre
-DB_CHARSET=utf8mb4
+# İsteğe bağlı: .env'in bulunduğu uygulama kökü
+# NSQL_PROJECT_ROOT=C:\path\to\app
 
-# Cache Ayarları
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=veritabani_adi
+DB_USER=kullanici_adi
+DB_PASS=sifre
+DB_CHARSET=utf8mb4
+DB_DRIVER=mysql
+
 QUERY_CACHE_ENABLED=true
 QUERY_CACHE_TIMEOUT=300
 QUERY_CACHE_SIZE_LIMIT=1000
 STATEMENT_CACHE_LIMIT=100
 
-# Connection Pool Ayarları  
 DB_MIN_CONNECTIONS=5
 DB_MAX_CONNECTIONS=20
-DB_CONNECTION_TIMEOUT=15
 
-# Debug Modu
-DEBUG_MODE=false 
-
-# Log Ayarları
+DEBUG_MODE=false
 LOG_FILE=error_log.txt
 ```
+
+`new nsql()` çağrıldığında host, veritabanı adı, kullanıcı ve şifre **önce `.env` / ortam değişkeninden**, yoksa `config` varsayılanlarından okunur.
 
 ## 🚀 Temel Kullanım
 
@@ -61,6 +75,9 @@ LOG_FILE=error_log.txt
 
 ```php
 use nsql\database\nsql;
+use nsql\database\config;
+
+config::set_project_root(__DIR__); // önerilir (özellikle vendor kurulumunda)
 
 // .env dosyasından yapılandırma ile
 $db = new nsql();

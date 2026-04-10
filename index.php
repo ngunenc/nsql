@@ -5,9 +5,11 @@ require_once __DIR__ . '/vendor/autoload.php';
 use nsql\database\config;
 use nsql\database\nsql;
 
+config::set_project_root(__DIR__);
+
 try {
 
-    // Config tabanlı güvenli bağlantı (credentials config üzerinden)
+    // Bağlantı: .env (DB_HOST, DB_NAME, DB_USER, DB_PASS, …) veya constructor argümanları
     $db = new nsql();
 
     // SELECT tek satır örneği
