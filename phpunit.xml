@@ -14,7 +14,11 @@
          failOnWarning="true">
     <testsuites>
         <testsuite name="nsql">
-            <directory>tests</directory>
+            <directory suffix="_test.php">tests</directory>
+            <directory suffix="Test.php">tests</directory>
+            <exclude>tests/setup_test_db.php</exclude>
+            <exclude>tests/cleanup_test_db.php</exclude>
+            <exclude>tests/debug_test_db.php</exclude>
         </testsuite>
     </testsuites>
     <php>
@@ -25,5 +29,7 @@
         <env name="DB_PASS" value=""/>
         <env name="DEBUG_MODE" value="false"/>
         <env name="SECURITY_STRICT_MODE" value="false"/>
+        <env name="ENCRYPTION_KEY" value="30izYzQNSqD7VM5E9a0/KtxvPiXgKH5ldyBMBanAc8o="/>
+        <env name="NSQL_MONITORING_TOKEN" value="test-monitoring-token"/>
     </php>
 </phpunit>

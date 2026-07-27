@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.4
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.5
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -11,6 +11,8 @@
 > **v1.5.3**: Güvenlik — `storage/keys/encryption.key` git'ten kaldırıldı; anahtar üretim / rotation dokümante edildi. Eski commit'li anahtar compromised kabul edilmeli.
 >
 > **v1.5.4**: Yapı — `.gitignore` güçlendirildi (keys, logs, coverage, tool caches); tracked `.php-cs-fixer.cache` kaldırıldı.
+>
+> **v1.5.5**: Çift PDO bağlantısı düzeltildi (composition + pool); health/metrics monitoring token zorunlu (#3, #4).
 
 ## 🌟 Özellikler
 
@@ -75,20 +77,20 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.4"
+        "ngunenc/nsql": "^1.5.5"
     }
 }
 ```
 
 Sonra:
 ```bash
-composer require ngunenc/nsql:^1.5.4
+composer require ngunenc/nsql:^1.5.5
 ```
 
 #### Yöntem 2: Tek Komutla
 
 ```bash
-composer require ngunenc/nsql:^1.5.4 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.5 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 > 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
@@ -607,6 +609,22 @@ $plain = $enc->decrypt($crypted);
 // Anahtar rotation (eski verileri önce çözüp yeniden şifreleyin)
 // $info = key_manager::rotate_key();
 ```
+
+#### Monitoring (health / metrics)
+
+`public/health.php` ve `public/metrics.php` **token zorunludur**:
+
+```env
+NSQL_MONITORING_TOKEN=uzun-rastgele-secret
+# NSQL_MONITORING_ENABLED=false  # endpoint'leri kapatır
+```
+
+```bash
+curl -H "Authorization: Bearer $NSQL_MONITORING_TOKEN" http://localhost/health.php
+# veya: X-NSQL-Monitoring-Token / ?token=
+```
+
+> v1.5.5+: `nsql` artık `PDO`'yu extend etmez. Ham PDO için `$db->get_pdo()` kullanın.
 
 #### Cache Kullanımı
 
@@ -1359,6 +1377,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.5 (2026-07-28)
+  - Çift PDO bağlantısı giderildi (`nsql` composition); health/metrics için monitoring token (#3, #4)
 
 - v1.5.4 (2026-07-28)
   - Yapı: `.gitignore` güçlendirildi; `.php-cs-fixer.cache` tracking'den çıkarıldı

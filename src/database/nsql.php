@@ -25,7 +25,13 @@ use PDOStatement;
 use RuntimeException;
 use Throwable;
 
-class nsql extends PDO
+/**
+ * PDO tabanlı veritabanı sarmalayıcı.
+ *
+ * Composition kullanır: fiziksel bağlantı yalnızca connection_pool üzerinden gelir.
+ * `nsql` artık PDO'yu extend etmez (v1.5.5+); ham PDO için get_pdo() kullanın.
+ */
+class nsql
 {
     use query_parameter_trait;
     use cache_trait;
@@ -195,13 +201,19 @@ class nsql extends PDO
         $this->log_file = (string)config::get('log_file', 'error_log.txt');
         $this->statement_cache_limit = (int)config::get('statement_cache_limit', 100);
 
-        // Parent PDO constructor'ı çağır
-        parent::__construct($this->dsn, $this->user, $this->pass, $this->options);
-
+        // Tek bağlantı: yalnızca pool (parent PDO açılmaz — çift bağlantı önlenir)
         self::initialize_static_vars();
         $this->initialize_pool();
         $this->initialize_connection();
         $this->load_cache_config();
+    }
+
+    /**
+     * Pool'dan alınan ham PDO bağlantısını döndürür.
+     */
+    public function get_pdo(): ?PDO
+    {
+        return $this->pdo;
     }
 
     /**
