@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.3
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.4
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -9,6 +9,8 @@
 > **v1.5.2**: `.env` ile veritabanı yapılandırması — proje kökü tespiti (`NSQL_PROJECT_ROOT`, `config::set_project_root`), dokümantasyon ve örnekler güncellendi.
 >
 > **v1.5.3**: Güvenlik — `storage/keys/encryption.key` git'ten kaldırıldı; anahtar üretim / rotation dokümante edildi. Eski commit'li anahtar compromised kabul edilmeli.
+>
+> **v1.5.4**: Yapı — `.gitignore` güçlendirildi (keys, logs, coverage, tool caches); tracked `.php-cs-fixer.cache` kaldırıldı.
 
 ## 🌟 Özellikler
 
@@ -73,20 +75,20 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.3"
+        "ngunenc/nsql": "^1.5.4"
     }
 }
 ```
 
 Sonra:
 ```bash
-composer require ngunenc/nsql:^1.5.3
+composer require ngunenc/nsql:^1.5.4
 ```
 
 #### Yöntem 2: Tek Komutla
 
 ```bash
-composer require ngunenc/nsql:^1.5.3 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.4 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 > 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
@@ -1357,6 +1359,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.4 (2026-07-28)
+  - Yapı: `.gitignore` güçlendirildi; `.php-cs-fixer.cache` tracking'den çıkarıldı
 
 - v1.5.3 (2026-07-28)
   - Güvenlik: `encryption.key` git'ten kaldırıldı; `.gitignore` ve anahtar üretim dokümantasyonu

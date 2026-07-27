@@ -1,13 +1,35 @@
+# Environment
 .env
-error_log.txt
+.env.local
+.env.*.local
+
+# Dependencies
 vendor/
+
+# IDE / editor
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+
+# Project / tools
 backup/
 .cursorrules
+error_log.txt
+
+# PHPUnit / coverage
 .phpunit.cache/
-.php-cs-fixer.cache
+.phpunit.result.cache
 coverage/
+.phpunit.coverage/
+clover.xml
+*.cov
+
+# PHP CS Fixer / static analysis caches
+.php-cs-fixer.cache
+.phpstan.cache
+.phpstan.result.cache
 
 # Encryption keys — asla commit edilmemeli
 *.key
@@ -19,4 +41,6 @@ storage/keys/archive/
 # Logs
 storage/logs/*
 !storage/logs/.gitkeep
+src/storage/logs/*
+!src/storage/logs/.gitkeep
 *.log
