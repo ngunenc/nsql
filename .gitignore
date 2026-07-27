@@ -6,3 +6,17 @@ vendor/
 backup/
 .cursorrules
 .phpunit.cache/
+.php-cs-fixer.cache
+coverage/
+
+# Encryption keys — asla commit edilmemeli
+*.key
+storage/keys/*
+!storage/keys/.gitkeep
+!storage/keys/README.md
+storage/keys/archive/
+
+# Logs
+storage/logs/*
+!storage/logs/.gitkeep
+*.log

@@ -4,6 +4,14 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.3] - 2026-07-28
+
+### Güvenlik
+- **Encryption key**: `storage/keys/encryption.key` artık git'te takip edilmiyor; `.gitignore` `*.key` ve `storage/keys/*` engelliyor.
+- **Rotate**: Daha önce repoya commit edilmiş anahtar **compromised** kabul edilmelidir. Production'da yeni `ENCRYPTION_KEY` kullanın; eski anahtarla şifrelenmiş verileri rotate edin.
+- **Dokümantasyon**: `storage/keys/README.md`, `.env.example` ve README'de anahtar üretim / rotation adımları eklendi.
+- **Not**: Git geçmişinden kalıcı silme (`filter-repo` / BFG) force-push gerektirir; main'e merge sonrası ayrı koordine edilmelidir (#2).
+
 ## [1.5.2] - 2026-04-10
 
 ### İyileştirmeler

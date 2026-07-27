@@ -517,6 +517,8 @@ DB_DRIVER=mysql
 DEBUG_MODE=false
 SECURITY_STRICT_MODE=true
 ENCRYPTION_KEY=your_secret_key_here
+# Production: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
+# storage/keys/encryption.key asla commit edilmemeli (bkz. storage/keys/README.md)
 
 STATEMENT_CACHE_LIMIT=100
 QUERY_CACHE_SIZE_LIMIT=1000

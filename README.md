@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.2
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.3
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -7,6 +7,8 @@
 > **v1.5.1**: PHP 8.4 uyumluluğu — kilit dosyası stream tutamaçlarında native `resource` tipleri kaldırıldı; PHPDoc ile belgelendi (`connection_pool`, `cache_trait`).
 >
 > **v1.5.2**: `.env` ile veritabanı yapılandırması — proje kökü tespiti (`NSQL_PROJECT_ROOT`, `config::set_project_root`), dokümantasyon ve örnekler güncellendi.
+>
+> **v1.5.3**: Güvenlik — `storage/keys/encryption.key` git'ten kaldırıldı; anahtar üretim / rotation dokümante edildi. Eski commit'li anahtar compromised kabul edilmeli.
 
 ## 🌟 Özellikler
 
@@ -71,20 +73,20 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.2"
+        "ngunenc/nsql": "^1.5.3"
     }
 }
 ```
 
 Sonra:
 ```bash
-composer require ngunenc/nsql:^1.5.2
+composer require ngunenc/nsql:^1.5.3
 ```
 
 #### Yöntem 2: Tek Komutla
 
 ```bash
-composer require ngunenc/nsql:^1.5.2 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.3 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 > 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
@@ -414,8 +416,12 @@ STATEMENT_CACHE_LIMIT=100
 
 # Güvenlik ayarları
 RATE_LIMIT_ENABLED=true
-ENCRYPTION_KEY=your-secure-key
+# Production'da zorunlu önerilir (git'e eklemeyin):
+# php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
+ENCRYPTION_KEY=your-secure-base64-key
 ```
+
+> **Güvenlik (v1.5.3+)**: `storage/keys/encryption.key` asla commit edilmemelidir. Anahtar yoksa kütüphane otomatik üretir; production'da `ENCRYPTION_KEY` kullanın. Detay: [`storage/keys/README.md`](storage/keys/README.md).
 
 ## 📖 Kullanım
 
@@ -589,10 +595,15 @@ if (!$limiter->check('user_ip')) {
 }
 
 use nsql\database\security\encryption;
+use nsql\database\security\key_manager;
 
+// Anahtar: ENCRYPTION_KEY env veya storage/keys/encryption.key
 $enc = new encryption();
 $crypted = $enc->encrypt('gizli veri');
 $plain = $enc->decrypt($crypted);
+
+// Anahtar rotation (eski verileri önce çözüp yeniden şifreleyin)
+// $info = key_manager::rotate_key();
 ```
 
 #### Cache Kullanımı
@@ -1346,6 +1357,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.3 (2026-07-28)
+  - Güvenlik: `encryption.key` git'ten kaldırıldı; `.gitignore` ve anahtar üretim dokümantasyonu
 
 - v1.5.2 (2026-04-10)
   - `.env` / proje kökü: `set_project_root`, `NSQL_PROJECT_ROOT`, doküman güncellemeleri
