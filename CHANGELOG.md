@@ -4,6 +4,16 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.5] - 2026-07-28
+
+### Düzeltmeler
+- **Çift PDO bağlantısı (#3)**: `nsql` artık `PDO`'yu extend etmez; `parent::__construct` kaldırıldı. Fiziksel bağlantı yalnızca `connection_pool` üzerinden alınır. Ham PDO için `get_pdo()` kullanın. **BC**: `nsql instanceof PDO` artık `false`.
+- **Monitoring güvenlik (#4)**: `public/health.php` ve `public/metrics.php` için `NSQL_MONITORING_TOKEN` zorunlu; Bearer / `X-NSQL-Monitoring-Token` / `?token=` desteklenir. Exception mesajları istemciye sızdırılmaz (`endpoint_guard`).
+
+### Yapı
+- `nsql\database\monitoring\endpoint_guard` eklendi
+- `.env.example` ve Docker nginx notları güncellendi
+
 ## [1.5.4] - 2026-07-28
 
 ### Yapı

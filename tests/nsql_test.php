@@ -64,6 +64,21 @@ class nsql_test extends TestCase
         $this->assertInstanceOf(nsql::class, $this->db);
     }
 
+    /**
+     * v1.5.5: nsql PDO'yu extend etmez; tek fiziksel bağlantı pool üzerinden gelir.
+     */
+    public function testUsesCompositionNotExtendingPdo(): void
+    {
+        $this->assertNotInstanceOf(\PDO::class, $this->db);
+        $pdo = $this->db->get_pdo();
+        $this->assertInstanceOf(\PDO::class, $pdo);
+        $this->assertSame($pdo, $this->db->get_pdo());
+
+        $stats = nsql::get_pool_stats();
+        $this->assertGreaterThanOrEqual(1, $stats['total_connections']);
+        $this->assertGreaterThanOrEqual(1, $stats['active_connections'] + $stats['idle_connections']);
+    }
+
     public function testQueryCache()
     {
         $result1 = $this->db->get_results("SELECT * FROM test_table");
@@ -162,10 +177,10 @@ class nsql_test extends TestCase
             ->limit(10)
             ->get_query();
             
-        $this->assertStringContainsString('SELECT * FROM test_table', $query);
-        $this->assertStringContainsString('WHERE name =', $query);
-        $this->assertStringContainsString('ORDER BY id DESC', $query);
-        $this->assertStringContainsString('LIMIT 10', $query);
+        $this->assertStringContainsString('SELECT * FROM `test_table`', $query);
+        $this->assertStringContainsString('WHERE `name` =', $query);
+        $this->assertStringContainsString('ORDER BY `id` DESC', $query);
+        $this->assertStringContainsString('LIMIT', $query);
     }
 
     public function testErrorHandling()
@@ -929,11 +944,13 @@ class nsql_test extends TestCase
         
         $this->assertIsArray($result);
         
-        // Hatalı işlem
+        // Hatalı işlem — production'da false yerine wrapped RuntimeException döner
         $result = $this->db->safe_execute(function() {
             return $this->db->query("INVALID SQL");
         }, 'Custom error message');
-        
-        $this->assertFalse($result);
+
+        $this->assertInstanceOf(\RuntimeException::class, $result);
+        $this->assertSame('Custom error message', $result->getMessage());
+        $this->assertNotNull($result->getPrevious());
     }
 }
