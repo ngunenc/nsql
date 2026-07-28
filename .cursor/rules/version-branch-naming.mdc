@@ -17,8 +17,11 @@ alwaysApply: true
 ## Akış (issue uygularken)
 1. Mevcut sürüm branch’inden (veya istenen base’den) `git checkout -b vX.Y.Z`
 2. Değişiklik + `composer.json` / `CHANGELOG` / README sürüm bump
-3. Commit → `git tag -a vX.Y.Z` → `git push -u origin vX.Y.Z` + `git push origin vX.Y.Z`
-4. **main’e merge etme** — kullanıcı açıkça istemedikçe
+3. Commit → `git tag -a vX.Y.Z`
+4. Push (branch ve tag aynı adda olduğu için **refspec açık yaz**):
+   - `git push -u origin refs/heads/vX.Y.Z:refs/heads/vX.Y.Z`
+   - `git push origin refs/tags/vX.Y.Z`
+5. **main’e merge etme** — kullanıcı açıkça istemedikçe
 
 ## Örnekler
 ```text
