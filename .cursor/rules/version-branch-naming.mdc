@@ -1,0 +1,30 @@
+---
+description: nsql sürüm, branch ve tag isimlendirme kuralları
+alwaysApply: true
+---
+
+# Sürüm / branch / tag isimlendirme
+
+## Branch
+- Sürüm branch adı: **`vX.Y.Z`** (ör. `v1.5.6`, `v1.5.7`)
+- **`release/vX.Y.Z` kullanma** — prefix yok
+- Patch/security/fix sürümleri aynı semver zincirinde devam eder (`1.5.5` → `1.5.6` → …)
+
+## Tag
+- Annotated tag adı branch ile aynı: **`vX.Y.Z`**
+- Tag mesajı kısa sürüm özeti içerir
+
+## Akış (issue uygularken)
+1. Mevcut sürüm branch’inden (veya istenen base’den) `git checkout -b vX.Y.Z`
+2. Değişiklik + `composer.json` / `CHANGELOG` / README sürüm bump
+3. Commit → `git tag -a vX.Y.Z` → `git push -u origin vX.Y.Z` + `git push origin vX.Y.Z`
+4. **main’e merge etme** — kullanıcı açıkça istemedikçe
+
+## Örnekler
+```text
+✅ v1.5.6
+✅ v1.6.0
+❌ release/v1.5.6
+❌ release/1.5.6
+❌ feature/v1.5.6
+```
