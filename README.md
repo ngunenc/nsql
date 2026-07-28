@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.5
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.6
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -13,6 +13,8 @@
 > **v1.5.4**: Yapı — `.gitignore` güçlendirildi (keys, logs, coverage, tool caches); tracked `.php-cs-fixer.cache` kaldırıldı.
 >
 > **v1.5.5**: Çift PDO bağlantısı düzeltildi (composition + pool); health/metrics monitoring token zorunlu (#3, #4).
+>
+> **v1.5.6**: Redis cache object injection riski giderildi — güvenli JSON payload (`nsql:j1:`) (#26).
 
 ## 🌟 Özellikler
 
@@ -77,20 +79,20 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.5"
+        "ngunenc/nsql": "^1.5.6"
     }
 }
 ```
 
 Sonra:
 ```bash
-composer require ngunenc/nsql:^1.5.5
+composer require ngunenc/nsql:^1.5.6
 ```
 
 #### Yöntem 2: Tek Komutla
 
 ```bash
-composer require ngunenc/nsql:^1.5.5 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.6 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 > 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
@@ -639,6 +641,8 @@ $sonuclar = $db->get_results("SELECT * FROM tablo");
 // İstatistikleri görüntüleme
 $stats = $db->get_all_cache_stats();
 ```
+
+> **v1.5.6+ Redis**: Cache payload `nsql:j1:{json}` formatındadır. Eski `serialize` kayıtları object içermiyorsa okunabilir; aksi halde miss olur. Güvenli geçiş için Redis DB flush önerilir.
 
 Bu örnekler, nsql kütüphanesinin migration, seed, güvenlik ve cache gibi modüllerinin gerçek bir projede nasıl kullanılabileceğini göstermektedir.
 
@@ -1377,6 +1381,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.6 (2026-07-29)
+  - Güvenlik: Redis cache JSON payload; object injection engellendi (#26)
 
 - v1.5.5 (2026-07-28)
   - Çift PDO bağlantısı giderildi (`nsql` composition); health/metrics için monitoring token (#3, #4)

@@ -85,7 +85,11 @@ class redis_adapter implements cache_adapter_interface
                 return null;
             }
 
-            return unserialize($value);
+            if (! is_string($value)) {
+                return null;
+            }
+
+            return safe_serializer::decode($value);
         } catch (\Exception $e) {
             return null;
         }
@@ -98,7 +102,7 @@ class redis_adapter implements cache_adapter_interface
         }
 
         try {
-            $serialized = serialize($value);
+            $serialized = safe_serializer::encode($value);
             $ttl = $ttl ?? $this->default_ttl;
 
             $result = $this->redis->setex($key, $ttl, $serialized);

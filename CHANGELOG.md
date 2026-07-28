@@ -4,6 +4,11 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.6] - 2026-07-29
+
+### Güvenlik
+- **Redis cache (#26)**: `serialize`/`unserialize` kaldırıldı. Yeni payload formatı `nsql:j1:{json}` (`safe_serializer`). Eski PHP serialize kayıtları yalnızca `unserialize(..., ['allowed_classes' => false])` ile okunur; object içeren payload'lar reddedilir (cache miss). Üretimde Redis cache flush önerilir.
+
 ## [1.5.5] - 2026-07-28
 
 ### Düzeltmeler
