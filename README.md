@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.7
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.8
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -17,6 +17,8 @@
 > **v1.5.6**: Redis cache object injection riski giderildi — güvenli JSON payload (`nsql:j1:`) (#26).
 >
 > **v1.5.7**: Composer paket adı Packagist ile hizalandı: `ngunenc/nsql` (#5).
+>
+> **v1.5.8**: `.env.example` tek şablon; `DB_MIN_CONNECTIONS` ↔ config mapping (#13).
 
 ## 🌟 Özellikler
 
@@ -69,7 +71,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.7
+composer require ngunenc/nsql:^1.5.8
 ```
 
 > 📖 **Kullanım ve .env**: [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md)
@@ -87,13 +89,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.7"
+        "ngunenc/nsql": "^1.5.8"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.7 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.8 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Manuel Kurulum
@@ -123,9 +125,9 @@ composer stan
 
 ### Yapılandırma
 
-1. `env.example` dosyasını `.env` olarak kopyalayın:
+1. `.env.example` dosyasını `.env` olarak kopyalayın:
 ```bash
-cp env.example .env
+cp .env.example .env
 ```
 
 2. `.env` dosyasındaki değerleri güncelleyin:
@@ -317,7 +319,8 @@ nsql/
 ├── phpunit.xml               # PHPUnit yapılandırması
 ├── phpstan.neon              # PHPStan yapılandırması
 ├── .php_cs                   # PHP CS Fixer yapılandırması
-├── env.example               # Yapılandırma örneği
+├── .env.example              # Yapılandırma örneği (resmi şablon)
+├── env.example               # DEPRECATED → .env.example kullanın
 └── README.md                # Dokümantasyon
 ```
 
@@ -1378,6 +1381,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.8 (2026-07-29)
+  - `.env.example` tek şablon; pool/cache env → config alias mapping (#13)
 
 - v1.5.7 (2026-07-29)
   - Composer paket adı Packagist ile hizalandı: `ngunenc/nsql` (#5)

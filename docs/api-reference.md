@@ -501,6 +501,8 @@ $manager->seed();
 
 Anahtarlar **büyük harf** yazılmalıdır. Tam liste için depodaki `.env.example` dosyasına bakın.
 
+Pool anahtarları: `DB_MIN_CONNECTIONS` ile `MIN_CONNECTIONS` (ve benzer `DB_*` alias'ları) birbirinin yerine kullanılabilir.
+
 ```ini
 ENV=production
 
@@ -513,6 +515,9 @@ DB_USER=username
 DB_PASS=secret
 DB_CHARSET=utf8mb4
 DB_DRIVER=mysql
+
+DB_MIN_CONNECTIONS=2
+DB_MAX_CONNECTIONS=10
 
 DEBUG_MODE=false
 SECURITY_STRICT_MODE=true

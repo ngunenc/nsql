@@ -58,6 +58,25 @@ class config
     public const rate_limit_max_requests = 100;
 
     /**
+     * Env / config anahtar eşlemeleri (canonical => alternatifler).
+     * Örn. DB_MIN_CONNECTIONS ↔ MIN_CONNECTIONS
+     *
+     * @var array<string, list<string>>
+     */
+    private const KEY_ALIASES = [
+        'MIN_CONNECTIONS' => ['DB_MIN_CONNECTIONS'],
+        'MAX_CONNECTIONS' => ['DB_MAX_CONNECTIONS'],
+        'HEALTH_CHECK_INTERVAL' => ['DB_HEALTH_CHECK_INTERVAL'],
+        'CONNECTION_TIMEOUT' => ['DB_CONNECTION_TIMEOUT'],
+        'CONNECTION_IDLE_TIMEOUT' => ['DB_CONNECTION_IDLE_TIMEOUT'],
+        'POOL_LOG_FILE' => ['DB_POOL_LOG_FILE'],
+        'READ_WRITE_SPLIT' => ['DB_READ_WRITE_SPLIT'],
+        'MAX_RETRY_ATTEMPTS' => ['DB_MAX_RETRY_ATTEMPTS'],
+        'CLEANUP_PROBABILITY' => ['DB_CLEANUP_PROBABILITY'],
+        'MAX_FAILED_CONNECTIONS' => ['DB_MAX_FAILED_CONNECTIONS'],
+    ];
+
+    /**
      * Ortamı ayarla (production/development/testing gibi)
      */
     public static function set_environment(string $environment): void
@@ -85,18 +104,18 @@ class config
     {
         self::ensure_bootstrapped();
 
-        $key = strtoupper($key);
+        foreach (self::resolve_keys($key) as $candidate) {
+            if (array_key_exists($candidate, self::$config)) {
+                return self::$config[$candidate];
+            }
 
-        if (array_key_exists($key, self::$config)) {
-            return self::$config[$key];
-        }
+            $env_value = getenv($candidate);
+            if ($env_value !== false) {
+                $value = self::cast_value($env_value);
+                self::$config[$candidate] = $value;
 
-        $env_value = getenv($key);
-        if ($env_value !== false) {
-            $value = self::cast_value($env_value);
-            self::$config[$key] = $value;
-
-            return $value;
+                return $value;
+            }
         }
 
         return $default;
@@ -107,17 +126,34 @@ class config
      */
     public static function set(string $key, mixed $value): void
     {
-        $key = strtoupper($key);
-        self::$config[$key] = $value;
+        $canonical = self::canonical_key($key);
+
+        foreach (self::KEY_ALIASES as $canon => $aliases) {
+            if ($canonical === $canon || in_array($canonical, $aliases, true)) {
+                self::$config[$canon] = $value;
+                foreach ($aliases as $alias) {
+                    self::$config[$alias] = $value;
+                }
+
+                return;
+            }
+        }
+
+        self::$config[$canonical] = $value;
     }
 
     /** Ortam değişkeni mevcut mu? */
     public static function has(string $key): bool
     {
         self::ensure_bootstrapped();
-        $key = strtoupper($key);
 
-        return array_key_exists($key, self::$config) || getenv($key) !== false;
+        foreach (self::resolve_keys($key) as $candidate) {
+            if (array_key_exists($candidate, self::$config) || getenv($candidate) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Tüm konfigürasyon değerlerini döndürür (kopya) */
@@ -174,6 +210,7 @@ class config
 
         self::$project_root = self::detect_project_root();
         self::load_env_file(self::$project_root . DIRECTORY_SEPARATOR . '.env');
+        self::normalize_aliases();
         self::apply_defaults();
         self::detect_and_set_environment();
         self::$env_loaded = true;
@@ -292,68 +329,129 @@ class config
         }
     }
 
-    /** Varsayılanları uygular (sadece set edilmemişse) */
+    /** Varsayılanları uygular (sadece set edilmemişse) — anahtarlar UPPER_SNAKE */
     private static function apply_defaults(): void
     {
         $defaults = [
             // DB
             'DB_HOST' => 'localhost',
+            'DB_PORT' => 3306,
             'DB_NAME' => 'nsql',
             'DB_USER' => 'root',
             'DB_PASS' => '',
             'DB_CHARSET' => 'utf8mb4',
+            'DB_DRIVER' => 'mysql',
 
             // PDO/options
             'CONNECTION_TIMEOUT' => 5,
             'PERSISTENT_CONNECTION' => false,
 
-            // Connection Pool ayarları
-            'health_check_interval' => 30, // saniye
-            'connection_idle_timeout' => 300, // 5 dakika
-            'min_connections' => 1,
-            'max_connections' => 10,
-            'max_retry_attempts' => 3,
-            'cleanup_probability' => 10, // %10 olasılık
-            'max_failed_connections' => 5,
+            // Connection pool (class constants ile hizalı)
+            'HEALTH_CHECK_INTERVAL' => self::health_check_interval,
+            'CONNECTION_IDLE_TIMEOUT' => self::connection_idle_timeout,
+            'MIN_CONNECTIONS' => self::min_connections,
+            'MAX_CONNECTIONS' => self::max_connections,
+            'MAX_RETRY_ATTEMPTS' => self::max_retry_attempts,
+            'CLEANUP_PROBABILITY' => self::cleanup_probability,
+            'MAX_FAILED_CONNECTIONS' => self::max_failed_connections,
 
             // Debug & Log
-            'debug_mode' => false,
-            'log_file' => 'error_log.txt',
-            'audit_log_file' => 'audit_log.txt',
-            'log_dir' => null, // null = otomatik tespit
-            'log_max_size' => 1048576, // 1MB
+            'DEBUG_MODE' => false,
+            'LOG_FILE' => 'error_log.txt',
+            'AUDIT_LOG_FILE' => 'audit_log.txt',
+            'LOG_DIR' => null,
+            'LOG_MAX_SIZE' => 1048576,
 
-            // Cache ayarları
-            'statement_cache_limit' => 100,
-            'query_cache_enabled' => false,
-            'query_cache_timeout' => 3600,
-            'query_cache_size_limit' => 100,
+            // Cache
+            'STATEMENT_CACHE_LIMIT' => self::statement_cache_limit,
+            'QUERY_CACHE_ENABLED' => self::query_cache_enabled,
+            'QUERY_CACHE_TIMEOUT' => self::query_cache_timeout,
+            'QUERY_CACHE_SIZE_LIMIT' => self::query_cache_size_limit,
+            'CACHE_CLEANUP_PROBABILITY' => self::cache_cleanup_probability,
 
-            // Performans sabitleri
-            'large_result_warning' => 10000,
-            'max_result_set_size' => 1000000,
-            'memory_check_interval' => 30,
-            'memory_limit_warning' => 128 * 1024 * 1024, // 128MB
-            'memory_limit_critical' => 256 * 1024 * 1024, // 256MB
-            'auto_adjust_chunk_size' => true,
-            'min_chunk_size' => 100,
-            'max_chunk_size' => 10000,
+            // Performans
+            'LARGE_RESULT_WARNING' => self::large_result_warning,
+            'MAX_RESULT_SET_SIZE' => self::max_result_set_size,
+            'MEMORY_CHECK_INTERVAL' => self::memory_check_interval,
+            'MEMORY_LIMIT_WARNING' => self::memory_limit_warning,
+            'MEMORY_LIMIT_CRITICAL' => self::memory_limit_critical,
+            'AUTO_ADJUST_CHUNK_SIZE' => self::auto_adjust_chunk_size,
+            'MIN_CHUNK_SIZE' => self::min_chunk_size,
+            'MAX_CHUNK_SIZE' => self::max_chunk_size,
 
-            // Rate Limiting ayarları
-            'rate_limit_decay' => 1, // saniye
-            'rate_limit_burst' => 10, // burst limit
-            'rate_limit_window' => 60, // 1 dakika
-            'rate_limit_max_requests' => 100, // dakikada max istek
+            // Rate limiting
+            'RATE_LIMIT_DECAY' => self::rate_limit_decay,
+            'RATE_LIMIT_BURST' => self::rate_limit_burst,
+            'RATE_LIMIT_WINDOW' => self::rate_limit_window,
+            'RATE_LIMIT_MAX_REQUESTS' => self::rate_limit_max_requests,
 
             // Güvenlik
-            'security_strict_mode' => false,
+            'SECURITY_STRICT_MODE' => false,
         ];
 
         foreach ($defaults as $k => $v) {
-            if (! array_key_exists($k, self::$config) && getenv($k) === false) {
+            if (! self::has_any_key($k)) {
                 self::$config[$k] = $v;
             }
         }
+    }
+
+    /**
+     * DB_* pool anahtarlarını canonical anahtarlara kopyalar.
+     */
+    private static function normalize_aliases(): void
+    {
+        foreach (self::KEY_ALIASES as $canonical => $aliases) {
+            if (array_key_exists($canonical, self::$config)) {
+                continue;
+            }
+            foreach ($aliases as $alias) {
+                if (array_key_exists($alias, self::$config)) {
+                    self::$config[$canonical] = self::$config[$alias];
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function resolve_keys(string $key): array
+    {
+        $canonical = self::canonical_key($key);
+        $keys = [$canonical];
+
+        if (isset(self::KEY_ALIASES[$canonical])) {
+            foreach (self::KEY_ALIASES[$canonical] as $alias) {
+                $keys[] = $alias;
+            }
+        }
+
+        // Ters yön: DB_MIN_CONNECTIONS istendiğinde MIN_CONNECTIONS de dene
+        foreach (self::KEY_ALIASES as $canon => $aliases) {
+            if (in_array($canonical, $aliases, true) && ! in_array($canon, $keys, true)) {
+                $keys[] = $canon;
+            }
+        }
+
+        return $keys;
+    }
+
+    private static function canonical_key(string $key): string
+    {
+        return strtoupper(trim($key));
+    }
+
+    private static function has_any_key(string $canonical): bool
+    {
+        foreach (self::resolve_keys($canonical) as $candidate) {
+            if (array_key_exists($candidate, self::$config) || getenv($candidate) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
