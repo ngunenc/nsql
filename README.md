@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.6
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.7
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -15,6 +15,8 @@
 > **v1.5.5**: Çift PDO bağlantısı düzeltildi (composition + pool); health/metrics monitoring token zorunlu (#3, #4).
 >
 > **v1.5.6**: Redis cache object injection riski giderildi — güvenli JSON payload (`nsql:j1:`) (#26).
+>
+> **v1.5.7**: Composer paket adı Packagist ile hizalandı: `ngunenc/nsql` (#5).
 
 ## 🌟 Özellikler
 
@@ -64,11 +66,17 @@
 
 ### Composer ile Kurulum
 
-**⚠️ Önemli**: Paket henüz Packagist'te yayınlanmadığı için, GitHub repository'yi direkt kullanmanız gerekiyor.
+Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
-#### Yöntem 1: Repository ile (Önerilen)
+```bash
+composer require ngunenc/nsql:^1.5.7
+```
 
-Projenizin `composer.json` dosyasına şunu ekleyin:
+> 📖 **Kullanım ve .env**: [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md)
+
+#### Alternatif: VCS (GitHub)
+
+Packagist kullanılamıyorsa:
 
 ```json
 {
@@ -79,25 +87,14 @@ Projenizin `composer.json` dosyasına şunu ekleyin:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.6"
+        "ngunenc/nsql": "^1.5.7"
     }
 }
 ```
 
-Sonra:
 ```bash
-composer require ngunenc/nsql:^1.5.6
+composer require ngunenc/nsql:^1.5.7 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
-
-#### Yöntem 2: Tek Komutla
-
-```bash
-composer require ngunenc/nsql:^1.5.6 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
-```
-
-> 📝 **Packagist'e Eklendikten Sonra**: Normal `composer require ngunenc/nsql` komutu çalışacak.
-> 
-> 📖 **Kullanım ve .env**: [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md) dosyasına bakın.
 
 ### Manuel Kurulum
 
@@ -1381,6 +1378,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.7 (2026-07-29)
+  - Composer paket adı Packagist ile hizalandı: `ngunenc/nsql` (#5)
 
 - v1.5.6 (2026-07-29)
   - Güvenlik: Redis cache JSON payload; object injection engellendi (#26)

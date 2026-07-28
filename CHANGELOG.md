@@ -4,6 +4,11 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.7] - 2026-07-29
+
+### Düzeltmeler
+- **Paket adı (#5)**: Resmi Composer / Packagist adı `ngunenc/nsql` olarak hizalandı (`composer.json` önceki `nsql/nsql` tutarsızlığı giderildi). Packagist'te paket zaten `ngunenc/nsql` olarak yayında; yerinde `nsql/nsql` rename desteklenmediği için şimdilik bu ad kullanılacak.
+
 ## [1.5.6] - 2026-07-29
 
 ### Güvenlik

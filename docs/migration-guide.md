@@ -145,7 +145,7 @@ Aşağıdaki özellikler gelecek versiyonlarda kaldırılabilir:
 ### 1. Composer Güncelleme
 
 ```bash
-composer update nsql/nsql
+composer update ngunenc/nsql
 ```
 
 ### 2. Test Çalıştırma
