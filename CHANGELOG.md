@@ -4,6 +4,12 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.8] - 2026-07-29
+
+### Düzeltmeler
+- **Env şablonları (#13)**: Resmi şablon tekilleştirildi (`.env.example`). `env.example` deprecated yönlendirme dosyası.
+- **Config mapping**: `DB_MIN_CONNECTIONS` ↔ `MIN_CONNECTIONS` (ve diğer pool `DB_*` alias'ları) `config::get` / `has` ile okunuyor. Defaults UPPER_SNAKE ve class constant'larla hizalandı.
+
 ## [1.5.7] - 2026-07-29
 
 ### Düzeltmeler
