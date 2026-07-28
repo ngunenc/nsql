@@ -1,7 +1,7 @@
 {
-	"name": "nsql/nsql",
-	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.5.6",
-	"version": "1.5.6",
+	"name": "ngunenc/nsql",
+	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.5.7",
+	"version": "1.5.7",
 	"type": "library",
 	"license": "MIT",
 	"authors": [
