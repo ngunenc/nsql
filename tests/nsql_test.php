@@ -148,6 +148,51 @@ class nsql_test extends TestCase
         $this->assertNull($row);
     }
 
+    public function testNestedTransactionSavepoints(): void
+    {
+        $this->db->begin();
+        $this->assertSame(1, $this->db->get_transaction_level());
+
+        $outerId = $this->db->insert(
+            "INSERT INTO test_table (name) VALUES (:name)",
+            ['name' => 'Nested Outer']
+        );
+
+        $this->db->begin();
+        $this->assertSame(2, $this->db->get_transaction_level());
+
+        $innerId = $this->db->insert(
+            "INSERT INTO test_table (name) VALUES (:name)",
+            ['name' => 'Nested Inner']
+        );
+
+        $this->assertTrue($this->db->rollback());
+        $this->assertSame(1, $this->db->get_transaction_level());
+
+        $this->assertNull($this->db->get_row(
+            "SELECT * FROM test_table WHERE id = :id",
+            ['id' => $innerId]
+        ));
+        $this->assertNotNull($this->db->get_row(
+            "SELECT * FROM test_table WHERE id = :id",
+            ['id' => $outerId]
+        ));
+
+        $this->assertTrue($this->db->commit());
+        $this->assertSame(0, $this->db->get_transaction_level());
+        $this->assertNotNull($this->db->get_row(
+            "SELECT * FROM test_table WHERE id = :id",
+            ['id' => $outerId]
+        ));
+    }
+
+    public function testCommitWithoutTransactionReturnsFalse(): void
+    {
+        $this->assertSame(0, $this->db->get_transaction_level());
+        $this->assertFalse($this->db->commit());
+        $this->assertFalse($this->db->rollback());
+    }
+
     public function testChunkedFetch()
     {
         // Test verisi ekle

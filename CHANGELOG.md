@@ -4,6 +4,11 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.9] - 2026-07-29
+
+### Düzeltmeler
+- **Transaction çift tanım (#7)**: `begin` / `commit` / `rollback` yalnızca `transaction_trait` içinde; `nsql.php` kopyaları kaldırıldı. Null PDO kontrolü ve `*_transaction` alias'ları trait'e taşındı.
+
 ## [1.5.8] - 2026-07-29
 
 ### Düzeltmeler
