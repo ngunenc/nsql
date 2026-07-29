@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.10
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.11
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -23,6 +23,8 @@
 > **v1.5.9**: Transaction metotları tek kaynakta (`transaction_trait`); sınıf kopyaları kaldırıldı (#7).
 >
 > **v1.5.10**: Vendor paket dizinine yazım engellendi; Composer `--prefer-dist` / dirty tree kurtarma dokümante (#28).
+>
+> **v1.5.11**: Test suite Unit/Integration olarak bölündü; ORM/migration/cache smoke testleri (#10).
 
 ## 🌟 Özellikler
 
@@ -75,7 +77,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.10 --prefer-dist
+composer require ngunenc/nsql:^1.5.11 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -95,7 +97,7 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.10"
+        "ngunenc/nsql": "^1.5.11"
     }
 }
 ```
@@ -1415,6 +1417,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.11 (2026-07-30)
+  - Test suite `Unit` / `Integration` olarak bölündü; ORM/migration/cache smoke (#10)
 
 - v1.5.10 (2026-07-30)
   - Vendor köküne yazım engeli; Composer prefer-dist / dirty tree kurtarma (#28)

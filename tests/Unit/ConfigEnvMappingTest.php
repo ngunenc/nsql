@@ -1,11 +1,11 @@
 <?php
 
-namespace Tests;
+namespace Tests\Unit;
 
 use nsql\database\config;
 use PHPUnit\Framework\TestCase;
 
-class config_env_mapping_test extends TestCase
+class ConfigEnvMappingTest extends TestCase
 {
     private string $tempRoot;
 
@@ -21,7 +21,7 @@ class config_env_mapping_test extends TestCase
     protected function tearDown(): void
     {
         $this->clear_pool_env();
-        config::set_project_root(dirname(__DIR__));
+        config::set_project_root(dirname(__DIR__, 2));
         config::refresh();
 
         $envFile = $this->tempRoot . DIRECTORY_SEPARATOR . '.env';
