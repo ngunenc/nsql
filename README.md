@@ -103,7 +103,7 @@ Packagist kullanılamıyorsa:
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.10 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.11 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
