@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.12
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.13
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -27,6 +27,8 @@
 > **v1.5.11**: Test suite Unit/Integration olarak bölündü; ORM/migration/cache smoke testleri (#10).
 >
 > **v1.5.12**: Pool config default/constant/env tek kaynak; Dockerfile `composer install` hataları yutulmuyor (#27, #19).
+>
+> **v1.5.13**: Sync script path CLI/env; CI Ubuntu+MySQL ana gate; gerçek coverage clover + Codecov (#6, #20, #11).
 
 ## 🌟 Özellikler
 
@@ -79,7 +81,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.12 --prefer-dist
+composer require ngunenc/nsql:^1.5.13 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -99,13 +101,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.12"
+        "ngunenc/nsql": "^1.5.13"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.12 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.13 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -296,9 +298,11 @@ Kütüphanenin daha fazla özelliği ve gelişmiş kullanım örnekleri için [d
 # Tüm testleri çalıştır
 composer test
 
-# Coverage raporu ile
-composer test -- --coverage-html coverage/html
+# Coverage (clover + text; Xdebug / XDEBUG_MODE=coverage)
+composer test:coverage
 ```
+
+Ölçülen satır coverage (v1.5.13, `composer test:coverage`): yaklaşık **%30** (`src/`). Daha önce dokümante edilen “%70+” iddiası güncel ölçümle uyumlu değildir.
 
 ### Kod Kalitesi
 
@@ -316,10 +320,9 @@ composer fix
 ### CI/CD
 
 Proje GitHub Actions ile otomatik test edilir:
-- PHP 8.0, 8.1, 8.2, 8.3 desteği
-- Ubuntu ve Windows ortamları
-- MySQL 8.0 test veritabanı
-- Coverage raporları
+- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.0–8.4
+- PHP 8.3 job’da `coverage/clover.xml` üretilir ve Codecov’a yüklenir
+- Windows unit smoke isteğe bağlıdır (`continue-on-error`; MySQL service yok)
 
 ## 📂 Proje Yapısı
 
@@ -1419,6 +1422,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.13 (2026-07-30)
+  - Sync CLI path/env; CI Ubuntu gate; coverage clover + Codecov (#6, #20, #11)
 
 - v1.5.12 (2026-07-30)
   - Pool config tek doğruluk kaynağı; Dockerfile composer fail-fast (#27, #19)

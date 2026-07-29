@@ -329,6 +329,7 @@ vendor/bin/phpunit tests/nsql_test.php
 
 # Coverage raporu
 vendor/bin/phpunit --coverage-html coverage/
+# veya: composer test:coverage
 ```
 
 ## 🆘 Yardım
