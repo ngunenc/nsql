@@ -1,11 +1,11 @@
 <?php
 
-namespace Tests;
+namespace Tests\Unit;
 
 use nsql\database\monitoring\endpoint_guard;
 use PHPUnit\Framework\TestCase;
 
-class endpoint_guard_test extends TestCase
+class EndpointGuardTest extends TestCase
 {
     private array $envBackup = [];
 

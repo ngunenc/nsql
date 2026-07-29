@@ -13,12 +13,11 @@
          failOnRisky="true"
          failOnWarning="true">
     <testsuites>
-        <testsuite name="nsql">
-            <directory suffix="_test.php">tests</directory>
-            <directory suffix="Test.php">tests</directory>
-            <exclude>tests/setup_test_db.php</exclude>
-            <exclude>tests/cleanup_test_db.php</exclude>
-            <exclude>tests/debug_test_db.php</exclude>
+        <testsuite name="unit">
+            <directory suffix="Test.php">tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory suffix="Test.php">tests/Integration</directory>
         </testsuite>
     </testsuites>
     <php>

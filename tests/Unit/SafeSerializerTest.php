@@ -1,11 +1,11 @@
 <?php
 
-namespace Tests;
+namespace Tests\Unit;
 
 use nsql\database\cache\safe_serializer;
 use PHPUnit\Framework\TestCase;
 
-class safe_serializer_test extends TestCase
+class SafeSerializerTest extends TestCase
 {
     public function test_encode_uses_safe_prefix(): void
     {

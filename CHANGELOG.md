@@ -4,6 +4,11 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.11] - 2026-07-30
+
+### Geliştirmeler
+- **Test suite bölündü (#10)**: `tests/Unit/` ve `tests/Integration/` yapısı; monolit `nsql_test.php` kaldırıldı. ORM / migration / cache adapter smoke testleri eklendi. PHPUnit suite'leri: `unit`, `integration`.
+
 ## [1.5.10] - 2026-07-30
 
 ### Düzeltmeler

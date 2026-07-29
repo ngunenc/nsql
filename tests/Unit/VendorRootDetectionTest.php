@@ -1,11 +1,11 @@
 <?php
 
-namespace Tests;
+namespace Tests\Unit;
 
 use nsql\database\config;
 use PHPUnit\Framework\TestCase;
 
-class vendor_root_detection_test extends TestCase
+class VendorRootDetectionTest extends TestCase
 {
     public function test_detects_vendor_package_paths(): void
     {
@@ -54,7 +54,7 @@ class vendor_root_detection_test extends TestCase
         $expected = str_replace('\\', '/', $app);
         $this->assertSame($expected, $root);
 
-        config::set_project_root(dirname(__DIR__));
+        config::set_project_root(dirname(__DIR__, 2));
         config::refresh();
 
         // cleanup
