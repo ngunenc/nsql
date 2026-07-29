@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.8
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.9
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -19,6 +19,8 @@
 > **v1.5.7**: Composer paket adı Packagist ile hizalandı: `ngunenc/nsql` (#5).
 >
 > **v1.5.8**: `.env.example` tek şablon; `DB_MIN_CONNECTIONS` ↔ config mapping (#13).
+>
+> **v1.5.9**: Transaction metotları tek kaynakta (`transaction_trait`); sınıf kopyaları kaldırıldı (#7).
 
 ## 🌟 Özellikler
 
@@ -71,7 +73,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.8
+composer require ngunenc/nsql:^1.5.9
 ```
 
 > 📖 **Kullanım ve .env**: [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md)
@@ -89,13 +91,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.8"
+        "ngunenc/nsql": "^1.5.9"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.8 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.9 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Manuel Kurulum
@@ -1381,6 +1383,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.9 (2026-07-29)
+  - Transaction metotları yalnızca `transaction_trait` içinde (#7)
 
 - v1.5.8 (2026-07-29)
   - `.env.example` tek şablon; pool/cache env → config alias mapping (#13)

@@ -1109,84 +1109,6 @@ class nsql
     }
 
     /**
-     * Bir veritabanı işlemi başlatır.
-     * Trait'teki begin() metodunu kullanır (nested transaction desteği ile)
-     *
-     * @return void
-     * @throws RuntimeException PDO bağlantısı yoksa
-     */
-    public function begin(): void
-    {
-        if ($this->pdo === null) {
-            throw new RuntimeException('PDO bağlantısı kurulamadı');
-        }
-        
-        // Trait'teki begin() metodunu kullan (nested transaction desteği ile)
-        // transaction_trait'teki begin() metodu zaten transaction_level kontrolü yapıyor
-        if ($this->transaction_level === 0) {
-            $this->pdo->beginTransaction();
-        } else {
-            $this->pdo->exec("SAVEPOINT trans{$this->transaction_level}");
-        }
-        $this->transaction_level++;
-    }
-
-    /**
-     * Bir veritabanı işlemini tamamlar ve değişiklikleri kaydeder.
-     * Trait'teki commit() metodunu kullanır (nested transaction desteği ile)
-     *
-     * @return bool İşlem başarılıysa true, değilse false döndürür
-     * @throws RuntimeException PDO bağlantısı yoksa
-     */
-    public function commit(): bool
-    {
-        if ($this->pdo === null) {
-            throw new RuntimeException('PDO bağlantısı kurulamadı');
-        }
-        
-        // Trait'teki commit() metodunu kullan (nested transaction desteği ile)
-        if ($this->transaction_level === 0) {
-            return false; // Transaction yok
-        }
-        
-        $this->transaction_level--;
-        
-        if ($this->transaction_level === 0) {
-            return $this->pdo->commit();
-        } elseif ($this->transaction_level > 0) {
-            return $this->pdo->exec("RELEASE SAVEPOINT trans{$this->transaction_level}") !== false;
-        }
-        
-        return false;
-    }
-
-    /**
-     * Bir veritabanı işlemini geri alır.
-     * Trait'teki rollback() metodunu kullanır (nested transaction desteği ile)
-     *
-     * @return bool İşlem başarılıysa true, değilse false döndürür
-     */
-    public function rollback(): bool
-    {
-        if ($this->pdo === null) {
-            throw new RuntimeException('PDO bağlantısı kurulamadı');
-        }
-        
-        // Trait'teki rollback() metodunu kullan (nested transaction desteği ile)
-        if ($this->transaction_level === 0) {
-            return false; // Transaction yok
-        }
-        
-        $this->transaction_level--;
-        
-        if ($this->transaction_level === 0) {
-            return $this->pdo->rollBack();
-        } else {
-            return $this->pdo->exec("ROLLBACK TO SAVEPOINT trans{$this->transaction_level}") !== false;
-        }
-    }
-
-    /**
      * Son çalıştırılan sorgunun detaylarını ve hata ayıklama bilgilerini gösterir.
      *
      * @return void
@@ -1496,24 +1418,6 @@ class nsql
     /**
      * Test uyumu için camelCase statik proxy'ler
      */
-
-    /**
-     * Transaction metodları için alias'lar
-     */
-    public function begin_transaction(): void
-    {
-        $this->begin();
-    }
-
-    public function commit_transaction(): bool
-    {
-        return $this->commit();
-    }
-
-    public function rollback_transaction(): bool
-    {
-        return $this->rollback();
-    }
 
     /**
      * Son hatayı döndürür
