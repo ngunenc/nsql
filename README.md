@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.11
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.12
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -25,6 +25,8 @@
 > **v1.5.10**: Vendor paket dizinine yazım engellendi; Composer `--prefer-dist` / dirty tree kurtarma dokümante (#28).
 >
 > **v1.5.11**: Test suite Unit/Integration olarak bölündü; ORM/migration/cache smoke testleri (#10).
+>
+> **v1.5.12**: Pool config default/constant/env tek kaynak; Dockerfile `composer install` hataları yutulmuyor (#27, #19).
 
 ## 🌟 Özellikler
 
@@ -77,7 +79,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.11 --prefer-dist
+composer require ngunenc/nsql:^1.5.12 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -97,13 +99,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.11"
+        "ngunenc/nsql": "^1.5.12"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.11 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.12 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1417,6 +1419,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.12 (2026-07-30)
+  - Pool config tek doğruluk kaynağı; Dockerfile composer fail-fast (#27, #19)
 
 - v1.5.11 (2026-07-30)
   - Test suite `Unit` / `Integration` olarak bölündü; ORM/migration/cache smoke (#10)

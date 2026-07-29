@@ -4,6 +4,12 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.12] - 2026-07-30
+
+### Düzeltmeler
+- **Pool config tutarsızlığı (#27)**: `config::default_values()` tek doğruluk kaynağı; class constant / `apply_defaults` / `.env.example` / call-site fallback hizalandı. Varsayılan tablo `docs/api-reference.md` içinde.
+- **Dockerfile (#19)**: `composer install ... || true` kaldırıldı — bağımlılık hatasında build fail olur.
+
 ## [1.5.11] - 2026-07-30
 
 ### Geliştirmeler

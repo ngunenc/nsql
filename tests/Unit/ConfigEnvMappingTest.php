@@ -81,6 +81,34 @@ class ConfigEnvMappingTest extends TestCase
         $this->assertSame(config::min_connections, config::get('min_connections'));
         $this->assertSame(config::max_connections, config::get('max_connections'));
         $this->assertSame(config::health_check_interval, config::get('health_check_interval'));
+        $this->assertSame(config::connection_idle_timeout, config::get('connection_idle_timeout'));
+        $this->assertSame(config::connection_timeout, config::get('connection_timeout'));
+    }
+
+    public function test_default_values_is_single_source_of_truth(): void
+    {
+        $defaults = config::default_values();
+
+        $this->assertSame(config::min_connections, $defaults['MIN_CONNECTIONS']);
+        $this->assertSame(config::max_connections, $defaults['MAX_CONNECTIONS']);
+        $this->assertSame(config::health_check_interval, $defaults['HEALTH_CHECK_INTERVAL']);
+        $this->assertSame(config::connection_idle_timeout, $defaults['CONNECTION_IDLE_TIMEOUT']);
+        $this->assertSame(config::connection_timeout, $defaults['CONNECTION_TIMEOUT']);
+        $this->assertSame(config::query_cache_timeout, $defaults['QUERY_CACHE_TIMEOUT']);
+        $this->assertSame(config::statement_cache_limit, $defaults['STATEMENT_CACHE_LIMIT']);
+        $this->assertSame(config::min_chunk_size, $defaults['MIN_CHUNK_SIZE']);
+        $this->assertSame(config::max_chunk_size, $defaults['MAX_CHUNK_SIZE']);
+    }
+
+    public function test_call_site_fallbacks_match_constants(): void
+    {
+        // nsql / connection_trait / pool initialize fallback'ları
+        $this->assertSame(2, config::min_connections);
+        $this->assertSame(15, config::max_connections);
+        $this->assertSame(
+            config::get('max_connections', config::max_connections),
+            config::max_connections
+        );
     }
 
     public function test_db_host_lowercase_lookup(): void

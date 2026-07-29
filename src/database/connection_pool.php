@@ -51,11 +51,14 @@ class connection_pool
     /**
      * Connection Pool'u başlatır
      */
-    public static function initialize(array $config, int $min_connections = 5, int $max_connections = 20): void
+    public static function initialize(array $config, ?int $min_connections = null, ?int $max_connections = null): void
     {
         if (self::$initialized) {
             return;
         }
+
+        $min_connections ??= config::min_connections;
+        $max_connections ??= config::max_connections;
 
         self::validate_configuration($config);
         self::$configuration = $config;
@@ -445,7 +448,7 @@ class connection_pool
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
                 \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
                 \PDO::ATTR_EMULATE_PREPARES => 0, // PHP 8.4 için int gerekiyor
-                \PDO::ATTR_TIMEOUT => (int)config::get('connection_timeout', 5),
+                \PDO::ATTR_TIMEOUT => (int)config::get('connection_timeout', config::connection_timeout),
                 \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', false),
             ];
 
@@ -535,7 +538,7 @@ class connection_pool
         // Aktif bağlantıları kontrol et
         foreach (self::$active_connections as $key => $timestamp) {
             // Timeout kontrolü
-            if (($now - $timestamp) > config::get('connection_timeout', 5)) {
+            if (($now - $timestamp) > config::get('connection_timeout', config::connection_timeout)) {
                 unset(self::$connections[$key], self::$active_connections[$key]);
                 self::$stats['connection_timeouts']++;
                 self::$stats['active_connections']--;
