@@ -503,6 +503,21 @@ Anahtarlar **büyük harf** yazılmalıdır. Tam liste için depodaki `.env.exam
 
 Pool anahtarları: `DB_MIN_CONNECTIONS` ile `MIN_CONNECTIONS` (ve benzer `DB_*` alias'ları) birbirinin yerine kullanılabilir.
 
+### Varsayılanlar (`config::default_values()`)
+
+| Anahtar | Default |
+|---------|---------|
+| `MIN_CONNECTIONS` / `DB_MIN_CONNECTIONS` | `2` |
+| `MAX_CONNECTIONS` / `DB_MAX_CONNECTIONS` | `15` |
+| `HEALTH_CHECK_INTERVAL` | `60` |
+| `CONNECTION_IDLE_TIMEOUT` | `600` |
+| `CONNECTION_TIMEOUT` | `5` |
+| `QUERY_CACHE_TIMEOUT` | `1800` |
+| `STATEMENT_CACHE_LIMIT` | `150` |
+| `MIN_CHUNK_SIZE` / `MAX_CHUNK_SIZE` | `200` / `15000` |
+
+Kaynak: `config` class constant'ları — tek doğruluk kaynağı (#27).
+
 ```ini
 ENV=production
 
@@ -517,7 +532,7 @@ DB_CHARSET=utf8mb4
 DB_DRIVER=mysql
 
 DB_MIN_CONNECTIONS=2
-DB_MAX_CONNECTIONS=10
+DB_MAX_CONNECTIONS=15
 
 DEBUG_MODE=false
 SECURITY_STRICT_MODE=true
@@ -525,8 +540,8 @@ ENCRYPTION_KEY=your_secret_key_here
 # Production: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
 # storage/keys/encryption.key asla commit edilmemeli (bkz. storage/keys/README.md)
 
-STATEMENT_CACHE_LIMIT=100
-QUERY_CACHE_SIZE_LIMIT=1000
+STATEMENT_CACHE_LIMIT=150
+QUERY_CACHE_SIZE_LIMIT=200
 
 LOG_FILE=app.log
 ```

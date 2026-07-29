@@ -136,8 +136,8 @@ class nsql
 
             connection_pool::initialize(
                 self::$pool_config,
-                (int)config::get('min_connections', 2),
-                (int)config::get('max_connections', 10)
+                (int)config::get('min_connections', config::min_connections),
+                (int)config::get('max_connections', config::max_connections)
             );
 
             self::$pool_initialized = true;
@@ -186,12 +186,12 @@ class nsql
         // PDO bağlantı seçeneklerini ayarla (driver'a özel + genel)
         $driver_options = $this->driver->get_pdo_options();
         $this->options = array_merge($driver_options, [
-            \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', false),
+            \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', config::persistent_connection),
         ]);
         
         // MySQL için timeout DSN'e eklenir (PDO attribute olarak desteklenmez)
         if ($driver_name === 'mysql' && config::has('connection_timeout')) {
-            $timeout = (int)config::get('connection_timeout', 5);
+            $timeout = (int)config::get('connection_timeout', config::connection_timeout);
             if (strpos($this->dsn, 'timeout=') === false) {
                 $this->dsn .= ";timeout={$timeout}";
             }

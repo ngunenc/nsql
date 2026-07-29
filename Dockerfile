@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-enable pdo_mysql pdo_pgsql pdo_sqlite \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Redis ve Memcached extension'larını yükle (opsiyonel)
-RUN pecl install redis memcached \
-    && docker-php-ext-enable redis memcached || true
+# Redis / Memcached (opsiyonel — yoksa image yine build edilir)
+RUN (pecl install redis && docker-php-ext-enable redis) || echo "redis extension skipped"
+RUN (pecl install memcached && docker-php-ext-enable memcached) || echo "memcached extension skipped"
 
 # Composer'ı yükle
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -28,8 +28,8 @@ WORKDIR /var/www/html
 # Dosyaları kopyala
 COPY . .
 
-# Composer bağımlılıklarını yükle (production için)
-RUN composer install --no-dev --optimize-autoloader --no-interaction || true
+# Composer bağımlılıkları — hata olursa build fail olmalı
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # İzinleri ayarla
 RUN chown -R www-data:www-data /var/www/html \

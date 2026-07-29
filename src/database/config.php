@@ -25,6 +25,10 @@ class config
     // Sık kullanılan varsayılan sabitler
     public const default_chunk_size = 1000;
 
+    // PDO / bağlantı
+    public const connection_timeout = 5;
+    public const persistent_connection = false;
+
     // Connection Pool sabitleri (optimize edilmiş)
     public const health_check_interval = 60; // 30s → 60s (performans artışı)
     public const connection_idle_timeout = 600; // 300s → 600s (daha uzun idle timeout)
@@ -385,7 +389,21 @@ class config
     /** Varsayılanları uygular (sadece set edilmemişse) — anahtarlar UPPER_SNAKE */
     private static function apply_defaults(): void
     {
-        $defaults = [
+        foreach (self::default_values() as $k => $v) {
+            if (! self::has_any_key($k)) {
+                self::$config[$k] = $v;
+            }
+        }
+    }
+
+    /**
+     * Tek doğruluk kaynağı: env/config varsayılanları (class constant'larla hizalı).
+     *
+     * @return array<string, mixed>
+     */
+    public static function default_values(): array
+    {
+        return [
             // DB
             'DB_HOST' => 'localhost',
             'DB_PORT' => 3306,
@@ -396,10 +414,10 @@ class config
             'DB_DRIVER' => 'mysql',
 
             // PDO/options
-            'CONNECTION_TIMEOUT' => 5,
-            'PERSISTENT_CONNECTION' => false,
+            'CONNECTION_TIMEOUT' => self::connection_timeout,
+            'PERSISTENT_CONNECTION' => self::persistent_connection,
 
-            // Connection pool (class constants ile hizalı)
+            // Connection pool
             'HEALTH_CHECK_INTERVAL' => self::health_check_interval,
             'CONNECTION_IDLE_TIMEOUT' => self::connection_idle_timeout,
             'MIN_CONNECTIONS' => self::min_connections,
@@ -441,12 +459,6 @@ class config
             // Güvenlik
             'SECURITY_STRICT_MODE' => false,
         ];
-
-        foreach ($defaults as $k => $v) {
-            if (! self::has_any_key($k)) {
-                self::$config[$k] = $v;
-            }
-        }
     }
 
     /**

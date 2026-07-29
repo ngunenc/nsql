@@ -93,8 +93,8 @@ trait connection_trait
 
             connection_pool::initialize(
                 self::$pool_config,
-                (int)config::get('min_connections', 2),
-                (int)config::get('max_connections', 10)
+                (int)config::get('min_connections', config::min_connections),
+                (int)config::get('max_connections', config::max_connections)
             );
 
             self::$pool_initialized = true;
