@@ -2,185 +2,104 @@
 
 ## Genel Bakış
 
-Bu kılavuz, production (diger/nsql) ve development ortamları arasında senkronizasyon yapmak için kullanılır.
+`scripts/sync_production.php`, iki nsql kopyası arasında seçili dosyaları kopyalar.
+**Placeholder path yoktur** — kaynak ve hedef CLI veya ortam değişkeni ile verilir.
 
-## Version Control Strategy
+> Bu script deneysel bir yardımcı araçtır. Üretim dağıtımı için Git tag / Composer tercih edin.
 
-### Git Workflow
+## Gereksinimler
 
-1. **Development Branch**: `main` veya `develop` branch'inde geliştirme yapılır
-2. **Production Branch**: `production` branch'i production kodunu içerir
-3. **Release Tags**: Her release için version tag'i oluşturulur (örn: `v1.4.1`)
+- PHP CLI
+- Yazılabilir hedef dizin (dry-run dışında)
 
-### Branch Stratejisi
+## Kullanım
 
-```
-main (development)
-  ├── feature/* (yeni özellikler)
-  ├── bugfix/* (hata düzeltmeleri)
-  └── hotfix/* (acil düzeltmeler)
-  
-production (production)
-  └── tags: v1.4.0, v1.4.1, etc.
-```
-
-## Senkronizasyon Senaryoları
-
-### 1. Development → Production
-
-**Kullanım:**
-```bash
-php scripts/sync_production.php --direction=to-production
-```
-
-**Ne zaman kullanılır:**
-- Yeni özellikler development'ta test edildikten sonra
-- Hata düzeltmeleri production'a aktarılırken
-- Release öncesi son kontroller
-
-**Senkronize edilenler:**
-- `src/` dizini (tüm kaynak kod)
-- `composer.json` ve `composer.lock`
-- Dokümantasyon dosyaları (README.md, CHANGELOG.md, INSTALLATION.md)
-
-**Hariç tutulanlar:**
-- Test dosyaları (`tests/`)
-- Benchmark dosyaları (`benchmarks/`)
-- Development dokümantasyonu (`docs/`)
-- Git dosyaları (`.git/`)
-- Cache dosyaları (`.phpunit.cache/`)
-
-### 2. Production → Development
-
-**Kullanım:**
-```bash
-php scripts/sync_production.php --direction=to-development
-```
-
-**Ne zaman kullanılır:**
-- Production'da yapılan acil düzeltmeleri development'a aktarırken
-- Production'daki değişiklikleri geri almak için
-
-## Dry Run (Simülasyon)
-
-Değişiklik yapmadan ne yapılacağını görmek için:
+### Doğrudan path
 
 ```bash
+php scripts/sync_production.php --source=/path/to/dev/nsql --target=/path/to/prod/nsql
+php scripts/sync_production.php --source=/path/to/dev/nsql --target=/path/to/prod/nsql --dry-run
+php scripts/sync_production.php --help
+```
+
+### Direction + production path
+
+```bash
+# Bu repo → production kopyası
+export NSQL_PRODUCTION_PATH=/path/to/production/nsql
 php scripts/sync_production.php --direction=to-production --dry-run
+php scripts/sync_production.php --direction=to-production
+
+# Production → bu repo
+php scripts/sync_production.php --direction=to-development --dry-run
 ```
 
-## Manuel Senkronizasyon
+### Ortam değişkenleri
 
-### Git ile
+| Değişken | Anlamı |
+|----------|--------|
+| `NSQL_SYNC_SOURCE` | `--source` eşleniği |
+| `NSQL_SYNC_TARGET` | `--target` eşleniği |
+| `NSQL_PRODUCTION_PATH` | `--direction` kullanıldığında diğer taraf |
+
+## Senkronize edilenler
+
+- `src/`
+- `composer.json`, `composer.lock`
+- `README.md`, `CHANGELOG.md`
+
+## Hariç tutulanlar
+
+- `tests/`, `benchmarks/`, `docs/`, `.github/`
+- `vendor/`, `coverage/`, `.git/`
+- `.env`, `.env.*`, `*.log`
+
+## Dry-run
 
 ```bash
-# Development'tan Production'a
+php scripts/sync_production.php --source=./ --target=/tmp/nsql-copy --dry-run
+```
+
+Dosya yazılmaz; kopyalanacak öğe sayısı listelenir.
+
+## Git ile (önerilen)
+
+```bash
 git checkout production
 git merge main
 git push origin production
-git tag v1.4.1
-git push origin v1.4.1
-
-# Production'dan Development'a
-git checkout main
-git merge production
-git push origin main
+git tag v1.5.13
+git push origin refs/tags/v1.5.13
 ```
 
-### Dosya Bazlı
-
-1. **Sadece src/ dizini:**
-```bash
-rsync -av --exclude='.git' src/ /path/to/production/nsql/src/
-```
-
-2. **Composer dosyaları:**
-```bash
-cp composer.json /path/to/production/nsql/
-cp composer.lock /path/to/production/nsql/
-```
-
-## Version Yönetimi
-
-### Version Numaralandırma
-
-- **Major.Minor.Patch** formatı kullanılır (örn: 1.4.1)
-- **Major**: Breaking changes
-- **Minor**: Yeni özellikler (geriye uyumlu)
-- **Patch**: Hata düzeltmeleri
-
-### CHANGELOG.md Güncelleme
-
-Her release'de CHANGELOG.md güncellenmelidir:
-
-```markdown
-## [1.4.1] - 2026-01-22
-
-### Added
-- Yeni özellikler
-
-### Changed
-- Değişiklikler
-
-### Fixed
-- Hata düzeltmeleri
-```
-
-## Güvenlik Kontrolleri
+## Güvenlik kontrolleri
 
 Senkronizasyon öncesi:
 
-1. ✅ Tüm testler başarılı mı?
-2. ✅ PHPStan hataları var mı?
-3. ✅ Composer dependencies güncel mi?
-4. ✅ CHANGELOG.md güncellendi mi?
-5. ✅ Version numarası doğru mu?
+1. Testler yeşil mi? (`composer test`)
+2. PHPStan / lint temiz mi?
+3. `CHANGELOG.md` ve sürüm numarası güncel mi?
+4. Önce `--dry-run`
 
-## Sorun Giderme
+## Sorun giderme
 
-### "Kaynak dizin bulunamadı" hatası
+### "Kaynak/hedef gerekli"
 
-Script'teki `$production_path` değişkenini doğru path ile güncelleyin:
-```php
-$production_path = '/gerçek/production/yolu/nsql';
-```
+`--source` ve `--target` verin veya `NSQL_SYNC_*` / `NSQL_PRODUCTION_PATH` ayarlayın.
+Sabit `/path/to/production/nsql` artık kullanılmaz.
 
-### "Dosya kopyalanamadı" hatası
+### "Kaynak dizin bulunamadı"
 
-- Dosya izinlerini kontrol edin
-- Disk alanını kontrol edin
-- Path'lerin doğru olduğundan emin olun
+Path'in var olduğundan emin olun (`realpath` ile çözülür).
 
-### Çakışan dosyalar
+### "Dosya kopyalanamadı"
 
-Manuel olarak çözümleyin veya merge tool kullanın:
-```bash
-git merge-tool
-```
+İzinler ve disk alanını kontrol edin.
 
-## Best Practices
+## Best practices
 
-1. **Her zaman dry-run ile başlayın**
-2. **Production'a geçmeden önce test edin**
-3. **Version tag'leri kullanın**
-4. **CHANGELOG.md'yi güncel tutun**
-5. **Backup alın** (production'a geçmeden önce)
-
-## Otomatik Senkronizasyon
-
-CI/CD pipeline'ında otomatik senkronizasyon için:
-
-```yaml
-# .github/workflows/sync.yml
-name: Sync to Production
-on:
-  release:
-    types: [published]
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Sync to Production
-        run: php scripts/sync_production.php --direction=to-production
-```
+1. Her zaman `--dry-run` ile başlayın
+2. Production'a geçmeden önce test edin
+3. Sürüm tag'leri kullanın
+4. `CHANGELOG.md` güncel tutun
+5. Hedef üzerinde backup alın

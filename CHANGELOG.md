@@ -4,6 +4,13 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.13] - 2026-07-30
+
+### Düzeltmeler
+- **Sync script (#6)**: Placeholder path kaldırıldı; `--source` / `--target` ve `NSQL_SYNC_*` / `NSQL_PRODUCTION_PATH`. `--help` + dry-run. `docs/sync-guide.md` güncellendi; var olmayan `INSTALLATION.md` referansları temizlendi.
+- **CI matrix (#20)**: Ana gate yalnızca Ubuntu + MySQL (PHP 8.0–8.4). Windows job MySQL’siz unit smoke ve `continue-on-error`.
+- **Coverage / Codecov (#11)**: `phpunit.xml` `<source>` include; `composer test:coverage` clover üretir; CI Codecov yükler. Dokümandaki “%70+” iddiası gerçek ölçümle (~%30 satır) düzeltildi.
+
 ## [1.5.12] - 2026-07-30
 
 ### Düzeltmeler
