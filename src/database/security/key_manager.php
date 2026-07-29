@@ -239,16 +239,20 @@ class key_manager
      */
     private static function get_storage_path(): string
     {
-        $project_root = \nsql\database\config::get('project_root', dirname(__DIR__, 3));
+        $project_root = \nsql\database\config::get_project_root();
+        if (\nsql\database\config::is_vendor_package_path($project_root)) {
+            $project_root = \nsql\database\config::resolve_away_from_vendor($project_root);
+        }
+
         $storage_file = \nsql\database\config::get('encryption_key_storage', self::KEY_STORAGE_FILE);
 
-        // Mutlak yol ise direkt kullan
-        if (preg_match('/^[A-Za-z]:\\\\|^\//', $storage_file)) {
+        if (is_string($storage_file) && preg_match('/^[A-Za-z]:\\\\|^\//', $storage_file)) {
             return $storage_file;
         }
 
-        // Göreli yol ise project root'a göre oluştur
-        return rtrim($project_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $storage_file;
+        $relative = is_string($storage_file) ? $storage_file : self::KEY_STORAGE_FILE;
+
+        return rtrim($project_root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $relative;
     }
 
     /**

@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.9
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.10
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -21,6 +21,8 @@
 > **v1.5.8**: `.env.example` tek şablon; `DB_MIN_CONNECTIONS` ↔ config mapping (#13).
 >
 > **v1.5.9**: Transaction metotları tek kaynakta (`transaction_trait`); sınıf kopyaları kaldırıldı (#7).
+>
+> **v1.5.10**: Vendor paket dizinine yazım engellendi; Composer `--prefer-dist` / dirty tree kurtarma dokümante (#28).
 
 ## 🌟 Özellikler
 
@@ -73,10 +75,12 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.9
+composer require ngunenc/nsql:^1.5.10 --prefer-dist
 ```
 
-> 📖 **Kullanım ve .env**: [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md)
+> **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
+
+> 📖 **Kullanım ve .env**: [docs/kullanim-klavuzu.md](docs/kullanim-klavuzu.md) — vendor kurulumunda `config::set_project_root(__DIR__)` veya `NSQL_PROJECT_ROOT` kullanın.
 
 #### Alternatif: VCS (GitHub)
 
@@ -91,14 +95,42 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.9"
+        "ngunenc/nsql": "^1.5.10"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.9 --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.10 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
+
+### Composer: `has uncommitted changes` hatası
+
+Source kurulumda şu hata görülebilir:
+
+```text
+Source directory .../vendor/ngunenc/nsql has uncommitted changes.
+```
+
+**Kurtarma:**
+
+```bash
+cd vendor/ngunenc/nsql
+git status
+git checkout -- .
+cd ../../..
+composer clear-cache
+composer update ngunenc/nsql --prefer-dist
+```
+
+Temiz kurulum gerekirse:
+
+```bash
+rm -rf vendor/ngunenc/nsql
+composer install --prefer-dist
+```
+
+v1.5.10+ runtime dosyaları (key/log) uygulama köküne yazılır; yine de dist kurulumu tercih edin.
 
 ### Manuel Kurulum
 
@@ -1383,6 +1415,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.10 (2026-07-30)
+  - Vendor köküne yazım engeli; Composer prefer-dist / dirty tree kurtarma (#28)
 
 - v1.5.9 (2026-07-29)
   - Transaction metotları yalnızca `transaction_trait` içinde (#7)
