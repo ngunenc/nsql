@@ -4,6 +4,11 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.10] - 2026-07-30
+
+### Düzeltmeler
+- **Composer vendor dirty tree (#28)**: Proje kökü tespiti Composer paket dizinini (`vendor/ngunenc/nsql`) atlar; key/log yolları uygulama köküne yazılır. README’de `--prefer-dist` ve `has uncommitted changes` kurtarma adımları.
+
 ## [1.5.9] - 2026-07-29
 
 ### Düzeltmeler

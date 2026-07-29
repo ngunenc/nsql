@@ -22,8 +22,10 @@
 ### Composer ile Kurulum
 
 ```bash
-composer require ngunenc/nsql
+composer require ngunenc/nsql --prefer-dist
 ```
+
+> Source/VCS kurulumunda `vendor/ngunenc/nsql has uncommitted changes` hatası alırsanız: `git checkout -- .` ile vendor paketini temizleyip `composer update ngunenc/nsql --prefer-dist` çalıştırın (ayrıntı: README).
 
 ### Yapılandırma
 
@@ -31,9 +33,8 @@ composer require ngunenc/nsql
 
 2. **Kütüphane `vendor` ile kuruluysa** `.env` genelde uygulama kökündedir. nsql şu sırayla kök dizini arar:
    - Ortam değişkeni `NSQL_PROJECT_ROOT`
-   - `getcwd()` altında `.env` varsa o dizin
-   - `config.php` konumundan yukarı doğru `.env` aranması
-   - Son çare: paket kökü
+   - Yukarı doğru `.env` veya `composer.json`+`vendor/autoload.php` (Composer paket dizini atlanır)
+   - Son çare: paket kökü — vendor altındaysa otomatik olarak uygulama köküne yükseltilir (v1.5.10+)
 
 3. Önerilen: giriş dosyanızda (ör. `public/index.php`) autoload sonrası:
 

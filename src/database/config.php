@@ -220,27 +220,96 @@ class config
     private static function detect_project_root(): string
     {
         if (self::$project_root_override !== null) {
-            return self::$project_root_override;
+            return self::prefer_application_root(self::$project_root_override);
         }
 
         $fromEnv = getenv('NSQL_PROJECT_ROOT');
         if (is_string($fromEnv) && trim($fromEnv) !== '') {
             $base = rtrim(trim($fromEnv), '/\\');
             if (is_dir($base)) {
-                return $base;
+                return self::prefer_application_root($base);
             }
         }
 
         $cwd = getcwd();
-        if ($cwd !== false && is_file($cwd . DIRECTORY_SEPARATOR . '.env')) {
-            return $cwd;
+        if ($cwd !== false) {
+            $fromCwd = self::find_application_root_upwards($cwd);
+            if ($fromCwd !== null) {
+                return $fromCwd;
+            }
         }
 
-        $dir = __DIR__;
-        for ($i = 0; $i < 14; $i++) {
-            if (is_file($dir . DIRECTORY_SEPARATOR . '.env')) {
-                return $dir;
+        // Paket içinden yukarı yürü (src/database → …); vendor/ngunenc/nsql atlanır
+        $fromPackage = self::find_application_root_upwards(__DIR__);
+        if ($fromPackage !== null) {
+            return $fromPackage;
+        }
+
+        $fallback = dirname(__DIR__, 2);
+        if ($fallback === '') {
+            return $cwd !== false ? $cwd : __DIR__;
+        }
+
+        return self::prefer_application_root($fallback);
+    }
+
+    /**
+     * Composer vendor paket yolu mu? (…/vendor/vendorName/packageName)
+     */
+    public static function is_vendor_package_path(string $path): bool
+    {
+        $normalized = str_replace('\\', '/', rtrim($path, '/\\'));
+
+        return (bool) preg_match('#(?:^|/)vendor/[^/]+/[^/]+(?:/|$)#', $normalized);
+    }
+
+    /**
+     * vendor/vendor/package altındaysa uygulama köküne (vendor'ın üstü) çıkar.
+     */
+    public static function resolve_away_from_vendor(string $path): string
+    {
+        $normalized = str_replace('\\', '/', rtrim($path, '/\\'));
+        if (preg_match('#^(.*?)/vendor/[^/]+/[^/]+#', $normalized, $matches)) {
+            $appRoot = $matches[1];
+            if ($appRoot !== '') {
+                return str_replace('/', DIRECTORY_SEPARATOR, $appRoot);
             }
+        }
+
+        return rtrim($path, '/\\');
+    }
+
+    /**
+     * Vendor paket köküyse uygulama köküne taşı; aksi halde olduğu gibi bırak.
+     */
+    public static function prefer_application_root(string $path): string
+    {
+        $path = rtrim($path, '/\\');
+        if (self::is_vendor_package_path($path)) {
+            return self::resolve_away_from_vendor($path);
+        }
+
+        return $path;
+    }
+
+    /**
+     * Yukarı doğru uygulama kökü ara (.env veya composer.json + vendor/autoload.php).
+     * Composer paket dizinleri aday olarak reddedilir.
+     */
+    private static function find_application_root_upwards(string $start): ?string
+    {
+        $dir = rtrim($start, '/\\');
+        for ($i = 0; $i < 16; $i++) {
+            if (! self::is_vendor_package_path($dir)) {
+                $hasEnv = is_file($dir . DIRECTORY_SEPARATOR . '.env');
+                $hasComposerApp = is_file($dir . DIRECTORY_SEPARATOR . 'composer.json')
+                    && is_file($dir . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php');
+
+                if ($hasEnv || $hasComposerApp) {
+                    return $dir;
+                }
+            }
+
             $parent = dirname($dir);
             if ($parent === $dir) {
                 break;
@@ -248,23 +317,7 @@ class config
             $dir = $parent;
         }
 
-        if ($cwd !== false) {
-            $dir = $cwd;
-            for ($i = 0; $i < 14; $i++) {
-                if (is_file($dir . DIRECTORY_SEPARATOR . '.env')) {
-                    return $dir;
-                }
-                $parent = dirname($dir);
-                if ($parent === $dir) {
-                    break;
-                }
-                $dir = $parent;
-            }
-        }
-
-        $root = dirname(__DIR__, 2);
-
-        return $root !== '' ? $root : (getcwd() !== false ? $cwd : __DIR__);
+        return null;
     }
 
     /** .env dosyasını okuyup self::$config içine yükler (stream-based okuma ile optimize edilmiş) */

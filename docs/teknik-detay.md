@@ -51,11 +51,12 @@ config::set_environment('development');
 $db_host = config::get('db_host'); // .env içindeki DB_HOST
 
 // Proje kökü tespiti (set_project_root yoksa):
-// NSQL_PROJECT_ROOT ortam değişkeni → getcwd()/.env → vendor üst dizinlerde .env → paket kökü
+// NSQL_PROJECT_ROOT → uygulama kökü (.env / composer+autoload) → vendor paketinden kaçınılmış fallback
 
 // Önerilen pratikler:
 // - Hassas bilgiler yalnızca .env veya ortam değişkeninde
-// - Vendor ile kurulumda mutlaka set_project_root veya NSQL_PROJECT_ROOT kullanın
+// - Vendor ile kurulumda set_project_root veya NSQL_PROJECT_ROOT kullanın
+// - composer require/update için --prefer-dist (source tree dirty hatasını önler)
 ```
 
 **Optimizasyon İpuçları:**
