@@ -4,6 +4,22 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.19] - 2026-10-04
+
+### Düzeltmeler (#35)
+- **Subquery parametreleri**: Subquery parametreleri `subquery_0_:id_0` gibi geçersiz adlarla bağlanıyor, `str_replace` `:id_1` değiştirirken `:id_10`'u bozuyordu. `from`, `select`, `where`, `where_in_subquery`, `where_exists`, `having` ve `join` subquery'leri gerçek veritabanında hata veriyordu.
+- **UNION**: Union builder parametreleri yeni adla ekleniyor ama SQL'deki placeholder'lar değiştirilmiyordu (`HY093`).
+- **Idempotency**: `build_query()` her çağrıda LIMIT/OFFSET/UNION parametrelerini tekrar ekliyordu; `get_query()` ardından `get()` fazla parametre hatası veriyordu. `first()` builder'ın kendi LIMIT'ini kalıcı olarak değiştiriyordu.
+- `null` değerli yapılandırılmış parametreler (`['value' => null, 'type' => PDO::PARAM_NULL]`) geçersiz parametre sayılıyordu.
+
+### Değişiklik
+- Placeholder'lar artık yalnızca derleme sırasında tek bir sayaçla üretiliyor (`:__p0`, `:__p1` …). Subquery, UNION ve raw binding adları da aynı sayaçla yeniden adlandırılıyor; aynı raw binding adı ana sorguda ve subquery'de çakışmıyor.
+- Yeni `query_builder::compile(): [sql, params]` (yan etkisiz). `get_query()` ve `get_params()` art arda çağrılabilir ve aynı sonucu döndürür.
+- Yeni `query_builder::offset(int)`.
+
+### Testler
+- `tests/Integration/QueryBuilderExecutionTest.php`: subquery (IN, NOT IN, EXISTS, FROM, SELECT, JOIN, HAVING), UNION / UNION ALL, 20+ parametre, `get_query()` + `get()` tekrarları, `first()`, `offset()`, raw binding çakışması, `null` binding
+
 ## [1.5.18] - 2026-10-04
 
 ### Güvenlik (#33)

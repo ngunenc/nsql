@@ -31,7 +31,7 @@ trait query_parameter_trait
     private function validate_param_types(array $params): void
     {
         foreach ($params as $key => $param) {
-            if (is_array($param) && isset($param['value'], $param['type'])) {
+            if (is_array($param) && array_key_exists('value', $param) && isset($param['type'])) {
                 if (! $this->is_valid_param_type($param['value'])) {
                     throw new InvalidArgumentException("Geçersiz parametre değeri: " . gettype($param['value']) . " (key: $key)");
                 }
