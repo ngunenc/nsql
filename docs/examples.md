@@ -471,22 +471,11 @@ echo $decrypted; // Orijinal veri
 
 ```php
 <?php
-// src/database/migrations/2023_12_01_000001_create_users_table.php
+// database/migrations/2023_12_01_000001_create_users_table.php  (vendor/bin/nsql migrate:create create_users_table)
 
-namespace nsql\database\migrations;
+use nsql\database\base_migration;
 
-use nsql\database\migration;
-use nsql\database\nsql;
-
-class create_users_table implements migration
-{
-    private nsql $db;
-
-    public function __construct()
-    {
-        $this->db = new nsql();
-    }
-
+return new class extends base_migration {
     public function up(): void
     {
         $sql = "CREATE TABLE IF NOT EXISTS users (
@@ -498,21 +487,20 @@ class create_users_table implements migration
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        
-        $this->db->query($sql);
+
+        $this->db()->query($sql);
     }
 
     public function down(): void
     {
-        $this->db->query("DROP TABLE IF EXISTS users");
+        $this->db()->query("DROP TABLE IF EXISTS users");
     }
 
     public function get_description(): string
     {
         return 'Create users table';
     }
-}
-?>
+};
 ```
 
 ### Migration Çalıştırma

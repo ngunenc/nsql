@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.19
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.20
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -41,6 +41,8 @@
 > **v1.5.18**: Query builder yalnızca `kolon`, `tablo.kolon`, `tablo.*` ve izinli aggregate ifadelerini kabul ediyor; hepsi driver'a göre quote ediliyor. `order_by('SLEEP(5)')` gibi ifadeler reddediliyor. Serbest SQL için `select_raw()`, `where_raw()`, `order_by_raw()`, `group_by_raw()`, `having_raw()` (#33).
 >
 > **v1.5.19**: Query builder subquery / UNION / having sorguları gerçek veritabanında çalışıyor; placeholder'lar derleme anında tek sayaçla üretiliyor, `compile()` yan etkisiz; `offset()` eklendi (#35).
+>
+> **v1.5.20**: Migration yükleme/yol düzeltmeleri, base_migration ile bağlantı enjeksiyonu, tembel migrations tablosu, vendor/bin/nsql (#36).
 
 ## 🌟 Özellikler
 
@@ -93,7 +95,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.19 --prefer-dist
+composer require ngunenc/nsql:^1.5.20 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -113,13 +115,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.19"
+        "ngunenc/nsql": "^1.5.20"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.19 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.20 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -345,10 +347,10 @@ nsql/
 │       ├── config.php               # Yapılandırma yönetimi
 │       ├── connection_pool.php      # Bağlantı havuzu yönetimi
 │       ├── migration.php           # Migration arayüzü
+│       ├── base_migration.php      # Bağlantısı enjekte edilen migration temeli
 │       ├── migration_manager.php   # Migration yönetimi
 │       ├── nsql.php               # Ana PDO wrapper sınıfı
 │       ├── query_builder.php      # SQL sorgu oluşturucu
-│       ├── migrations/            # Migration dosyaları
 │       ├── schema/               # Şema validasyonu (v1.3.0)
 │       ├── security/             # Güvenlik bileşenleri
 │       │   ├── audit_logger.php   # Güvenlik log sistemi
@@ -623,11 +625,42 @@ $db->safe_execute(function() use ($db) {
 
 Gerçek projelerde veritabanı şemasını güncellemek için migration modülünü kullanabilirsiniz:
 
+Migration dosyaları uygulamanızda durur; varsayılan dizin `<proje kökü>/database/migrations` (seed: `database/seeds`). `.env` içinde `MIGRATIONS_PATH` / `SEEDS_PATH` ile veya constructor parametreleriyle değiştirilebilir.
+
+```bash
+vendor/bin/nsql migrate:create create_posts_table   # database/migrations/2026_10_04_120000_create_posts_table.php
+vendor/bin/nsql migrate                             # bekleyenleri uygular
+vendor/bin/nsql migrate:rollback                    # son batch'i geri alır
+vendor/bin/nsql migrate --path=db/schema            # farklı dizin
+```
+
+Oluşturulan dosya bir migration nesnesi döndürür; bağlantı `migration_manager` tarafından enjekte edilir (`$this->db()`):
+
+```php
+<?php
+
+use nsql\database\base_migration;
+
+return new class extends base_migration {
+    public function up(): void
+    {
+        $this->db()->query('CREATE TABLE posts (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL)');
+    }
+
+    public function down(): void
+    {
+        $this->db()->query('DROP TABLE IF EXISTS posts');
+    }
+};
+```
+
+Sınıf tanımlayan dosyalar da desteklenir: sınıf adı, tarih öneki çıkarılmış dosya adıdır (`2026_10_04_120000_create_posts_table.php` → `create_posts_table`, dosyadaki namespace ile).
+
 ```php
 use nsql\database\migration_manager;
 
-$migration = new migration_manager();
-$migration->runMigrations(); // Tüm migration dosyalarını uygular
+$manager = new migration_manager($db);              // veya new migration_manager($db, __DIR__ . '/database/migrations')
+$executed = $manager->migrate();
 ```
 
 #### Seed Kullanımı
@@ -1498,6 +1531,9 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v1.5.20 (2026-10-04)
+  - Migration manager: tarih önekli yükleme, proje içi yollar, base_migration, vendor/bin/nsql (#36)
+
 - v1.5.19 (2026-10-04)
   - Query builder parametre isimlendirmesi, UNION ve idempotent compile() (#35)
 
@@ -1621,10 +1657,10 @@ composer fix
 
 ```bash
 # Migration'ları çalıştır
-php -r "require 'vendor/autoload.php'; (new nsql\database\migration_manager())->migrate();"
+vendor/bin/nsql migrate
 
 # Seed verilerini yükle
-php -r "require 'vendor/autoload.php'; (new nsql\database\migration_manager())->seed();"
+vendor/bin/nsql seed
 ```
 
 ## 📊 Performans Metrikleri

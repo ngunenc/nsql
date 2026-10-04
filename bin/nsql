@@ -7,23 +7,50 @@
  * Migration ve seed işlemleri için komut satırı aracı
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+(static function (): void {
+    $candidates = [
+        $GLOBALS['_composer_autoload_path'] ?? null,
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/../../../autoload.php',
+    ];
+    foreach ($candidates as $autoload) {
+        if (is_string($autoload) && is_file($autoload)) {
+            require_once $autoload;
+
+            return;
+        }
+    }
+    fwrite(STDERR, "HATA: Composer autoload dosyası bulunamadı. Önce 'composer install' çalıştırın.\n");
+    exit(1);
+})();
 
 use nsql\database\nsql;
 use nsql\database\migration_manager;
 
 class nsql_cli
 {
-    private migration_manager $migration_manager;
+    private ?migration_manager $migration_manager = null;
+    private ?string $migrations_path = null;
+    private ?string $seeds_path = null;
 
-    public function __construct()
+    private function manager(): migration_manager
     {
-        $db = new nsql();
-        $this->migration_manager = new migration_manager($db);
+        return $this->migration_manager ??= new migration_manager(new nsql(), $this->migrations_path, $this->seeds_path);
     }
 
-    public function run(array $args): void
+    public function run(array $argv): void
     {
+        $args = [];
+        foreach ($argv as $arg) {
+            if (str_starts_with($arg, '--path=')) {
+                $this->migrations_path = substr($arg, strlen('--path='));
+            } elseif (str_starts_with($arg, '--seeds-path=')) {
+                $this->seeds_path = substr($arg, strlen('--seeds-path='));
+            } else {
+                $args[] = $arg;
+            }
+        }
+
         if (empty($args) || ! isset($args[1])) {
             $this->show_help();
             return;
@@ -48,7 +75,7 @@ class nsql_cli
     {
         echo "Migration'lar çalıştırılıyor...\n";
         try {
-            $executed = $this->migration_manager->migrate();
+            $executed = $this->manager()->migrate();
             if (empty($executed)) {
                 echo "Çalıştırılacak migration yok.\n";
             } else {
@@ -66,7 +93,7 @@ class nsql_cli
     {
         echo "Son batch rollback ediliyor...\n";
         try {
-            $rolled_back = $this->migration_manager->rollback();
+            $rolled_back = $this->manager()->rollback();
             if (empty($rolled_back)) {
                 echo "Rollback edilecek migration yok.\n";
             } else {
@@ -84,7 +111,7 @@ class nsql_cli
     {
         echo "Migration durumu:\n\n";
         try {
-            $report = $this->migration_manager->get_status_report();
+            $report = $this->manager()->get_status_report();
             echo "Toplam Migration: {$report['total_migrations']}\n";
             echo "Uygulanan: {$report['applied_count']}\n";
             echo "Bekleyen: {$report['pending_count']}\n";
@@ -104,12 +131,12 @@ class nsql_cli
     private function migrate_create(?string $name): void
     {
         if (empty($name)) {
-            $this->error("Migration adı belirtilmedi. Kullanım: php bin/nsql migrate:create migration_name");
+            $this->error("Migration adı belirtilmedi. Kullanım: vendor/bin/nsql migrate:create migration_name");
             return;
         }
 
         try {
-            $path = $this->migration_manager->create($name);
+            $path = $this->manager()->create($name);
             echo "Migration oluşturuldu: {$path}\n";
         } catch (\Exception $e) {
             $this->error("Migration oluşturma hatası: " . $e->getMessage());
@@ -120,7 +147,7 @@ class nsql_cli
     {
         echo "Seed verileri yükleniyor...\n";
         try {
-            $this->migration_manager->seed($class);
+            $this->manager()->seed($class);
             echo "Seed işlemi tamamlandı.\n";
         } catch (\Exception $e) {
             $this->error("Seed hatası: " . $e->getMessage());
@@ -130,12 +157,12 @@ class nsql_cli
     private function seed_create(?string $name): void
     {
         if (empty($name)) {
-            $this->error("Seeder adı belirtilmedi. Kullanım: php bin/nsql seed:create seeder_name");
+            $this->error("Seeder adı belirtilmedi. Kullanım: vendor/bin/nsql seed:create seeder_name");
             return;
         }
 
         try {
-            $path = $this->migration_manager->create_seeder($name);
+            $path = $this->manager()->create_seeder($name);
             echo "Seeder oluşturuldu: {$path}\n";
         } catch (\Exception $e) {
             $this->error("Seeder oluşturma hatası: " . $e->getMessage());
@@ -183,7 +210,7 @@ class nsql_cli
     private function show_help(): void
     {
         echo "NSQL CLI Tool\n\n";
-        echo "Kullanım: php bin/nsql <komut> [argümanlar]\n\n";
+        echo "Kullanım: vendor/bin/nsql <komut> [argümanlar]\n\n";
         echo "Komutlar:\n";
         echo "  migrate              Tüm bekleyen migration'ları çalıştır\n";
         echo "  migrate:rollback     Son batch'i rollback et\n";
@@ -192,7 +219,10 @@ class nsql_cli
         echo "  seed [class]         Seed verilerini yükle\n";
         echo "  seed:create <ad>     Yeni seeder oluştur\n";
         echo "  db:status            Veritabanı durumunu göster\n";
-        echo "  help                 Bu yardım mesajını göster\n";
+        echo "  help                 Bu yardım mesajını göster\n\n";
+        echo "Seçenekler:\n";
+        echo "  --path=<dizin>        Migration dizini (varsayılan: MIGRATIONS_PATH veya database/migrations)\n";
+        echo "  --seeds-path=<dizin>  Seed dizini (varsayılan: SEEDS_PATH veya database/seeds)\n";
     }
 
     private function error(string $message): void

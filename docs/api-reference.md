@@ -315,7 +315,9 @@ $logger->log_sql_injection_attempt(string $query, array $params = [], string $er
 Veritabanı migration'larını yönetme.
 
 ```php
-$manager = new migration_manager(?nsql $db = null);
+// Yollar null ise MIGRATIONS_PATH / SEEDS_PATH veya <proje kökü>/database/{migrations,seeds}
+$manager = new migration_manager(nsql $db, ?string $migrations_path = null, ?string $seeds_path = null);
+$manager->set_migrations_table(string $table): void
 
 // Migration'ları çalıştırma
 $manager->migrate(): array
