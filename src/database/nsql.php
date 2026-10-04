@@ -850,13 +850,32 @@ class nsql
         return implode('.', array_map(fn (string $part) => $quote . $part . $quote, $parts));
     }
 
+    /**
+     * get_row() için sorguya güvenli olduğunda `LIMIT 1` ekler.
+     *
+     * Yalnızca SELECT/WITH sorgularında, sorgu herhangi bir LIMIT (`LIMIT 5`, `LIMIT ?`, `LIMIT :p`,
+     * subquery içi dahil) veya kilit ifadesi (`FOR UPDATE`, `FOR SHARE`, `LOCK IN SHARE MODE`)
+     * içermiyorsa eklenir. Aksi halde sorgu değiştirilmez ve yalnızca ilk satır okunur.
+     */
+    private function with_single_row_limit(string $query): string
+    {
+        $query = rtrim($query, " \t\n\r\0\x0B;");
+
+        if (! preg_match('/^\s*(SELECT|WITH)\b/i', $query)) {
+            return $query;
+        }
+
+        if (preg_match('/\bLIMIT\b|\bFOR\s+(UPDATE|SHARE)\b|\bLOCK\s+IN\s+SHARE\s+MODE\b/i', $query)) {
+            return $query;
+        }
+
+        return $query . ' LIMIT 1';
+    }
+
     public function get_row(string $query, array $params = []): ?object
     {
         $this->set_last_called_method();
-        // LIMIT 1 ekle eğer yoksa
-        if (! preg_match('/\bLIMIT\s+\d+(?:\s*,\s*\d+)?$/i', $query)) {
-            $query .= ' LIMIT 1';
-        }
+        $query = $this->with_single_row_limit($query);
 
         // Cache kontrolü
         $cache_key = $this->generate_query_cache_key($query, $params);
@@ -878,6 +897,7 @@ class nsql
         
         // Sonucu al, last_results ve cache'i guncelle
         $result = $stmt->fetch(PDO::FETCH_OBJ);
+        $stmt->closeCursor();
         $this->last_results = $result ? [$result] : [];
         if ($result && $this->query_cache_enabled) {
             $tables = $this->extract_tables_from_query($query);

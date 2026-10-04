@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.16
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.17
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -35,6 +35,8 @@
 > **v1.5.15**: Connection pool DSN başına ve süreç içi (kilit dosyası yok); kullanımdaki bağlantılar artık silinmiyor. Kopan bağlantıda statement yeniden hazırlanarak otomatik yeniden bağlanma, transaction içinde ise `ConnectionException` (#30, #31).
 >
 > **v1.5.16**: ORM güvenliği — constructor dahil mass assignment yalnızca `$fillable` alanları kabul eder (boşsa hiçbiri); tablo/kolon adları doğrulanıp quote edilir; `hidden` alanlar artık kaydediliyor (#32).
+>
+> **v1.5.17**: `query_builder::first()` ve `Model::find()` düzeltildi; `get_row()` `LIMIT ?`/`:param`, `FOR UPDATE`, `LOCK IN SHARE MODE` ve sondaki `;` ile çalışıyor (#34).
 
 ## 🌟 Özellikler
 
@@ -87,7 +89,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.16 --prefer-dist
+composer require ngunenc/nsql:^1.5.17 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -107,13 +109,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.16"
+        "ngunenc/nsql": "^1.5.17"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.16 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.17 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1464,6 +1466,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.17 (2026-10-04)
+  - get_row() LIMIT çakışması: first() / Model::find() / FOR UPDATE düzeltmesi (#34)
 
 - v1.5.16 (2026-10-04)
   - ORM mass assignment koruması, identifier doğrulama/quote, hidden alanların kaydı; batch_* kolon adı doğrulaması (#32)

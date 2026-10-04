@@ -4,6 +4,16 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.17] - 2026-10-04
+
+### Düzeltmeler (#34)
+- **`query_builder::first()` ve `model::find()` çalışmıyordu**: Builder `LIMIT :limit_N` üretirken `get_row()` yalnızca sayısal LIMIT tanıdığı için ikinci bir `LIMIT 1` ekliyor ve sözdizimi hatası oluşuyordu.
+- `get_row()` artık `LIMIT 1`'i yalnızca SELECT/WITH sorgularında ve sorgu hiç `LIMIT` (sayısal, `?`, `:param`), `FOR UPDATE`, `FOR SHARE` veya `LOCK IN SHARE MODE` içermiyorsa ekliyor. Sondaki `;` temizleniyor.
+- `get_row()` ilk satırı okuduktan sonra cursor'ı kapatıyor.
+
+### Testler
+- `tests/Integration/GetRowLimitTest.php`: `first()`, `Model::find()`, `FOR UPDATE`, `LOCK IN SHARE MODE`, sondaki `;`, `LIMIT ?` / `LIMIT :p` / `LIMIT 1 OFFSET 1`
+
 ## [1.5.16] - 2026-10-04
 
 ### Güvenlik (#32)
