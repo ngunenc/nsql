@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.22
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.23
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -47,6 +47,8 @@
 > **v1.5.21**: Proxy başlıkları yalnızca TRUSTED_PROXIES listesindeki adreslerden kabul ediliyor; yeni ip_resolver (#37).
 >
 > **v1.5.22**: Rate limiter: doğru token bucket, SELECT ... FOR UPDATE ile atomik güncelleme, config::get, security_manager bağlantısı (#38).
+>
+> **v1.5.23**: Şifreleme v2: ham 32 byte anahtar, 12 byte IV, key_id ile rotation sonrası çözme; v1 verisi okunmaya devam ediyor (#39).
 
 ## 🌟 Özellikler
 
@@ -99,7 +101,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.22 --prefer-dist
+composer require ngunenc/nsql:^1.5.23 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -119,13 +121,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.22"
+        "ngunenc/nsql": "^1.5.23"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.22 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.23 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -726,14 +728,26 @@ $limiter->install();                    // veya migration içinde: rate_limiter:
 use nsql\database\security\encryption;
 use nsql\database\security\key_manager;
 
-// Anahtar: ENCRYPTION_KEY env veya storage/keys/encryption.key
+// Anahtar: ENCRYPTION_KEY env (base64, 32 byte) veya storage/keys/encryption.key
+// Üretmek için: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
 $enc = new encryption();
-$crypted = $enc->encrypt('gizli veri');
-$plain = $enc->decrypt($crypted);
+$crypted = $enc->encrypt('gizli veri');   // "v2:..." (AES-256-GCM, ham 32 byte anahtar, 12 byte IV, key_id)
+$plain = $enc->decrypt($crypted);         // v1 (<= 1.5.22) verileri de çözülür
 
-// Anahtar rotation (eski verileri önce çözüp yeniden şifreleyin)
-// $info = key_manager::rotate_key();
+// Anahtar rotation: eski anahtar storage/keys/archive/ altına (0600) taşınır,
+// v2 verisi key_id ile doğru (arşiv) anahtarla çözülür.
+$info = $enc->rotate_key();
+
+// Eski verileri mevcut anahtara taşımak
+if ($enc->needs_reencrypt($crypted)) {
+    $crypted = $enc->reencrypt($crypted);
+}
+
+// Anahtarı açıkça verip arşivi eklemek
+$enc = new encryption($key, key_manager::get_archived_keys());
 ```
+
+> `ENCRYPTION_KEY` env ile verilen anahtar storage'dan önce gelir; rotation sonrası yeni anahtarı env'e de yazmanız gerekir. Eski anahtarlar `storage/keys/archive/` altında kaldığı sürece eski veriler çözülebilir.
 
 #### Monitoring (health / metrics)
 
@@ -1567,6 +1581,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.23 (2026-10-04)
+  - Şifreleme v2 formatı, arşiv anahtarlarıyla çözme, reencrypt(), arşiv 0600 (#39)
 
 - v1.5.22 (2026-10-04)
   - Rate limiter token bucket ve yarış durumu düzeltmesi, saat enjeksiyonu, install() (#38)
