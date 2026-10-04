@@ -840,7 +840,7 @@ class nsql
         }
 
         foreach ($parts as $part) {
-            if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $part)) {
+            if (! preg_match('/^(?!\d+$)[A-Za-z0-9_]+$/', $part)) {
                 throw new InvalidArgumentException('Geçersiz tanımlayıcı: ' . substr($identifier, 0, 64));
             }
         }

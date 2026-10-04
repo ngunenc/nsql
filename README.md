@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.17
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.18
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -37,6 +37,8 @@
 > **v1.5.16**: ORM güvenliği — constructor dahil mass assignment yalnızca `$fillable` alanları kabul eder (boşsa hiçbiri); tablo/kolon adları doğrulanıp quote edilir; `hidden` alanlar artık kaydediliyor (#32).
 >
 > **v1.5.17**: `query_builder::first()` ve `Model::find()` düzeltildi; `get_row()` `LIMIT ?`/`:param`, `FOR UPDATE`, `LOCK IN SHARE MODE` ve sondaki `;` ile çalışıyor (#34).
+>
+> **v1.5.18**: Query builder yalnızca `kolon`, `tablo.kolon`, `tablo.*` ve izinli aggregate ifadelerini kabul ediyor; hepsi driver'a göre quote ediliyor. `order_by('SLEEP(5)')` gibi ifadeler reddediliyor. Serbest SQL için `select_raw()`, `where_raw()`, `order_by_raw()`, `group_by_raw()`, `having_raw()` (#33).
 
 ## 🌟 Özellikler
 
@@ -89,7 +91,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.17 --prefer-dist
+composer require ngunenc/nsql:^1.5.18 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -109,13 +111,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.17"
+        "ngunenc/nsql": "^1.5.18"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.17 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.18 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1336,6 +1338,33 @@ Bu sayede formlarınızda CSRF saldırılarına karşı koruma sağlayabilirsini
 
 ---
 
+### 🔎 Query Builder: Kolon Kuralları ve Raw İfadeler (v1.5.18+)
+
+`select`, `where`, `order_by`, `group_by`, `having` ve `join` yalnızca şu biçimleri kabul eder; hepsi driver'a göre quote edilir:
+
+- `kolon`, `tablo.kolon`, `tablo.*`, `*` (backtick/çift tırnaklı yazım da olur: `` `tablo`.`kolon` ``)
+- Aggregate: `COUNT(*)`, `COUNT(DISTINCT kolon)`, `SUM|AVG|MIN|MAX|GROUP_CONCAT(kolon)`
+- Yalnızca `select` içinde: `ifade AS takma_ad` ve tamsayı (`select('1')`)
+
+Diğer her şey (`SLEEP(5)`, `IF(...)`, `kolon -- `, tırnaklı alias içinde SQL …) `InvalidArgumentException` fırlatır. Böylece `order_by($_GET['sort'])` SQL injection'a açık olmaz; yine de kullanıcıdan gelen kolonları bir izin listesiyle sınırlamanız önerilir.
+
+Serbest SQL gerekiyorsa raw metodları kullanın. **Raw içerik doğrulanmaz; kullanıcı girdisi koymayın**, değerleri isimli binding ile verin:
+
+```php
+$rows = $db->table('orders')
+    ->select('id')
+    ->select_raw('DATE(created_at) AS day')
+    ->where_raw('total > :min', ['min' => 100])
+    ->group_by_raw('DATE(created_at)')
+    ->having_raw('COUNT(*) > :n', ['n' => 1])
+    ->order_by_raw("FIELD(status, 'new', 'paid')")
+    ->get();
+```
+
+JOIN closure'ının döndürdüğü ON koşulu da raw kabul edilir.
+
+---
+
 ### 🧩 ORM Model (v1.5.16+)
 
 ```php
@@ -1466,6 +1495,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.18 (2026-10-04)
+  - Query builder identifier güvenliği: katı kolon grameri, driver'a göre quote, *_raw() metodları (#33)
 
 - v1.5.17 (2026-10-04)
   - get_row() LIMIT çakışması: first() / Model::find() / FOR UPDATE düzeltmesi (#34)

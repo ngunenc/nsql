@@ -4,6 +4,34 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.18] - 2026-10-04
+
+### Güvenlik (#33)
+- **Query builder kolon doğrulaması**: Parantezli her ifade kabul ediliyordu (`order_by('SLEEP(5)')`, `select('BENCHMARK(...) AS x')`); kullanıcıdan gelen sıralama kolonuyla blind SQL injection mümkündü. Artık yalnızca şu biçimler kabul ediliyor:
+  - `kolon`, `tablo.kolon`, `tablo.*`, `*`
+  - `COUNT(*)`, `COUNT(DISTINCT kolon)`, `SUM|AVG|MIN|MAX|GROUP_CONCAT(kolon)`
+  - yalnızca `select` içinde `ifade AS takma_ad` ve tamsayı literal
+- **Quote**: Tüm tablo, kolon, alias ve subquery alias'ları `nsql::quote_identifier()` ile doğrulanıp driver'a göre quote ediliyor. Tırnaklı alias içeriği (`x AS "a, (SELECT 1)"`) ve backtick içeren adlar reddediliyor.
+- `where()` subquery dalı, `where_in_subquery()` ve `having()` subquery dalında kolon quote edilmiyordu; düzeltildi.
+- `from()` / `join()` subquery alias'ı doğrulanmıyordu; düzeltildi.
+- `order_by()` yönü doğrulanmadan önce değil, ekleme anında normalize ediliyor (`'DESC, SLEEP(1)'` reddedilir).
+- Builder parametre adları yalnızca harf/rakam/`_` içeriyor (aggregate veya tırnaklı kolonlarda geçersiz placeholder oluşmuyordu).
+
+### Düzeltmeler
+- `join()` ikinci argümanı PHP fonksiyon adıyla aynı olan bir kolon (`max`, `date` …) ise closure gibi çağrılıyordu.
+
+### Yeni
+- `select_raw()`, `where_raw()`, `order_by_raw()`, `group_by_raw()`, `having_raw()` — doğrulanmayan serbest SQL; değerler isimli binding ile (`['min' => 100]`).
+- `!=` ve `NOT LIKE` operatörleri.
+
+### Davranış değişikliği
+- Aggregate argümanları quote ediliyor: `AVG(price)` → ``AVG(`price`)``.
+- `select('UPPER(name)')`, `order_by('RAND()')` gibi serbest ifadeler artık exception fırlatıyor; `select_raw()` / `order_by_raw()` kullanın.
+- `nsql::quote_identifier()` rakamla başlayan adları kabul ediyor (yalnızca rakamdan oluşanları reddediyor).
+
+### Testler
+- `tests/Integration/QueryBuilderIdentifierSecurityTest.php`
+
 ## [1.5.17] - 2026-10-04
 
 ### Düzeltmeler (#34)
