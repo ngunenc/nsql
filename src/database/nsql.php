@@ -826,15 +826,28 @@ class nsql
      * @param string $identifier Identifier
      * @return string Quoted identifier
      */
-    private function quote_identifier(string $identifier): string
+    /**
+     * Tablo/kolon adını doğrular ve driver'a göre quote eder (`tablo` veya `şema.tablo`).
+     *
+     * @throws InvalidArgumentException Ad yalnızca harf, rakam ve alt çizgiden oluşmuyorsa
+     */
+    public function quote_identifier(string $identifier): string
     {
-        if ($this->driver) {
-            $quote = $this->driver->get_identifier_quote();
-            return $quote . $identifier . $quote;
+        $parts = explode('.', $identifier);
+
+        if (count($parts) > 2) {
+            throw new InvalidArgumentException('Geçersiz tanımlayıcı: ' . substr($identifier, 0, 64));
         }
-        
-        // Varsayılan: backtick (MySQL)
-        return '`' . $identifier . '`';
+
+        foreach ($parts as $part) {
+            if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $part)) {
+                throw new InvalidArgumentException('Geçersiz tanımlayıcı: ' . substr($identifier, 0, 64));
+            }
+        }
+
+        $quote = $this->driver?->get_identifier_quote() ?? '`';
+
+        return implode('.', array_map(fn (string $part) => $quote . $part . $quote, $parts));
     }
 
     public function get_row(string $query, array $params = []): ?object

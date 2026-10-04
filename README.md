@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.15
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.16
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -33,6 +33,8 @@
 > **v1.5.14**: Query cache yazma/rollback sonrası eski veri döndürmüyor; cache artık varsayılan **kapalı** (opt-in). Konumsal `?` parametreleri ve `batch_insert` / `batch_update` düzeltildi (#29).
 >
 > **v1.5.15**: Connection pool DSN başına ve süreç içi (kilit dosyası yok); kullanımdaki bağlantılar artık silinmiyor. Kopan bağlantıda statement yeniden hazırlanarak otomatik yeniden bağlanma, transaction içinde ise `ConnectionException` (#30, #31).
+>
+> **v1.5.16**: ORM güvenliği — constructor dahil mass assignment yalnızca `$fillable` alanları kabul eder (boşsa hiçbiri); tablo/kolon adları doğrulanıp quote edilir; `hidden` alanlar artık kaydediliyor (#32).
 
 ## 🌟 Özellikler
 
@@ -85,7 +87,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.15 --prefer-dist
+composer require ngunenc/nsql:^1.5.16 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -105,13 +107,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.15"
+        "ngunenc/nsql": "^1.5.16"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.15 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.16 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1332,6 +1334,32 @@ Bu sayede formlarınızda CSRF saldırılarına karşı koruma sağlayabilirsini
 
 ---
 
+### 🧩 ORM Model (v1.5.16+)
+
+```php
+use nsql\database\orm\model;
+
+class User extends model
+{
+    protected string $table = 'users';
+    protected array $fillable = ['name', 'email', 'password'];
+    protected array $hidden = ['password'];
+}
+
+$user = new User($db, $_POST);   // yalnızca fillable alanlar atanır
+$user->save();                   // bool; hidden alanlar da kaydedilir
+echo $user->to_json();           // password çıktıda yok
+
+$user->force_fill(['is_admin' => 1]);        // güvenilir veri: fillable kontrolü yok
+$user->set_attribute('role', 'editor');
+```
+
+- `$fillable` boşsa constructor, `fill()` ve `$model->alan = ...` hiçbir alanı atamaz.
+- Tablo ve kolon adları yalnızca harf, rakam ve `_` içerebilir; aksi halde `InvalidArgumentException`. Aynı doğrulama `batch_insert()` / `batch_update()` için de geçerli (`$db->quote_identifier()`).
+- `hidden` yalnızca `to_array()` / `to_json()` çıktısını etkiler.
+
+---
+
 ### 🔄 Veritabanı Bağlantı Güncelliği
 
 `nsql` sınıfı, her sorgudan önce veritabanı bağlantısının canlı olup olmadığını otomatik olarak kontrol eder. Eğer bağlantı kopmuşsa, otomatik olarak yeniden bağlanır.
@@ -1436,6 +1464,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.16 (2026-10-04)
+  - ORM mass assignment koruması, identifier doğrulama/quote, hidden alanların kaydı; batch_* kolon adı doğrulaması (#32)
 
 - v1.5.15 (2026-10-04)
   - Connection pool DSN başına / süreç içi yeniden tasarım; reconnect + statement yeniden hazırlama, transaction içinde ConnectionException (#30, #31)

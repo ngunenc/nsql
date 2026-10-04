@@ -4,6 +4,31 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.16] - 2026-10-04
+
+### Güvenlik (#32)
+- **Mass assignment**: Constructor'a verilen alanlar artık `fill()` üzerinden geçiyor ve yalnızca `$fillable` içindeki alanlar atanıyor. `$fillable` boşsa constructor, `fill()` ve `$model->alan = ...` hiçbir alanı atamıyor (önceden her anahtar kabul ediliyordu).
+- **SQL injection (ORM)**: `save()` ve `delete()` tablo, kolon ve primary key adlarını `nsql::quote_identifier()` ile doğrulayıp quote ediyor. Harf/rakam/`_` dışında karakter içeren adlar `InvalidArgumentException` fırlatıyor.
+- **SQL injection (batch)**: `batch_insert()` ve `batch_update()` kolon/tablo adlarını kaçışsız backtick içine koyuyordu; aynı doğrulama artık burada da uygulanıyor.
+
+### Düzeltmeler
+- `hidden` alanlar (ör. `password`) `save()` sırasında atlanıyordu. Artık kaydediliyor; `hidden` yalnızca `to_array()` / `to_json()` çıktısını etkiliyor.
+- `save()` her zaman `bool` döndürüyor (insert'te `int|false` dönüyordu). Insert sonrası primary key ve timestamp alanları modele yazılıyor.
+- `to_json()` dönüş tipi `string`.
+
+### Yeni
+- `model::fill()`, `model::force_fill()`, `model::set_attribute()`, `model::is_fillable()`, `model::__isset()`.
+- `nsql::quote_identifier()` artık public ve doğrulama yapıyor (`tablo` veya `şema.tablo`).
+
+### Davranış değişikliği
+- `$fillable` tanımlamayan modellerde `new Model($db, [...])` ve `$model->alan = ...` artık alan atamıyor. Güvenilir veriler için `force_fill()` / `set_attribute()` kullanın veya `$fillable` tanımlayın.
+
+### Testler
+- `tests/Integration/OrmModelSecurityTest.php`
+
+### Bilinen sorun
+- `model::find()` / `query_builder::first()` hâlâ `LIMIT` çakışması nedeniyle çalışmıyor (#34).
+
 ## [1.5.15] - 2026-10-04
 
 ### Düzeltmeler
