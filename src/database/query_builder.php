@@ -2,8 +2,20 @@
 
 namespace nsql\database;
 
+/**
+ * Akıcı SELECT sorgu oluşturucu.
+ *
+ * Kolon/tablo argümanları yalnızca şu biçimleri kabul eder ve driver'a göre quote edilir:
+ * `kolon`, `tablo.kolon`, `tablo.*`, `*`, tamsayı (yalnızca select), izinli aggregate
+ * (`COUNT(*)`, `SUM(kolon)`, `COUNT(DISTINCT kolon)` …) ve select'te `ifade AS takma_ad`.
+ *
+ * Serbest SQL ifadeleri için *_raw() metodlarını kullanın; raw içerik doğrulanmaz ve
+ * kullanıcı girdisi içermemelidir. JOIN closure'ının döndürdüğü koşul da raw kabul edilir.
+ */
 class query_builder
 {
+    private const AGGREGATES = 'COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT';
+
     private nsql $db;
     private string $table;
     private array $columns = ['*'];
@@ -27,77 +39,65 @@ class query_builder
     /**
      * Tabloyu belirler
      *
-     * @param string $table Tablo adı
-     * @return self
+     * @param string $table Tablo adı (`tablo` veya `şema.tablo`)
      */
     public function table(string $table): self
     {
-        $this->validate_table_name($table);
-        $this->table = $table;
+        $this->table = $this->compile_reference($table);
 
         return $this;
     }
 
     /**
-     * FROM clause için alias
+     * FROM clause
      *
      * @param string|query_builder $table Tablo adı veya subquery builder
      * @param string|null $alias Alias adı (subquery kullanılıyorsa zorunlu)
-     * @return self
      */
     public function from($table, ?string $alias = null): self
     {
-        // Subquery desteği
         if ($table instanceof query_builder) {
             if ($alias === null) {
                 throw new \InvalidArgumentException('FROM subquery için alias zorunludur.');
             }
-            
-            $subquery = $table->build_query();
-            $subquery_params = $table->get_params();
-            
-            // Subquery parametrelerini birleştir
-            foreach ($subquery_params as $key => $param_data) {
-                $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-                $this->params[$unique_key] = $param_data;
-                $subquery = str_replace($key, $unique_key, $subquery);
-            }
-            
-            $this->table = "($subquery) AS {$alias}";
+
+            $this->table = '(' . $this->merge_subquery($table) . ') AS ' . $this->db->quote_identifier($alias);
+
             return $this;
         }
-        
+
         return $this->table($table);
     }
 
     /**
      * Seçilecek sütunları belirler
      *
-     * @param string|query_builder ...$columns Sütun adları veya subquery builder
-     * @return self
+     * @param string|query_builder ...$columns Sütunlar (`ifade AS takma_ad` desteklenir) veya subquery builder
      */
     public function select(...$columns): self
     {
         $this->columns = [];
         foreach ($columns as $column) {
-            // Subquery desteği
             if ($column instanceof query_builder) {
-                $subquery = $column->build_query();
-                $subquery_params = $column->get_params();
-                
-                // Subquery parametrelerini birleştir
-                foreach ($subquery_params as $key => $param_data) {
-                    $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-                    $this->params[$unique_key] = $param_data;
-                    $subquery = str_replace($key, $unique_key, $subquery);
-                }
-                
-                $this->columns[] = "($subquery)";
-            } else {
-                $this->validate_column_name($column);
-                $this->columns[] = $column;
+                $this->columns[] = '(' . $this->merge_subquery($column) . ')';
+                continue;
             }
+
+            $this->columns[] = $this->compile_column((string) $column, true);
         }
+
+        return $this;
+    }
+
+    /**
+     * Doğrulanmadan SELECT listesine eklenen ifade. Kullanıcı girdisi içermemelidir.
+     */
+    public function select_raw(string $expression): self
+    {
+        if ($this->columns === ['*']) {
+            $this->columns = [];
+        }
+        $this->columns[] = $expression;
 
         return $this;
     }
@@ -107,34 +107,20 @@ class query_builder
      *
      * @param string $column Sütun adı
      * @param string $operator Operatör (=, >, <, etc.)
-     * @param mixed $value Değer
-     * @return self
+     * @param mixed $value Değer veya subquery builder
      */
     public function where(string $column, string $operator, $value): self
     {
-        $this->validate_column_name($column);
+        $quoted_column = $this->compile_column($column);
         $this->validate_operator($operator);
 
-        // Subquery desteği
         if ($value instanceof query_builder) {
-            $subquery = $value->build_query();
-            $subquery_params = $value->get_params();
-            
-            // Subquery parametrelerini birleştir
-            foreach ($subquery_params as $key => $param_data) {
-                $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-                $this->params[$unique_key] = $param_data;
-                // Subquery içindeki parametre adlarını güncelle
-                $subquery = str_replace($key, $unique_key, $subquery);
-            }
-            
-            $this->where[] = "$column $operator ($subquery)";
+            $this->where[] = "$quoted_column $operator (" . $this->merge_subquery($value) . ')';
+
             return $this;
         }
 
         [$param_name, $param_value, $param_type] = $this->prepare_param($column, $value);
-        // Column'ı quote et (güvenlik için)
-        $quoted_column = $this->quote_identifier_safe($column);
         $this->where[] = "$quoted_column $operator $param_name";
         $this->params[$param_name] = ['value' => $param_value, 'type' => $param_type];
 
@@ -142,63 +128,43 @@ class query_builder
     }
 
     /**
-     * WHERE IN subquery ekler
+     * Doğrulanmadan eklenen WHERE koşulu. Değerler için `:ad` placeholder'ı ve $bindings kullanın.
      *
-     * @param string $column Sütun adı
-     * @param query_builder $subquery Subquery builder
-     * @param bool $not NOT IN kullanılacak mı?
-     * @return self
+     * @param array<string, mixed> $bindings ['ad' => değer]
+     */
+    public function where_raw(string $condition, array $bindings = []): self
+    {
+        $this->where[] = '(' . $condition . ')';
+        $this->add_raw_bindings($bindings);
+
+        return $this;
+    }
+
+    /**
+     * WHERE IN subquery ekler
      */
     public function where_in_subquery(string $column, query_builder $subquery, bool $not = false): self
     {
-        $this->validate_column_name($column);
-        
-        $subquery_sql = $subquery->build_query();
-        $subquery_params = $subquery->get_params();
-        
-        // Subquery parametrelerini birleştir
-        foreach ($subquery_params as $key => $param_data) {
-            $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-            $this->params[$unique_key] = $param_data;
-            $subquery_sql = str_replace($key, $unique_key, $subquery_sql);
-        }
-        
+        $quoted_column = $this->compile_column($column);
         $operator = $not ? 'NOT IN' : 'IN';
-        $this->where[] = "$column $operator ($subquery_sql)";
-        
+        $this->where[] = "$quoted_column $operator (" . $this->merge_subquery($subquery) . ')';
+
         return $this;
     }
 
     /**
      * WHERE EXISTS subquery ekler
-     *
-     * @param query_builder $subquery Subquery builder
-     * @param bool $not NOT EXISTS kullanılacak mı?
-     * @return self
      */
     public function where_exists(query_builder $subquery, bool $not = false): self
     {
-        $subquery_sql = $subquery->build_query();
-        $subquery_params = $subquery->get_params();
-        
-        // Subquery parametrelerini birleştir
-        foreach ($subquery_params as $key => $param_data) {
-            $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-            $this->params[$unique_key] = $param_data;
-            $subquery_sql = str_replace($key, $unique_key, $subquery_sql);
-        }
-        
         $operator = $not ? 'NOT EXISTS' : 'EXISTS';
-        $this->where[] = "$operator ($subquery_sql)";
-        
+        $this->where[] = "$operator (" . $this->merge_subquery($subquery) . ')';
+
         return $this;
     }
 
     /**
      * WHERE NOT EXISTS subquery ekler (convenience method)
-     *
-     * @param query_builder $subquery Subquery builder
-     * @return self
      */
     public function where_not_exists(query_builder $subquery): self
     {
@@ -208,36 +174,44 @@ class query_builder
     /**
      * Sıralama ekler
      *
-     * @param string $column Sütun adı
+     * @param string $column Sütun adı, select takma adı veya aggregate
      * @param string $direction Sıralama yönü (ASC/DESC)
-     * @return self
      */
     public function order_by(string $column, string $direction = 'ASC'): self
     {
-        $this->validate_column_name($column);
-        $direction = strtoupper($direction);
+        $this->order_by[] = $this->compile_column($column) . ' ' . $this->normalize_direction($direction);
 
-        if (! in_array($direction, ['ASC', 'DESC'])) {
-            throw new \InvalidArgumentException('Geçersiz sıralama yönü. Sadece ASC veya DESC kullanılabilir.');
-        }
+        return $this;
+    }
 
-        $this->order_by[] = "$column $direction";
+    /**
+     * Doğrulanmadan eklenen ORDER BY ifadesi (ör. `FIELD(status, 'a', 'b')`). Kullanıcı girdisi içermemelidir.
+     */
+    public function order_by_raw(string $expression): self
+    {
+        $this->order_by[] = $expression;
 
         return $this;
     }
 
     /**
      * GROUP BY ekler
-     *
-     * @param string ...$columns Gruplanacak sütunlar
-     * @return self
      */
     public function group_by(string ...$columns): self
     {
         foreach ($columns as $column) {
-            $this->validate_column_name($column);
-            $this->group_by[] = $column;
+            $this->group_by[] = $this->compile_column($column);
         }
+
+        return $this;
+    }
+
+    /**
+     * Doğrulanmadan eklenen GROUP BY ifadesi. Kullanıcı girdisi içermemelidir.
+     */
+    public function group_by_raw(string $expression): self
+    {
+        $this->group_by[] = $expression;
 
         return $this;
     }
@@ -245,34 +219,21 @@ class query_builder
     /**
      * HAVING koşulu ekler (GROUP BY ile birlikte kullanılır)
      *
-     * @param string $column Sütun adı veya aggregate fonksiyon (örn: COUNT(*))
-     * @param string $operator Operatör (=, >, <, >=, <=, etc.)
+     * @param string $column Sütun adı veya aggregate (örn: COUNT(*))
      * @param mixed $value Değer veya subquery builder
-     * @return self
      */
     public function having(string $column, string $operator, $value): self
     {
+        $quoted_column = $this->compile_column($column);
         $this->validate_operator($operator);
 
-        // Subquery desteği
         if ($value instanceof query_builder) {
-            $subquery = $value->build_query();
-            $subquery_params = $value->get_params();
-            
-            // Subquery parametrelerini birleştir
-            foreach ($subquery_params as $key => $param_data) {
-                $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-                $this->params[$unique_key] = $param_data;
-                $subquery = str_replace($key, $unique_key, $subquery);
-            }
-            
-            $this->having[] = "$column $operator ($subquery)";
+            $this->having[] = "$quoted_column $operator (" . $this->merge_subquery($value) . ')';
+
             return $this;
         }
 
         [$param_name, $param_value, $param_type] = $this->prepare_param($column, $value);
-        // Column'ı quote et (güvenlik için) - HAVING için aggregate fonksiyonlar olabilir
-        $quoted_column = $this->quote_identifier_safe($column);
         $this->having[] = "$quoted_column $operator $param_name";
         $this->params[$param_name] = ['value' => $param_value, 'type' => $param_type];
 
@@ -280,10 +241,20 @@ class query_builder
     }
 
     /**
-     * Limit belirler
+     * Doğrulanmadan eklenen HAVING koşulu. Değerler için `:ad` placeholder'ı ve $bindings kullanın.
      *
-     * @param int $limit Limit değeri
-     * @return self
+     * @param array<string, mixed> $bindings ['ad' => değer]
+     */
+    public function having_raw(string $condition, array $bindings = []): self
+    {
+        $this->having[] = '(' . $condition . ')';
+        $this->add_raw_bindings($bindings);
+
+        return $this;
+    }
+
+    /**
+     * Limit belirler
      */
     public function limit(int $limit): self
     {
@@ -298,146 +269,81 @@ class query_builder
     /**
      * JOIN ekler
      *
-     * @param string|query_builder $table Katılım yapılacak tablo veya subquery builder (alias ile: 'table AS alias' veya 'table alias')
-     * @param string|callable $first Birinci sütun veya closure (karmaşık ON condition için)
+     * @param string|query_builder $table Katılım yapılacak tablo veya subquery builder
+     * @param string|callable $first Birinci sütun veya closure (raw ON koşulu döndürür)
      * @param string|null $operator Operatör (closure kullanılıyorsa null)
      * @param string|null $second İkinci sütun (closure kullanılıyorsa null)
      * @param string $type Join tipi (INNER, LEFT, RIGHT, FULL, CROSS, LEFT OUTER, RIGHT OUTER, FULL OUTER)
      * @param string|null $alias Alias adı (subquery kullanılıyorsa zorunlu)
-     * @return self
      */
     public function join($table, $first, ?string $operator = null, ?string $second = null, string $type = 'INNER', ?string $alias = null): self
     {
-        // Subquery desteği
         if ($table instanceof query_builder) {
             if ($alias === null) {
                 throw new \InvalidArgumentException('JOIN subquery için alias zorunludur.');
             }
-            
-            $subquery = $table->build_query();
-            $subquery_params = $table->get_params();
-            
-            // Subquery parametrelerini birleştir
-            foreach ($subquery_params as $key => $param_data) {
-                $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
-                $this->params[$unique_key] = $param_data;
-                $subquery = str_replace($key, $unique_key, $subquery);
-            }
-            
-            $table = "($subquery) AS {$alias}";
+
+            $table_sql = '(' . $this->merge_subquery($table) . ') AS ' . $this->db->quote_identifier($alias);
         } else {
-            $this->validate_table_name($table);
+            $table_sql = $this->compile_reference($table);
         }
-        
+
         $this->validate_join_type($type);
 
-        // Closure ile karmaşık ON condition
-        if (is_callable($first)) {
+        if (! is_string($first) && is_callable($first)) {
             $condition = call_user_func($first, $this);
             if (! is_string($condition)) {
                 throw new \InvalidArgumentException('JOIN closure bir string döndürmelidir.');
             }
-            $this->joins[] = [
-                'type' => $type,
-                'table' => $table,
-                'condition' => $condition,
-            ];
+            $this->joins[] = ['type' => $type, 'table' => $table_sql, 'condition' => $condition];
 
             return $this;
         }
 
-        // Normal ON condition (first operator second)
         if ($operator === null || $second === null) {
             throw new \InvalidArgumentException('JOIN için operator ve second parametreleri gereklidir (closure kullanmıyorsanız).');
         }
 
-        $this->validate_column_name($first);
-        $this->validate_column_name($second);
         $this->validate_operator($operator);
-
-        // Column'ları quote et (güvenlik için)
-        $quoted_first = $this->quote_identifier_safe($first);
-        $quoted_second = $this->quote_identifier_safe($second);
 
         $this->joins[] = [
             'type' => $type,
-            'table' => $table, // Table zaten validate edilmiş ve subquery olabilir
-            'condition' => "$quoted_first $operator $quoted_second",
+            'table' => $table_sql,
+            'condition' => $this->compile_reference($first) . " $operator " . $this->compile_reference($second),
         ];
 
         return $this;
     }
 
-    /**
-     * LEFT JOIN ekler (convenience method)
-     *
-     * @param string $table Katılım yapılacak tablo
-     * @param string|callable $first Birinci sütun veya closure
-     * @param string|null $operator Operatör
-     * @param string|null $second İkinci sütun
-     * @return self
-     */
-    public function left_join(string $table, $first, ?string $operator = null, ?string $second = null): self
+    public function left_join(string $table, string|callable $first, ?string $operator = null, ?string $second = null): self
     {
         return $this->join($table, $first, $operator, $second, 'LEFT');
     }
 
-    /**
-     * RIGHT JOIN ekler (convenience method)
-     *
-     * @param string $table Katılım yapılacak tablo
-     * @param string|callable $first Birinci sütun veya closure
-     * @param string|null $operator Operatör
-     * @param string|null $second İkinci sütun
-     * @return self
-     */
-    public function right_join(string $table, $first, ?string $operator = null, ?string $second = null): self
+    public function right_join(string $table, string|callable $first, ?string $operator = null, ?string $second = null): self
     {
         return $this->join($table, $first, $operator, $second, 'RIGHT');
     }
 
-    /**
-     * FULL JOIN ekler (convenience method)
-     *
-     * @param string $table Katılım yapılacak tablo
-     * @param string|callable $first Birinci sütun veya closure
-     * @param string|null $operator Operatör
-     * @param string|null $second İkinci sütun
-     * @return self
-     */
-    public function full_join(string $table, $first, ?string $operator = null, ?string $second = null): self
+    public function full_join(string $table, string|callable $first, ?string $operator = null, ?string $second = null): self
     {
         return $this->join($table, $first, $operator, $second, 'FULL');
     }
 
-    /**
-     * INNER JOIN ekler (convenience method)
-     *
-     * @param string $table Katılım yapılacak tablo
-     * @param string|callable $first Birinci sütun veya closure
-     * @param string|null $operator Operatör
-     * @param string|null $second İkinci sütun
-     * @return self
-     */
-    public function inner_join(string $table, $first, ?string $operator = null, ?string $second = null): self
+    public function inner_join(string $table, string|callable $first, ?string $operator = null, ?string $second = null): self
     {
         return $this->join($table, $first, $operator, $second, 'INNER');
     }
 
     /**
      * CROSS JOIN ekler
-     *
-     * @param string $table Katılım yapılacak tablo
-     * @return self
      */
     public function cross_join(string $table): self
     {
-        $this->validate_table_name($table);
-
         $this->joins[] = [
             'type' => 'CROSS',
-            'table' => $table,
-            'condition' => null, // CROSS JOIN'de ON condition yok
+            'table' => $this->compile_reference($table),
+            'condition' => null,
         ];
 
         return $this;
@@ -446,9 +352,7 @@ class query_builder
     /**
      * UNION ekler (iki sorguyu birleştirir)
      *
-     * @param query_builder $builder Birleştirilecek Query Builder
-     * @param bool $all UNION ALL kullanılacak mı? (varsayılan: false, UNION kullanır)
-     * @return self
+     * @param bool $all UNION ALL kullanılacak mı?
      */
     public function union(query_builder $builder, bool $all = false): self
     {
@@ -490,92 +394,45 @@ class query_builder
     }
 
     /**
-     * SQL sorgusunu oluşturur
+     * SQL sorgusunu oluşturur. Tüm parçalar ekleme sırasında doğrulanıp quote edilmiştir.
      */
     private function build_query(): string
     {
-        // Column'ları quote et (güvenlik için)
-        $quoted_columns = array_map(fn($col) => $this->quote_identifier_safe($col), $this->columns);
-        $query = "SELECT " . implode(", ", $quoted_columns);
-        
-        // Table'ı quote et (güvenlik için)
-        $quoted_table = $this->quote_identifier_safe($this->table);
-        $query .= " FROM {$quoted_table}";
+        $query = 'SELECT ' . implode(', ', $this->columns) . " FROM {$this->table}";
 
-        if (! empty($this->joins)) {
-            $join_clauses = [];
-            foreach ($this->joins as $join) {
-                $join_type = strtoupper($join['type']);
-                $table = $join['table'];
-                
-                // Table'ı quote et (subquery değilse)
-                if (!preg_match('/^\(/', $table)) { // Subquery değilse
-                    $table = $this->quote_identifier_safe($table);
-                }
-                
-                // CROSS JOIN için ON condition yok
-                if ($join_type === 'CROSS') {
-                    $join_clauses[] = "CROSS JOIN {$table}";
-                } else {
-                    // OUTER JOIN'ler için OUTER kelimesini ekle
-                    if (in_array($join_type, ['LEFT', 'RIGHT', 'FULL']) && strpos($join_type, 'OUTER') === false) {
-                        // LEFT, RIGHT, FULL için OUTER eklenebilir ama opsiyonel
-                        // SQL standardında LEFT JOIN = LEFT OUTER JOIN
-                        $join_clauses[] = "{$join_type} JOIN {$table} ON {$join['condition']}";
-                    } else {
-                        // FULL OUTER, LEFT OUTER, RIGHT OUTER gibi açık yazımlar
-                        $join_clauses[] = "{$join_type} JOIN {$table} ON {$join['condition']}";
-                    }
-                }
-            }
-            $query .= " " . implode(" ", $join_clauses);
+        foreach ($this->joins as $join) {
+            $join_type = strtoupper($join['type']);
+            $query .= $join_type === 'CROSS'
+                ? " CROSS JOIN {$join['table']}"
+                : " {$join_type} JOIN {$join['table']} ON {$join['condition']}";
         }
 
         if (! empty($this->where)) {
-            // WHERE clause'ları zaten quote edilmiş olmalı (where() metodunda)
-            $query .= " WHERE " . implode(" AND ", $this->where);
+            $query .= ' WHERE ' . implode(' AND ', $this->where);
         }
 
         if (! empty($this->group_by)) {
-            // GROUP BY column'larını quote et
-            $quoted_group_by = array_map(fn($col) => $this->quote_identifier_safe($col), $this->group_by);
-            $query .= " GROUP BY " . implode(", ", $quoted_group_by);
+            $query .= ' GROUP BY ' . implode(', ', $this->group_by);
         }
 
         if (! empty($this->having)) {
-            $query .= " HAVING " . implode(" AND ", $this->having);
+            $query .= ' HAVING ' . implode(' AND ', $this->having);
         }
 
         // UNION'ları ekle (ORDER BY ve LIMIT'ten önce)
-        if (! empty($this->unions)) {
-            foreach ($this->unions as $union) {
-                $union_query = $union['builder']->build_query();
-                $union_type = $union['all'] ? 'UNION ALL' : 'UNION';
-                $query .= " {$union_type} ({$union_query})";
-                
-                // UNION'daki parametreleri de ekle
-                $union_params = $union['builder']->get_params();
-                foreach ($union_params as $key => $value) {
-                    // Parametre adı çakışmasını önlemek için unique key oluştur
-                    $unique_key = 'union_' . $this->param_counter++ . '_' . $key;
-                    $this->params[$unique_key] = $value;
-                }
+        foreach ($this->unions as $union) {
+            $union_query = $union['builder']->build_query();
+            $union_type = $union['all'] ? 'UNION ALL' : 'UNION';
+            $query .= " {$union_type} ({$union_query})";
+
+            foreach ($union['builder']->get_params() as $key => $value) {
+                $unique_key = 'union_' . $this->param_counter++ . '_' . $key;
+                $this->params[$unique_key] = $value;
             }
         }
 
         if (! empty($this->order_by)) {
-            // ORDER BY column'larını quote et (column ASC/DESC formatı)
-            $quoted_order_by = array_map(function($order) {
-                // "column ASC" veya "column DESC" formatını parse et
-                if (preg_match('/^(.+?)\s+(ASC|DESC)$/i', $order, $matches)) {
-                    $column = trim($matches[1]);
-                    $direction = strtoupper(trim($matches[2]));
-                    return $this->quote_identifier_safe($column) . ' ' . $direction;
-                }
-                // Sadece column adı varsa
-                return $this->quote_identifier_safe($order);
-            }, $this->order_by);
-            $query .= " ORDER BY " . implode(", ", $quoted_order_by);
+            $query .= ' ORDER BY ' . implode(', ', $this->order_by);
         }
 
         if ($this->limit !== null) {
@@ -596,233 +453,150 @@ class query_builder
 
     /**
      * Parametreleri döndürür (UNION için gerekli)
-     *
-     * @return array
      */
     public function get_params(): array
     {
         return $this->params;
     }
-    
+
     /**
-     * Identifier'ı quote eder (güvenlik için)
-     * 
-     * @param string $identifier Identifier (tablo veya sütun adı)
-     * @return string Quoted identifier
+     * Subquery SQL'ini döndürür ve parametrelerini bu builder'a taşır.
      */
-    private function quote_identifier(string $identifier): string
+    private function merge_subquery(query_builder $subquery): string
     {
-        // Zaten quote edilmişse olduğu gibi döndür
-        if ((str_starts_with($identifier, '`') && str_ends_with($identifier, '`')) ||
-            (str_starts_with($identifier, '"') && str_ends_with($identifier, '"')) ||
-            (str_starts_with($identifier, '[') && str_ends_with($identifier, ']'))) {
-            return $identifier;
+        $sql = $subquery->build_query();
+
+        foreach ($subquery->get_params() as $key => $param_data) {
+            $unique_key = 'subquery_' . $this->param_counter++ . '_' . $key;
+            $this->params[$unique_key] = $param_data;
+            $sql = str_replace($key, $unique_key, $sql);
         }
-        
-        // Tablo.sütun formatını handle et
-        if (str_contains($identifier, '.')) {
-            $parts = explode('.', $identifier, 2);
-            return '`' . $parts[0] . '`.`' . $parts[1] . '`';
-        }
-        
-        // Basit identifier
-        return '`' . $identifier . '`';
-    }
-    
-    /**
-     * Identifier'ı quote eder (eğer basit identifier ise)
-     * Aggregate fonksiyonlar, wildcard gibi özel durumları olduğu gibi bırakır
-     * 
-     * @param string $identifier Identifier
-     * @return string Quoted identifier veya olduğu gibi
-     */
-    private function quote_identifier_safe(string $identifier): string
-    {
-        $identifier = trim($identifier);
-        
-        // Zaten quote edilmişse olduğu gibi döndür
-        if ((str_starts_with($identifier, '`') && str_ends_with($identifier, '`')) ||
-            (str_starts_with($identifier, '"') && str_ends_with($identifier, '"'))) {
-            return $identifier;
-        }
-        
-        // Wildcard
-        if ($identifier === '*' || preg_match('/^[a-zA-Z0-9_]+\.\*$/', $identifier)) {
-            return $identifier;
-        }
-        
-        // Aggregate fonksiyonlar veya parantez içeren ifadeler
-        if (preg_match('/\b(COUNT|SUM|AVG|MAX|MIN|GROUP_CONCAT)\s*\(/i', $identifier) ||
-            preg_match('/\(/', $identifier)) {
-            return $identifier;
-        }
-        
-        // Alias içeren ifadeler (AS keyword)
-        if (preg_match('/\s+as\s+/i', $identifier)) {
-            $parts = preg_split('/\s+as\s+/i', $identifier, 2);
-            if (count($parts) === 2) {
-                $quoted_expr = $this->quote_identifier_safe(trim($parts[0]));
-                $alias = trim($parts[1]);
-                // Alias'ı quote et (eğer zaten quote edilmemişse)
-                if (!preg_match('/^[`"]/', $alias)) {
-                    $alias = '`' . $alias . '`';
-                }
-                return $quoted_expr . ' AS ' . $alias;
-            }
-        }
-        
-        // Basit identifier veya tablo.sütun formatı - quote et
-        return $this->quote_identifier($identifier);
+
+        return $sql;
     }
 
     /**
-     * Tablo adını doğrular
+     * Kolon ifadesini doğrular ve quote edilmiş SQL'e çevirir.
+     *
+     * @param bool $allow_alias `ifade AS takma_ad` (yalnızca select)
+     * @throws \InvalidArgumentException
      */
-    private function validate_table_name(string $table): void
-    {
-        if (! preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
-            throw new \InvalidArgumentException("Geçersiz tablo adı: $table");
-        }
-    }
-
-    /**
-     * Sütun adını doğrular
-     * 
-     * Desteklenen formatlar:
-     * - Basit sütun: name, id, user_id
-     * - Tablo prefix: users.name, test_table.id
-     * - Wildcard: *, test_table.*
-     * - Aggregate fonksiyonlar: COUNT(*), SUM(price), AVG(column), MAX(column), MIN(column)
-     * - Alias: column as alias, COUNT(*) as count, SUM(price) as total
-     * - Karmaşık: test_table.*, COUNT(*) as count, SUM(price) as total
-     */
-    private function validate_column_name(string $column): void
+    private function compile_column(string $column, bool $allow_alias = false): string
     {
         $column = trim($column);
-        
-        // Boş string kontrolü
+
         if ($column === '') {
-            throw new \InvalidArgumentException("Sütun adı boş olamaz");
+            throw new \InvalidArgumentException('Sütun adı boş olamaz');
         }
 
-        // Yıldız (*) karakterine izin ver
-        if ($column === '*') {
-            return;
-        }
-
-        // Tablo prefix + wildcard: test_table.*
-        if (preg_match('/^[a-zA-Z0-9_]+\.\*$/', $column)) {
-            return;
-        }
-
-        // Alias içeren ifadeler: column as alias, COUNT(*) as count
-        if (preg_match('/\s+as\s+/i', $column)) {
-            // Alias'ı ayır ve her iki kısmı da kontrol et
-            $parts = preg_split('/\s+as\s+/i', $column, 2);
-            if (count($parts) === 2) {
-                $this->validate_column_expression(trim($parts[0]));
-                $this->validate_column_alias(trim($parts[1]));
-                return;
+        if (preg_match('/^(.+?)\s+AS\s+(\S+)$/is', $column, $m)) {
+            if (! $allow_alias) {
+                throw new \InvalidArgumentException('Geçersiz sütun ifadesi: ' . $this->excerpt($column));
             }
+
+            return $this->compile_expression(trim($m[1]), true)
+                . ' AS ' . $this->db->quote_identifier($this->unquote($m[2]));
         }
 
-        // Aggregate fonksiyonlar veya parantez içeren ifadeler
-        if (preg_match('/\(/', $column)) {
-            $this->validate_column_expression($column);
-            return;
+        return $this->compile_expression($column, $allow_alias);
+    }
+
+    /**
+     * @param bool $allow_literal Tamsayı literal (ör. `SELECT 1`)
+     */
+    private function compile_expression(string $expression, bool $allow_literal): string
+    {
+        if ($expression === '*') {
+            return '*';
         }
 
-        // Basit sütun adı veya tablo.sütun formatı
-        if (preg_match('/^[a-zA-Z0-9_]+(\.[a-zA-Z0-9_]+)?$/', $column)) {
-            return;
+        if ($allow_literal && preg_match('/^\d+$/', $expression)) {
+            return $expression;
         }
 
-        // Eğer hiçbir pattern eşleşmezse, daha esnek kontrol yap
-        // SQL injection'a karşı temel güvenlik: sadece güvenli karakterlere izin ver
-        if (preg_match('/^[a-zA-Z0-9_\.\s\(\)\*,\'"]+$/i', $column)) {
-            // Tehlikeli SQL keyword'lerini kontrol et
-            $dangerous_keywords = ['DROP', 'DELETE', 'TRUNCATE', 'ALTER', 'CREATE', 'INSERT', 'UPDATE', 'EXEC', 'EXECUTE'];
-            $column_upper = strtoupper($column);
-            foreach ($dangerous_keywords as $keyword) {
-                if (strpos($column_upper, $keyword) !== false && 
-                    !preg_match('/\b(COUNT|SUM|AVG|MAX|MIN|GROUP_CONCAT)\s*\(/i', $column)) {
-                    throw new \InvalidArgumentException("Geçersiz sütun adı: $column (tehlikeli keyword içeriyor)");
+        if (preg_match('/^([`"]?)([A-Za-z0-9_]+)\1\.\*$/', $expression, $m)) {
+            return $this->db->quote_identifier($m[2]) . '.*';
+        }
+
+        if (preg_match('/^(' . self::AGGREGATES . ')\s*\(\s*(DISTINCT\s+)?(.+?)\s*\)$/is', $expression, $m)) {
+            $function = strtoupper($m[1]);
+            $distinct = $m[2] !== '' ? 'DISTINCT ' : '';
+
+            if ($m[3] === '*') {
+                if ($function !== 'COUNT' || $distinct !== '') {
+                    throw new \InvalidArgumentException('Geçersiz sütun ifadesi: ' . $this->excerpt($expression));
                 }
+
+                return 'COUNT(*)';
             }
-            return;
+
+            return $function . '(' . $distinct . $this->compile_reference($m[3]) . ')';
         }
 
-        throw new \InvalidArgumentException("Geçersiz sütun adı: $column");
+        return $this->compile_reference($expression);
     }
 
     /**
-     * Sütun ifadesini doğrular (aggregate fonksiyonlar, parantez içeren ifadeler)
+     * `ad`, `tablo.ad` (isteğe bağlı backtick/çift tırnaklı parçalarla) doğrular ve quote eder.
      */
-    private function validate_column_expression(string $expression): void
+    private function compile_reference(string $reference): string
     {
-        $expression = trim($expression);
-        
-        // Aggregate fonksiyonlar: COUNT(*), SUM(price), AVG(column), MAX(column), MIN(column)
-        if (preg_match('/^(COUNT|SUM|AVG|MAX|MIN|GROUP_CONCAT)\s*\(/i', $expression)) {
-            // Parantez eşleşmesini kontrol et
-            $open_count = substr_count($expression, '(');
-            $close_count = substr_count($expression, ')');
-            if ($open_count !== $close_count) {
-                throw new \InvalidArgumentException("Geçersiz sütun ifadesi: $expression (parantez eşleşmiyor)");
-            }
-            
-            // İçerik kontrolü: sadece güvenli karakterler
-            // COUNT(*) veya COUNT(column) veya COUNT(DISTINCT column)
-            if (preg_match('/^(COUNT|SUM|AVG|MAX|MIN|GROUP_CONCAT)\s*\(\s*(DISTINCT\s+)?([a-zA-Z0-9_\.\*]+)\s*\)$/i', $expression)) {
-                return;
-            }
-            
-            // Daha karmaşık ifadeler için genel kontrol
-            if (preg_match('/^(COUNT|SUM|AVG|MAX|MIN|GROUP_CONCAT)\s*\([^)]+\)$/i', $expression)) {
-                return;
-            }
+        $parts = explode('.', trim($reference));
+
+        if (count($parts) > 2) {
+            throw new \InvalidArgumentException('Geçersiz tanımlayıcı: ' . $this->excerpt($reference));
         }
 
-        // Subquery pattern: (SELECT ...)
-        if (preg_match('/^\(\s*SELECT\s+/i', $expression)) {
-            // Subquery'ler zaten ayrı handle ediliyor, buraya gelmemeli
-            // Ama yine de güvenlik kontrolü yapalım
-            return;
+        try {
+            return $this->db->quote_identifier(implode('.', array_map(fn ($part) => $this->unquote($part), $parts)));
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Geçersiz tanımlayıcı: ' . $this->excerpt($reference), 0, $e);
         }
-
-        // Basit parantez içeren ifadeler
-        if (preg_match('/^[a-zA-Z0-9_\.\s\(\)\*]+$/', $expression)) {
-            return;
-        }
-
-        throw new \InvalidArgumentException("Geçersiz sütun ifadesi: $expression");
     }
 
     /**
-     * Alias adını doğrular
+     * Tek parça tanımlayıcıdan çevreleyen backtick/çift tırnağı kaldırır.
      */
-    private function validate_column_alias(string $alias): void
+    private function unquote(string $part): string
     {
-        $alias = trim($alias);
-        
-        // Alias boş olamaz
-        if ($alias === '') {
-            throw new \InvalidArgumentException("Alias adı boş olamaz");
+        if (preg_match('/^([`"])(.*)\1$/s', $part, $m)) {
+            return $m[2];
         }
 
-        // Alias sadece alfanumerik, underscore ve nokta içerebilir
-        // Tırnak içinde olabilir: "alias name", 'alias name'
-        if (preg_match('/^["\']/', $alias) && preg_match('/["\']$/', $alias)) {
-            // Tırnak içindeki alias
-            return;
+        return $part;
+    }
+
+    private function excerpt(string $value): string
+    {
+        return substr($value, 0, 64);
+    }
+
+    private function normalize_direction(string $direction): string
+    {
+        $direction = strtoupper(trim($direction));
+
+        if (! in_array($direction, ['ASC', 'DESC'], true)) {
+            throw new \InvalidArgumentException('Geçersiz sıralama yönü. Sadece ASC veya DESC kullanılabilir.');
         }
 
-        // Normal alias: sadece alfanumerik ve underscore
-        if (preg_match('/^[a-zA-Z0-9_]+$/', $alias)) {
-            return;
-        }
+        return $direction;
+    }
 
-        throw new \InvalidArgumentException("Geçersiz alias adı: $alias");
+    /**
+     * @param array<string, mixed> $bindings
+     */
+    private function add_raw_bindings(array $bindings): void
+    {
+        foreach ($bindings as $name => $value) {
+            if (! is_string($name) || ! preg_match('/^:?[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
+                throw new \InvalidArgumentException('Raw binding adları isimli olmalıdır (ör. [\'status\' => 1]).');
+            }
+
+            $this->params[$this->normalize_parameter_name($name)] = [
+                'value' => $value,
+                'type' => $this->get_param_type($value),
+            ];
+        }
     }
 
     /**
@@ -830,8 +604,8 @@ class query_builder
      */
     private function validate_operator(string $operator): void
     {
-        $valid_operators = ['=', '>', '<', '>=', '<=', '<>', 'LIKE', 'IN', 'NOT IN', 'IS', 'IS NOT'];
-        if (! in_array(strtoupper($operator), $valid_operators)) {
+        $valid_operators = ['=', '>', '<', '>=', '<=', '<>', '!=', 'LIKE', 'NOT LIKE', 'IN', 'NOT IN', 'IS', 'IS NOT'];
+        if (! in_array(strtoupper($operator), $valid_operators, true)) {
             throw new \InvalidArgumentException("Geçersiz operatör: $operator");
         }
     }
@@ -841,31 +615,21 @@ class query_builder
      */
     private function validate_join_type(string $type): void
     {
-        $valid_types = [
-            'INNER',
-            'LEFT',
-            'RIGHT',
-            'FULL',
-            'CROSS',
-            'LEFT OUTER',
-            'RIGHT OUTER',
-            'FULL OUTER',
-        ];
-        $type_upper = strtoupper($type);
-        if (! in_array($type_upper, $valid_types)) {
+        $valid_types = ['INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'LEFT OUTER', 'RIGHT OUTER', 'FULL OUTER'];
+        if (! in_array(strtoupper($type), $valid_types, true)) {
             throw new \InvalidArgumentException("Geçersiz JOIN tipi: $type. Geçerli tipler: " . implode(', ', $valid_types));
         }
     }
 
     /**
-     * Parametre adını normalize eder
+     * Parametre adını normalize eder (yalnızca harf, rakam, alt çizgi)
      */
     private function normalize_parameter_name(string $name): string
     {
-        $name = trim($name);
-        $name = str_replace(['.', ' '], '_', $name);
+        $name = ltrim(trim($name), ':');
+        $name = preg_replace('/[^A-Za-z0-9_]/', '_', $name) ?? '';
 
-        return strpos($name, ':') === 0 ? $name : ":{$name}";
+        return ":{$name}";
     }
 
     /**
@@ -894,7 +658,6 @@ class query_builder
         $param_name = $this->normalize_parameter_name($column . '_' . $this->param_counter++);
         $param_type = $this->get_param_type($value);
 
-        // String değer kontrolü
         if ($param_type === \PDO::PARAM_STR && ! $this->allow_empty_string && trim((string)$value) === '') {
             throw new \InvalidArgumentException("Boş string değeri kullanılamaz: {$column}");
         }

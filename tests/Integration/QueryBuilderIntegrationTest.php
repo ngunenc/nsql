@@ -351,6 +351,6 @@ class QueryBuilderIntegrationTest extends DatabaseTestCase
             ->get_query();
             
         $this->assertStringContainsString('HAVING', $query);
-        $this->assertStringContainsString('AVG(price)', $query);
+        $this->assertStringContainsString('AVG(`price`)', $query);
     }
 }
