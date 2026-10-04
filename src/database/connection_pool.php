@@ -3,699 +3,384 @@
 namespace nsql\database;
 
 use PDO;
+use PDOException;
 use RuntimeException;
 
+/**
+ * Süreç içi (per-process) bağlantı havuzu.
+ *
+ * - Her DSN + kullanıcı + seçenek kombinasyonu ayrı bir havuz anahtarı alır; farklı
+ *   veritabanlarına bağlanan `nsql` örnekleri birbirinin bağlantısını almaz.
+ * - State PHP sürecine aittir (PHP-FPM worker'ları arasında paylaşılmaz); bu nedenle
+ *   süreçler arası dosya kilidi kullanılmaz.
+ * - Bağlantılar ihtiyaç anında açılır; kullanımdaki bir bağlantı havuz tarafından asla kapatılmaz.
+ */
 class connection_pool
 {
-    private static array $connections = [];
-    private static array $active_connections = [];
-    private static array $idle_connections = [];
-    private static array $configuration;
-    private static bool $initialized = false;
-    private static ?int $last_health_check = null;
-    private static array $retry_counts = [];
-    
-    // Dinamik tuning için değişkenler
-    private static int $current_min_connections;
-    private static int $current_max_connections;
-    private static int $adaptive_health_check_interval;
-    private static array $load_history = []; // Son 10 dakikalık yük geçmişi (circular buffer)
-    private static int $load_history_index = 0; // Circular buffer için index
-    private static int $load_history_size = 0; // Dolu eleman sayısı
-    private static int $last_load_check = 0;
-    private static float $current_load_factor = 0.0; // 0.0 - 1.0 arası yük faktörü
-    private const MAX_LOAD_HISTORY_ENTRIES = 60; // 10 dakika * 10 saniye = 60 entry (circular buffer boyutu)
-    
-    // Thread safety için lock mekanizması
-    private static ?string $lock_file = null;
-    /** @var resource|null */
-    private static $lock_handle = null;
-    private const LOCK_TIMEOUT = 5; // Saniye cinsinden lock timeout (config'den alınabilir ama constant olarak bırakıldı - kritik güvenlik değeri)
+    /**
+     * @var array<string, array{
+     *     config: array{dsn: string, username: string, password: string, options: array<int|string, mixed>},
+     *     min: int,
+     *     max: int,
+     *     connections: array<int, PDO>,
+     *     in_use: array<int, true>,
+     *     idle_since: array<int, int>
+     * }>
+     */
+    private static array $pools = [];
 
+    private static ?string $default_key = null;
+
+    /** @var array<int, string> spl_object_id(PDO) => havuz anahtarı */
+    private static array $owners = [];
+
+    /** @var array<string, int> */
     private static array $stats = [
-        'total_connections' => 0,
-        'active_connections' => 0,
-        'idle_connections' => 0,
+        'created_connections' => 0,
+        'closed_connections' => 0,
+        'discarded_connections' => 0,
         'connection_errors' => 0,
-        'connection_timeouts' => 0,
-        'connection_retries' => 0,
         'health_checks' => 0,
         'failed_health_checks' => 0,
         'peak_connections' => 0,
-        'total_queries' => 0,
-        'slow_queries' => 0,
-        'pool_adjustments' => 0, // Dinamik ayarlama sayısı
-        'health_check_interval_adjustments' => 0, // Health check interval ayarlama sayısı
     ];
 
     /**
-     * Connection Pool'u başlatır
+     * Havuzu kaydeder (bağlantı açmaz) ve havuz anahtarını döndürür.
+     *
+     * Aynı yapılandırma ile tekrar çağrılması mevcut havuzu döndürür.
+     *
+     * @param int|null $min_connections Boşta tutulacak minimum bağlantı sayısı (önceden bağlantı açılmaz)
      */
-    public static function initialize(array $config, ?int $min_connections = null, ?int $max_connections = null): void
+    public static function initialize(array $config, ?int $min_connections = null, ?int $max_connections = null): string
     {
-        if (self::$initialized) {
-            return;
-        }
-
-        $min_connections ??= config::min_connections;
-        $max_connections ??= config::max_connections;
-
         self::validate_configuration($config);
-        self::$configuration = $config;
-        
-        // Lock dosyasını hazırla
-        self::initialize_lock();
-        
-        // Dinamik tuning için başlangıç değerleri
-        self::$current_min_connections = $min_connections;
-        self::$current_max_connections = $max_connections;
-        self::$adaptive_health_check_interval = config::health_check_interval;
-        self::$last_load_check = time();
 
-        // Başlangıç bağlantılarını oluştur
-        for ($i = 0; $i < $min_connections; $i++) {
-            self::create_connection();
-        }
+        $key = self::pool_key($config);
 
-        self::$initialized = true;
-        self::$last_health_check = time();
-    }
-    
-    /**
-     * Lock dosyasını başlatır
-     */
-    private static function initialize_lock(): void
-    {
-        if (self::$lock_file !== null) {
-            return;
-        }
-        
-        // Lock dosyası için geçici dizin kullan
-        $lock_dir = sys_get_temp_dir();
-        $lock_file = $lock_dir . DIRECTORY_SEPARATOR . 'nsql_connection_pool.lock';
-        
-        // Lock dosyasını oluştur (yoksa)
-        if (!file_exists($lock_file)) {
-            touch($lock_file);
-            chmod($lock_file, 0666); // Read/write for all (lock dosyası için yeterli)
-        }
-        
-        self::$lock_file = $lock_file;
-    }
-    
-    /**
-     * Lock alır (exclusive lock)
-     * 
-     * @param int $timeout Timeout süresi (saniye)
-     * @return bool Lock alındıysa true
-     */
-    private static function acquire_lock(int $timeout = self::LOCK_TIMEOUT): bool
-    {
-        if (self::$lock_file === null) {
-            self::initialize_lock();
-        }
-        
-        // Lock handle'ı aç
-        if (self::$lock_handle === null) {
-            $handle = fopen(self::$lock_file, 'r+');
-            if ($handle === false) {
-                return false;
-            }
-            self::$lock_handle = $handle;
-        }
-        
-        $start_time = time();
-        
-        // Non-blocking lock dene
-        while (true) {
-            if (flock(self::$lock_handle, LOCK_EX | LOCK_NB)) {
-                return true;
-            }
-            
-            // Timeout kontrolü
-            if ((time() - $start_time) >= $timeout) {
-                return false;
-            }
-            
-            // Kısa bir bekleme (10ms)
-            usleep(10000);
-        }
-    }
-    
-    /**
-     * Lock'u serbest bırakır
-     */
-    private static function release_lock(): void
-    {
-        if (self::$lock_handle !== null) {
-            flock(self::$lock_handle, LOCK_UN);
-            // Handle'ı kapatma, tekrar kullanılabilir
-        }
-    }
+        if (! isset(self::$pools[$key])) {
+            $max = max(1, $max_connections ?? (int) config::get('max_connections', config::max_connections));
+            $min = max(0, min($max, $min_connections ?? (int) config::get('min_connections', config::min_connections)));
 
-    /**
-     * Sağlık kontrolü yapar (optimize edilmiş, adaptive interval ile)
-     */
-    private static function perform_health_check(): void
-    {
-        $now = time();
-
-        // Adaptive health check interval kullan
-        if (self::$last_health_check !== null &&
-            ($now - self::$last_health_check) < self::$adaptive_health_check_interval) {
-            return;
-        }
-
-        self::$last_health_check = $now;
-        self::$stats['health_checks']++;
-        
-        // Yük faktörünü güncelle ve adaptive interval'ı ayarla
-        self::update_load_factor();
-        self::adjust_health_check_interval();
-
-        // Sadece aktif olmayan bağlantıları kontrol et (performans optimizasyonu)
-        $connections_to_check = array_diff_key(self::$connections, self::$active_connections);
-        
-        foreach ($connections_to_check as $key => $conn) {
-            if (! self::is_connection_valid($conn)) {
-                self::$stats['failed_health_checks']++;
-                unset(self::$connections[$key], self::$active_connections[$key]);
-                
-                // Dinamik minimum bağlantı sayısını kullan
-                if (count(self::$connections) < self::$current_min_connections) {
-                    self::create_connection();
-                }
-            }
-        }
-
-        // Boşta kalan bağlantıları yönet
-        self::manage_idle_connections();
-        
-        // Dinamik pool tuning
-        self::adjust_pool_size();
-
-        // Timeout olan bağlantıları temizle (daha az sıklıkta)
-        if (rand(1, 100) <= config::cleanup_probability) {
-            self::cleanup_stale_connections();
-        }
-    }
-
-    /**
-     * Boşta kalan bağlantıları yönetir
-     */
-    private static function manage_idle_connections(): void
-    {
-        $now = time();
-
-        foreach (self::$connections as $key => $conn) {
-            if (! isset(self::$active_connections[$key])) {
-                if (! isset(self::$idle_connections[$key])) {
-                    self::$idle_connections[$key] = $now;
-                } elseif (($now - self::$idle_connections[$key]) > config::connection_idle_timeout) {
-                    // Boşta kalma süresi aşıldıysa ve dinamik minimum bağlantı sayısının üzerindeyse kapat
-                    if (count(self::$connections) > self::$current_min_connections) {
-                        unset(self::$connections[$key], self::$idle_connections[$key]);
-                        self::$stats['idle_connections']--;
-                    }
-                }
-            }
-        }
-    }
-    
-    /**
-     * Yük faktörünü günceller (load-based tuning için)
-     * Optimize edilmiş: Circular buffer kullanarak memory leak önlenir
-     */
-    private static function update_load_factor(): void
-    {
-        $now = time();
-        $total_connections = count(self::$connections);
-        $active_connections = count(self::$active_connections);
-        
-        if ($total_connections === 0) {
-            self::$current_load_factor = 0.0;
-            return;
-        }
-        
-        // Aktif bağlantı oranı (0.0 - 1.0)
-        $active_ratio = $active_connections / $total_connections;
-        
-        // Circular buffer kullanarak yük geçmişine ekle
-        $entry = [
-            'timestamp' => $now,
-            'active_ratio' => $active_ratio,
-            'total_connections' => $total_connections,
-            'active_connections' => $active_connections,
-        ];
-        
-        // Circular buffer'a ekle
-        if (self::$load_history_size < self::MAX_LOAD_HISTORY_ENTRIES) {
-            // Henüz dolu değilse sona ekle
-            self::$load_history[] = $entry;
-            self::$load_history_size++;
-        } else {
-            // Doluysa eski entry'yi üzerine yaz (circular buffer)
-            self::$load_history[self::$load_history_index] = $entry;
-            self::$load_history_index = (self::$load_history_index + 1) % self::MAX_LOAD_HISTORY_ENTRIES;
-        }
-        
-        // 10 dakikadan eski kayıtları filtrele (timestamp kontrolü)
-        $valid_entries = [];
-        foreach (self::$load_history as $entry) {
-            if (($now - $entry['timestamp']) < 600) {
-                $valid_entries[] = $entry;
-            }
-        }
-        
-        // Ortalama yük faktörünü hesapla
-        if (!empty($valid_entries)) {
-            $avg_active_ratio = array_sum(array_column($valid_entries, 'active_ratio')) / count($valid_entries);
-            self::$current_load_factor = min(1.0, max(0.0, $avg_active_ratio));
-        } else {
-            self::$current_load_factor = $active_ratio;
-        }
-    }
-    
-    /**
-     * Adaptive health check interval'ı ayarlar (GELISTIRME-002)
-     */
-    private static function adjust_health_check_interval(): void
-    {
-        $base_interval = config::health_check_interval;
-        $min_interval = 30; // Minimum 30 saniye
-        $max_interval = 300; // Maximum 5 dakika
-        
-        // Yük faktörüne göre interval'ı ayarla
-        // Yüksek yük → daha sık kontrol (küçük interval)
-        // Düşük yük → daha seyrek kontrol (büyük interval)
-        if (self::$current_load_factor > 0.8) {
-            // Yüksek yük: interval'ı azalt (daha sık kontrol)
-            $new_interval = max($min_interval, (int)($base_interval * 0.5));
-        } elseif (self::$current_load_factor > 0.5) {
-            // Orta yük: normal interval
-            $new_interval = $base_interval;
-        } else {
-            // Düşük yük: interval'ı artır (daha seyrek kontrol)
-            $new_interval = min($max_interval, (int)($base_interval * 1.5));
-        }
-        
-        // Interval değiştiyse güncelle
-        if ($new_interval !== self::$adaptive_health_check_interval) {
-            self::$adaptive_health_check_interval = $new_interval;
-            self::$stats['health_check_interval_adjustments']++;
-        }
-    }
-    
-    /**
-     * Pool size'ı dinamik olarak ayarlar (GELISTIRME-001)
-     */
-    private static function adjust_pool_size(): void
-    {
-        $total_connections = count(self::$connections);
-        $active_connections = count(self::$active_connections);
-        $base_min = config::min_connections;
-        $base_max = config::max_connections;
-        
-        // Yük faktörüne göre min/max connection'ları ayarla
-        if (self::$current_load_factor > 0.8) {
-            // Yüksek yük: pool size'ı artır
-            $new_min = min($base_max, (int)($base_min * 1.5));
-            $new_max = min($base_max * 2, (int)($base_max * 1.5));
-        } elseif (self::$current_load_factor > 0.5) {
-            // Orta yük: normal pool size
-            $new_min = $base_min;
-            $new_max = $base_max;
-        } else {
-            // Düşük yük: pool size'ı azalt (kaynak tasarrufu)
-            $new_min = max(1, (int)($base_min * 0.75));
-            $new_max = max($new_min + 1, (int)($base_max * 0.75));
-        }
-        
-        // Min/Max değerleri güncelle
-        $min_changed = false;
-        $max_changed = false;
-        
-        if ($new_min !== self::$current_min_connections) {
-            self::$current_min_connections = $new_min;
-            $min_changed = true;
-        }
-        
-        if ($new_max !== self::$current_max_connections) {
-            self::$current_max_connections = $new_max;
-            $max_changed = true;
-        }
-        
-        // Eğer ayarlama yapıldıysa istatistikleri güncelle
-        if ($min_changed || $max_changed) {
-            self::$stats['pool_adjustments']++;
-            
-            // Minimum bağlantı sayısının altındaysa yeni bağlantılar oluştur
-            if ($total_connections < self::$current_min_connections) {
-                $needed = self::$current_min_connections - $total_connections;
-                for ($i = 0; $i < $needed && $total_connections + $i < self::$current_max_connections; $i++) {
-                    self::create_connection();
-                }
-            }
-        }
-    }
-
-    /**
-     * Havuzdan bir bağlantı alır
-     * @throws RuntimeException Bağlantı alınamazsa
-     */
-    public static function get_connection(): \PDO
-    {
-        if (! self::$initialized) {
-            throw new \RuntimeException('Connection pool başlatılmamış');
-        }
-
-        // Lock al (thread safety için)
-        if (!self::acquire_lock()) {
-            throw new \RuntimeException('Connection pool lock alınamadı (timeout)');
-        }
-        
-        try {
-            // Sağlık kontrolü yap
-            self::perform_health_check();
-
-            // Bağlantı almayı dene
-            $conn = self::try_get_connection();
-
-            if ($conn === null) {
-                throw new \RuntimeException(
-                    'Kullanılabilir bağlantı yok. Aktif: ' . count(self::$active_connections) .
-                    ', Toplam: ' . count(self::$connections)
-                );
-            }
-
-            return $conn;
-        } finally {
-            // Lock'u her durumda serbest bırak
-            self::release_lock();
-        }
-    }
-
-    /**
-     * Bağlantı alma denemesi yapar
-     * Not: Bu metod lock içinde çağrılmalıdır
-     */
-    private static function try_get_connection(int $attempt = 0): ?\PDO
-    {
-        try {
-            // Aktif bağlantı kontrolü
-            foreach (self::$connections as $key => $conn) {
-                if (! isset(self::$active_connections[$key])) {
-                    if (self::is_connection_valid($conn)) {
-                        self::$active_connections[$key] = time();
-                        unset(self::$idle_connections[$key]);
-                        self::$stats['active_connections']++;
-
-                        return $conn;
-                    }
-                }
-            }
-
-            // Yeni bağlantı oluştur (dinamik max_connections kullan)
-            if (count(self::$connections) < self::$current_max_connections) {
-                return self::create_connection();
-            }
-
-            // Tüm bağlantılar kullanımda, timeout kontrolü yap
-            self::cleanup_stale_connections();
-
-            return null;
-        } catch (\PDOException $e) {
-            if ($attempt < config::max_retry_attempts) {
-                self::$stats['connection_retries']++;
-                sleep(1); // Kısa bir bekleme
-
-                return self::try_get_connection($attempt + 1);
-            }
-
-            throw new \RuntimeException('Bağlantı hatası: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Yeni bağlantı oluşturur
-     * Not: Bu metod lock içinde çağrılmalıdır
-     */
-    private static function create_connection(): \PDO
-    {
-        try {
-            // Varsayılan PDO seçeneklerini ayarla
-            $default_options = [
-                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-                \PDO::ATTR_EMULATE_PREPARES => 0, // PHP 8.4 için int gerekiyor
-                \PDO::ATTR_TIMEOUT => (int)config::get('connection_timeout', config::connection_timeout),
-                \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', false),
+            self::$pools[$key] = [
+                'config' => [
+                    'dsn' => (string) $config['dsn'],
+                    'username' => (string) $config['username'],
+                    'password' => (string) $config['password'],
+                    'options' => (array) $config['options'],
+                ],
+                'min' => $min,
+                'max' => $max,
+                'connections' => [],
+                'in_use' => [],
+                'idle_since' => [],
             ];
+        }
 
-            $final_options = $default_options;
+        self::$default_key ??= $key;
 
-            // Özel yapılandırma seçeneklerini ekle
-            if (isset(self::$configuration['options']) && is_array(self::$configuration['options'])) {
-                foreach (self::$configuration['options'] as $key => $value) {
-                    // PDO sabitlerini doğrula ve güvenli şekilde ayarla
-                    if (is_string($key) && strpos($key, 'ATTR_') === 0) {
-                        $attr_name = substr($key, 5); // ATTR_ kısmını kaldır
-                        if (defined("\\PDO::ATTR_$attr_name")) {
-                            $pdo_key = constant("\\PDO::ATTR_$attr_name");
-                            $final_options[$pdo_key] = $value;
-                        }
-                    } else {
-                        // Sayısal anahtar veya doğrudan PDO sabiti
-                        if (is_int($key) && defined("\\PDO::ATTR_$value")) {
-                            $pdo_key = constant("\\PDO::ATTR_$value");
-                            $final_options[$pdo_key] = true;
-                        } else {
-                            $final_options[$key] = $value;
-                        }
-                    }
-                }
+        return $key;
+    }
+
+    /**
+     * Havuzdan bir bağlantı alır; boşta geçerli bağlantı yoksa yenisini açar.
+     *
+     * @param string|null $pool_key initialize() dönüşü; null ise ilk kaydedilen havuz
+     * @throws RuntimeException Havuz kayıtlı değilse, havuz doluysa veya bağlantı açılamazsa
+     */
+    public static function get_connection(?string $pool_key = null): PDO
+    {
+        $key = self::resolve_key($pool_key);
+
+        self::prune_idle($key);
+
+        foreach (self::$pools[$key]['connections'] as $id => $conn) {
+            if (isset(self::$pools[$key]['in_use'][$id])) {
+                continue;
             }
 
-            // PDO bağlantısını oluştur
-            $conn = new \PDO(
-                self::$configuration['dsn'],
-                self::$configuration['username'],
-                self::$configuration['password'],
-                $final_options
-            );
+            $idle_since = self::$pools[$key]['idle_since'][$id] ?? 0;
+            if (self::needs_health_check($idle_since) && ! self::is_connection_valid($conn)) {
+                self::$stats['failed_health_checks']++;
+                self::remove($key, $id);
 
-            // Bağlantı başarılı olduğunda yapılandırmayı doğrula
-            $actual_err_mode = $conn->getAttribute(\PDO::ATTR_ERRMODE);
-            if ($actual_err_mode !== \PDO::ERRMODE_EXCEPTION) {
-                $conn->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+                continue;
             }
 
-            $key = spl_object_hash($conn);
-            self::$connections[$key] = $conn;
-            self::$active_connections[$key] = time();
-
-            self::$stats['total_connections']++;
-            self::$stats['active_connections']++;
-
-            // Peak bağlantı sayısını güncelle
-            self::$stats['peak_connections'] = max(
-                self::$stats['peak_connections'],
-                count(self::$connections)
-            );
+            self::$pools[$key]['in_use'][$id] = true;
+            unset(self::$pools[$key]['idle_since'][$id]);
 
             return $conn;
-        } catch (\PDOException $e) {
+        }
+
+        $total = count(self::$pools[$key]['connections']);
+        if ($total >= self::$pools[$key]['max']) {
+            throw new RuntimeException(
+                'Kullanılabilir bağlantı yok (havuz dolu). Aktif: ' . count(self::$pools[$key]['in_use']) .
+                ', Maksimum: ' . self::$pools[$key]['max']
+            );
+        }
+
+        return self::create_connection($key);
+    }
+
+    /**
+     * Bağlantıyı havuza geri bırakır. Açık transaction kalmışsa geri alınır.
+     */
+    public static function release_connection(PDO $connection): void
+    {
+        $id = spl_object_id($connection);
+        $key = self::$owners[$id] ?? null;
+
+        if ($key === null || ! isset(self::$pools[$key]['in_use'][$id])) {
+            return;
+        }
+
+        try {
+            if ($connection->inTransaction()) {
+                $connection->rollBack();
+            }
+        } catch (PDOException $e) {
+            self::$stats['discarded_connections']++;
+            self::remove($key, $id);
+
+            return;
+        }
+
+        unset(self::$pools[$key]['in_use'][$id]);
+        self::$pools[$key]['idle_since'][$id] = time();
+    }
+
+    /**
+     * Bozuk/kopmuş bir bağlantıyı havuzdan tamamen çıkarır (tekrar dağıtılmaz).
+     */
+    public static function discard_connection(PDO $connection): void
+    {
+        $id = spl_object_id($connection);
+        $key = self::$owners[$id] ?? null;
+
+        if ($key === null) {
+            return;
+        }
+
+        self::$stats['discarded_connections']++;
+        self::remove($key, $id);
+    }
+
+    /**
+     * Tüm havuzlardaki bağlantı referanslarını bırakır. Havuz kayıtları korunur.
+     */
+    public static function close_all(): void
+    {
+        foreach (self::$pools as $key => $pool) {
+            foreach (array_keys($pool['connections']) as $id) {
+                self::remove($key, $id);
+            }
+        }
+    }
+
+    /**
+     * Havuz istatistiklerini döndürür.
+     *
+     * @param string|null $pool_key Belirtilirse yalnızca o havuz; null ise tüm havuzların toplamı
+     */
+    public static function get_stats(?string $pool_key = null): array
+    {
+        $keys = $pool_key === null ? array_keys(self::$pools) : [$pool_key];
+
+        $total = 0;
+        $active = 0;
+        $max = 0;
+        $pools = [];
+
+        foreach ($keys as $key) {
+            if (! isset(self::$pools[$key])) {
+                continue;
+            }
+
+            $pool = self::$pools[$key];
+            $pool_total = count($pool['connections']);
+            $pool_active = count($pool['in_use']);
+
+            $total += $pool_total;
+            $active += $pool_active;
+            $max += $pool['max'];
+
+            $pools[substr($key, 0, 12)] = [
+                'total_connections' => $pool_total,
+                'active_connections' => $pool_active,
+                'idle_connections' => $pool_total - $pool_active,
+                'min_connections' => $pool['min'],
+                'max_connections' => $pool['max'],
+            ];
+        }
+
+        return array_merge(self::$stats, [
+            'pool_count' => count($pools),
+            'total_connections' => $total,
+            'active_connections' => $active,
+            'idle_connections' => $total - $active,
+            'max_connections' => $max,
+            'pools' => $pools,
+        ]);
+    }
+
+    private static function pool_key(array $config): string
+    {
+        $options = (array) $config['options'];
+        ksort($options);
+
+        return hash('sha256', implode("\0", [
+            (string) $config['dsn'],
+            (string) $config['username'],
+            (string) $config['password'],
+            serialize($options),
+        ]));
+    }
+
+    private static function resolve_key(?string $pool_key): string
+    {
+        $key = $pool_key ?? self::$default_key;
+
+        if ($key === null || ! isset(self::$pools[$key])) {
+            throw new RuntimeException('Connection pool başlatılmamış');
+        }
+
+        return $key;
+    }
+
+    private static function create_connection(string $key): PDO
+    {
+        $config = self::$pools[$key]['config'];
+
+        try {
+            $conn = new PDO(
+                $config['dsn'],
+                $config['username'],
+                $config['password'],
+                self::build_options($config['options'])
+            );
+        } catch (PDOException $e) {
             self::$stats['connection_errors']++;
 
-            throw new \RuntimeException('Veritabanı bağlantısı oluşturulamadı: ' . $e->getMessage());
+            throw new RuntimeException('Veritabanı bağlantısı oluşturulamadı: ' . $e->getMessage(), 0, $e);
         }
+
+        if ($conn->getAttribute(PDO::ATTR_ERRMODE) !== PDO::ERRMODE_EXCEPTION) {
+            $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        }
+
+        $id = spl_object_id($conn);
+        self::$pools[$key]['connections'][$id] = $conn;
+        self::$pools[$key]['in_use'][$id] = true;
+        self::$owners[$id] = $key;
+
+        self::$stats['created_connections']++;
+        self::$stats['peak_connections'] = max(self::$stats['peak_connections'], self::count_all());
+
+        return $conn;
     }
 
     /**
-     * Bağlantının geçerli olup olmadığını kontrol eder
+     * @param array<int|string, mixed> $options
+     * @return array<int, mixed>
      */
-    private static function is_connection_valid(\PDO $connection): bool
+    private static function build_options(array $options): array
     {
+        $final = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => 0,
+            PDO::ATTR_TIMEOUT => (int) config::get('connection_timeout', config::connection_timeout),
+            PDO::ATTR_PERSISTENT => (int) (bool) config::get('persistent_connection', config::persistent_connection),
+        ];
+
+        foreach ($options as $key => $value) {
+            if (is_string($key)) {
+                if (str_starts_with($key, 'ATTR_') && defined('\\PDO::' . $key)) {
+                    $final[constant('\\PDO::' . $key)] = $value;
+                }
+
+                continue;
+            }
+
+            $final[$key] = $value;
+        }
+
+        return $final;
+    }
+
+    /**
+     * Boşta kalma süresini aşan bağlantıları (minimum boşta sayısını koruyarak) kapatır.
+     * Kullanımdaki bağlantılara dokunmaz.
+     */
+    private static function prune_idle(string $key): void
+    {
+        $idle_timeout = (int) config::get('connection_idle_timeout', config::connection_idle_timeout);
+        $now = time();
+        $idle_count = count(self::$pools[$key]['idle_since']);
+
+        foreach (self::$pools[$key]['idle_since'] as $id => $since) {
+            if ($idle_count <= self::$pools[$key]['min']) {
+                return;
+            }
+
+            if (($now - $since) > $idle_timeout) {
+                self::remove($key, $id);
+                $idle_count--;
+            }
+        }
+    }
+
+    private static function needs_health_check(int $idle_since): bool
+    {
+        $interval = (int) config::get('health_check_interval', config::health_check_interval);
+
+        return (time() - $idle_since) >= $interval;
+    }
+
+    private static function is_connection_valid(PDO $connection): bool
+    {
+        self::$stats['health_checks']++;
+
         try {
-            return $connection->query('SELECT 1') !== false;
-        } catch (\PDOException $e) {
+            return @$connection->query('SELECT 1') !== false;
+        } catch (PDOException $e) {
             return false;
         }
     }
 
-    /**
-     * Timeout olan bağlantıları temizler
-     */
-    private static function cleanup_stale_connections(): void
+    private static function remove(string $key, int $id): void
     {
-        $now = time();
-
-        // Her istekte belirli bir olasılıkla temizlik yap
-        if (mt_rand(1, 100) > config::cleanup_probability) {
+        if (! isset(self::$pools[$key]['connections'][$id])) {
             return;
         }
 
-        // Aktif bağlantıları kontrol et
-        foreach (self::$active_connections as $key => $timestamp) {
-            // Timeout kontrolü
-            if (($now - $timestamp) > config::get('connection_timeout', config::connection_timeout)) {
-                unset(self::$connections[$key], self::$active_connections[$key]);
-                self::$stats['connection_timeouts']++;
-                self::$stats['active_connections']--;
-
-                continue;
-            }
-
-            // Bağlantı geçerliliğini kontrol et
-            if (! isset(self::$connections[$key]) || ! self::is_connection_valid(self::$connections[$key])) {
-                unset(self::$connections[$key], self::$active_connections[$key]);
-                self::$stats['failed_health_checks']++;
-                self::$stats['active_connections']--;
-            }
-        }
-
-        // Boşta kalan bağlantıları kontrol et
-        foreach (self::$idle_connections as $key => $timestamp) {
-                // Boşta kalma süresi kontrolü
-            if (($now - $timestamp) > config::connection_idle_timeout) {
-                // Dinamik minimum bağlantı sayısını koru
-                if (count(self::$connections) > self::$current_min_connections) {
-                    unset(self::$connections[$key], self::$idle_connections[$key]);
-                    self::$stats['idle_connections']--;
-                }
-
-                continue;
-            }
-
-            // Bağlantı geçerliliğini kontrol et
-            if (! isset(self::$connections[$key]) || ! self::is_connection_valid(self::$connections[$key])) {
-                unset(self::$connections[$key], self::$idle_connections[$key]);
-                self::$stats['failed_health_checks']++;
-                self::$stats['idle_connections']--;
-            }
-        }
-
-        // Yeterli aktif bağlantı yoksa yeni bağlantılar oluştur (dinamik min_connections kullan)
-        $total_connections = count(self::$connections);
-        if ($total_connections < self::$current_min_connections) {
-            $needed = self::$current_min_connections - $total_connections;
-            for ($i = 0; $i < $needed && ($total_connections + $i) < self::$current_max_connections; $i++) {
-                self::create_connection();
-            }
-        }
-
-        // Başarısız denemelerini sıfırla
-        self::$retry_counts = array_filter(
-            self::$retry_counts,
-            fn ($count) => $count < config::max_failed_connections
+        unset(
+            self::$pools[$key]['connections'][$id],
+            self::$pools[$key]['in_use'][$id],
+            self::$pools[$key]['idle_since'][$id],
+            self::$owners[$id]
         );
+
+        self::$stats['closed_connections']++;
     }
 
-    /**
-     * Yapılandırmayı doğrular
-     */
+    private static function count_all(): int
+    {
+        $total = 0;
+        foreach (self::$pools as $pool) {
+            $total += count($pool['connections']);
+        }
+
+        return $total;
+    }
+
     private static function validate_configuration(array $config): void
     {
-        $required = ['dsn', 'username', 'password', 'options'];
-
-        foreach ($required as $key) {
-            if (! isset($config[$key])) {
+        foreach (['dsn', 'username', 'password', 'options'] as $key) {
+            if (! array_key_exists($key, $config)) {
                 throw new \InvalidArgumentException("Eksik yapılandırma parametresi: $key");
-            }
-        }
-    }
-
-    /**
-     * Pool istatistiklerini döndürür
-     */
-    public static function get_stats(): array
-    {
-        return array_merge(self::$stats, [
-            'current_connections' => count(self::$connections),
-            'idle_connections' => count(self::$connections) - count(self::$active_connections),
-            'memory_usage' => memory_get_usage(true),
-            'peak_memory' => memory_get_peak_usage(true),
-            // Dinamik tuning istatistikleri
-            'current_min_connections' => self::$current_min_connections ?? config::min_connections,
-            'current_max_connections' => self::$current_max_connections ?? config::max_connections,
-            'adaptive_health_check_interval' => self::$adaptive_health_check_interval ?? config::health_check_interval,
-            'current_load_factor' => self::$current_load_factor,
-            'load_history_size' => count(self::$load_history),
-        ]);
-    }
-
-    /**
-     * Bağlantıyı havuza geri bırakır
-     */
-    public static function release_connection(\PDO $connection): void
-    {
-        // Lock al (thread safety için)
-        if (!self::acquire_lock()) {
-            // Lock alınamazsa logla ama işlemi devam ettir (best effort)
-            error_log('Connection pool: Lock alınamadı release_connection sırasında');
-            return;
-        }
-        
-        try {
-            $key = spl_object_hash($connection);
-
-            // Bağlantı zaten havuzda değilse işlem yapma
-            if (! isset(self::$connections[$key])) {
-                return;
-            }
-
-            // Bağlantının geçerli olduğunu kontrol et
-            if (! self::is_connection_valid($connection)) {
-                // Geçersiz bağlantıyı kaldır ve yerine yeni bir tane oluştur
-                unset(self::$connections[$key], self::$active_connections[$key]);
-                self::$stats['failed_health_checks']++;
-                self::create_connection();
-
-                return;
-            }
-
-            // Bağlantıyı aktif listesinden çıkar
-            if (isset(self::$active_connections[$key])) {
-                unset(self::$active_connections[$key]);
-                self::$stats['active_connections']--;
-
-                // Bağlantıyı boşta kalanlar listesine ekle
-                self::$idle_connections[$key] = time();
-                self::$stats['idle_connections']++;
-            }
-        } finally {
-            // Lock'u her durumda serbest bırak
-            self::release_lock();
-        }
-    }
-
-    /**
-     * Tüm bağlantıları kapatır
-     */
-    public static function close_all(): void
-    {
-        // Lock al (thread safety için)
-        if (!self::acquire_lock()) {
-            error_log('Connection pool: Lock alınamadı close_all sırasında');
-            return;
-        }
-        
-        try {
-            foreach (self::$connections as $key => $conn) {
-                unset(self::$connections[$key]);
-                unset(self::$active_connections[$key]);
-                unset(self::$idle_connections[$key]);
-            }
-            self::$stats['active_connections'] = 0;
-            self::$stats['idle_connections'] = 0;
-        } finally {
-            // Lock'u serbest bırak
-            self::release_lock();
-            
-            // Lock handle'ı kapat
-            if (self::$lock_handle !== null) {
-                fclose(self::$lock_handle);
-                self::$lock_handle = null;
             }
         }
     }

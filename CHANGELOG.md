@@ -4,6 +4,40 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.15] - 2026-10-04
+
+### Düzeltmeler
+- **Connection pool yeniden tasarımı (#30)**:
+  - Havuz artık her DSN + kullanıcı için ayrı tutuluyor; farklı veritabanlarına bağlanan `nsql` örnekleri birbirinin bağlantısını almıyor.
+  - State yalnızca PHP sürecine ait (PHP-FPM worker'ları arasında paylaşılmaz). Süreçler arası `flock` kilidi ve `sys_get_temp_dir()/nsql_connection_pool.lock` dosyası kaldırıldı.
+  - Yeni bağlantılar artık "kullanımda" olarak sayılmıyor (önceden `min_connections` kadar bağlantı açılışta aktif işaretleniyor, dağıtılamıyordu).
+  - Havuz kullanımdaki bir bağlantıyı asla kapatmıyor (önceden `connection_timeout` = 5 sn sonra kullanımdaki bağlantılar siliniyordu).
+  - Bağlantılar ihtiyaç anında açılıyor; açılışta `min_connections` kadar bağlantı oluşturulmuyor.
+  - `release_connection()` her seferinde `SELECT 1` atmıyor; açık kalan transaction'ı geri alıyor. Sağlık kontrolü yalnızca `health_check_interval` süresinden uzun boşta kalan bağlantılarda yapılıyor.
+- **Yeniden bağlanma (#31)**:
+  - Sınıftaki bozuk `ensure_connection()` (parametresiz `connect()` çağırıyordu) kaldırıldı. Bağlantı yönetiminin tek kaynağı artık `connection_trait`.
+  - `nsql` sınıfındaki gölgelenen `$pdo`, `$retry_limit` ve static havuz özellikleri kaldırıldı.
+  - Sorgu sırasında bağlantı koparsa (MySQL 2006/2013) kopan bağlantı havuzdan atılıyor, statement cache temizleniyor, sorgu yeni bağlantıda yeniden hazırlanıp çalıştırılıyor. Önceden eski bağlantının statement'ı tekrar deneniyordu.
+  - Transaction içindeyken bağlantı koparsa sessizce yeniden bağlanılmıyor: `ConnectionException` (`error_codes::CONNECTION_LOST`) fırlatılıyor ve transaction seviyesi sıfırlanıyor.
+  - `begin()` transaction başlatmadan önce bağlantıyı doğruluyor.
+
+### Yeni
+- `nsql::reconnect()`: bağlantıyı açıkça yeniler.
+- `nsql::get_instance_pool_stats()`: yalnızca örneğin kendi havuzunun istatistikleri.
+- `connection_pool::initialize()` artık havuz anahtarını döndürüyor. `get_connection()` ve `get_stats()` isteğe bağlı havuz anahtarı alıyor. Yeni `connection_pool::discard_connection()` metodu eklendi.
+
+### Davranış değişikliği
+- `nsql::get_pool_stats()` tüm havuzların toplamını döndürüyor. `active_connections`, `idle_connections`, `total_connections` ve `max_connections` korunuyor; `total_connections` artık şu an açık bağlantı sayısı. Ömür boyu açılan bağlantı sayısı `created_connections` içinde. Dinamik tuning alanları (`current_load_factor`, `adaptive_health_check_interval` …) kaldırıldı.
+- Kullanılmayan `error_handling_trait::execute_with_retry()` artık sınıf metodu tarafından gölgelenmiyor; sınıfın iç metodu `run_with_reconnect()` olarak yeniden adlandırıldı.
+
+### Testler
+- `tests/Integration/ConnectionPoolIntegrationTest.php`:
+  - Örnek başına tek bağlantı ve bırakılan bağlantının yeniden kullanılması
+  - Farklı veritabanları için ayrı havuz
+  - Kilit dosyası oluşturulmaması
+  - `KILL` sonrası yeniden bağlanma
+  - Transaction içinde bağlantı kaybında exception
+
 ## [1.5.14] - 2026-10-04
 
 ### Düzeltmeler
