@@ -37,44 +37,78 @@ trait cache_trait
     }
 
     /**
-     * SQL sorgusundan tablo adlarını çıkarır (basit regex ile)
+     * SQL sorgusundan tablo adlarını çıkarır.
+     *
+     * Quote'lu (`tablo`, "tablo"), şema önekli (db.tablo), JOIN, virgüllü FROM listesi
+     * ve subquery içindeki tabloları yakalar. Boş dizi = tablo tespit edilemedi.
      *
      * @param string $query SQL sorgusu
-     * @return array Tablo adları
+     * @return list<string> Küçük harfli tablo adları
      */
     private function extract_tables_from_query(string $query): array
     {
+        $ident = '[`"]?(?:\w+[`"]?\.[`"]?)?(\w+)[`"]?';
+        $patterns = [
+            '/\bJOIN\s+' . $ident . '/i',
+            '/\bUPDATE\s+(?:(?:LOW_PRIORITY|IGNORE)\s+)*' . $ident . '/i',
+            '/\bINTO\s+' . $ident . '/i',
+            '/\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?' . $ident . '/i',
+        ];
+
         $tables = [];
-        $query_upper = strtoupper(trim($query));
-        
-        // FROM clause
-        if (preg_match('/\bFROM\s+([a-z0-9_]+)/i', $query, $matches)) {
-            $tables[] = strtolower($matches[1]);
-        }
-        
-        // JOIN clauses
-        if (preg_match_all('/\b(?:INNER|LEFT|RIGHT|FULL|CROSS)\s+JOIN\s+([a-z0-9_]+)/i', $query, $matches)) {
-            foreach ($matches[1] as $table) {
-                $tables[] = strtolower($table);
+        foreach ($patterns as $pattern) {
+            if (preg_match_all($pattern, $query, $matches)) {
+                foreach ($matches[1] as $table) {
+                    $tables[] = strtolower($table);
+                }
             }
         }
-        
-        // UPDATE table
-        if (preg_match('/\bUPDATE\s+([a-z0-9_]+)/i', $query, $matches)) {
-            $tables[] = strtolower($matches[1]);
+
+        $from_end = '(?=\b(?:WHERE|GROUP|ORDER|LIMIT|HAVING|UNION|JOIN|INNER|LEFT|RIGHT|CROSS|FULL|NATURAL|STRAIGHT_JOIN|FOR|LOCK|WINDOW)\b|\)|;|$)';
+        if (preg_match_all('/\bFROM\s+(.+?)' . $from_end . '/is', $query, $matches)) {
+            foreach ($matches[1] as $segment) {
+                foreach (explode(',', $segment) as $part) {
+                    if (preg_match('/^\s*' . $ident . '/', $part, $part_match)) {
+                        $tables[] = strtolower($part_match[1]);
+                    }
+                }
+            }
         }
-        
-        // INSERT INTO table
-        if (preg_match('/\bINSERT\s+INTO\s+([a-z0-9_]+)/i', $query, $matches)) {
-            $tables[] = strtolower($matches[1]);
+
+        return array_values(array_unique($tables));
+    }
+
+    /**
+     * Query cache okunabilir/yazılabilir mi? Transaction içinde cache bypass edilir;
+     * commit edilmemiş veri cache'e girmez, rollback sonrası eski kayıt dönmez.
+     */
+    private function query_cache_usable(): bool
+    {
+        if (! $this->query_cache_enabled) {
+            return false;
         }
-        
-        // DELETE FROM table
-        if (preg_match('/\bDELETE\s+FROM\s+([a-z0-9_]+)/i', $query, $matches)) {
-            $tables[] = strtolower($matches[1]);
+
+        return ! (method_exists($this, 'get_transaction_level') && $this->get_transaction_level() > 0);
+    }
+
+    /**
+     * Yazma sorgusundan etkilenen tabloların cache'ini temizler.
+     * Tablo tespit edilemezse tüm cache temizlenir.
+     */
+    private function invalidate_cache_for_write(string $sql): void
+    {
+        if (! $this->query_cache_enabled) {
+            return;
         }
-        
-        return array_unique($tables);
+
+        $tables = $this->extract_tables_from_query($sql);
+        if ($tables === []) {
+            $this->invalidate_all_cache();
+
+            return;
+        }
+
+        $this->invalidate_cache_by_table($tables);
     }
 
     /**
@@ -83,12 +117,14 @@ trait cache_trait
      * @param string $key Cache key
      * @param mixed $data Cache data
      * @param array $tags Cache tags (opsiyonel)
-     * @param array $tables İlgili tablolar (opsiyonel, event-based invalidation için)
+     * @param array $tables İlgili tablolar (event-based invalidation için; boşsa cache'lenmez)
+     * @return bool Cache'e yazıldıysa true
      */
-    private function add_to_query_cache(string $key, mixed $data, array $tags = [], array $tables = []): void
+    private function add_to_query_cache(string $key, mixed $data, array $tags = [], array $tables = []): bool
     {
-        if (! $this->query_cache_enabled) {
-            return;
+        // Tablosu bilinmeyen sonuç yazma sonrası geçersiz kılınamaz → cache'leme
+        if (! $this->query_cache_usable() || $tables === []) {
+            return false;
         }
 
         // Sadece belirli aralıklarla expired cache temizle (performans optimizasyonu)
@@ -137,6 +173,8 @@ trait cache_trait
         
         // LRU sıralamasını güncelle (O(1) complexity)
         $this->update_access_order($key);
+
+        return true;
     }
 
     /**
@@ -144,7 +182,11 @@ trait cache_trait
      */
     private function get_from_query_cache(string $key): mixed
     {
-        if (! $this->query_cache_enabled || ! isset($this->query_cache[$key])) {
+        if (! $this->query_cache_usable()) {
+            return null;
+        }
+
+        if (! isset($this->query_cache[$key])) {
             $this->query_cache_misses++;
             return null;
         }

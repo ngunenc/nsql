@@ -685,6 +685,10 @@ class nsql
                 new \PDOException($this->last_error)
             );
         }
+
+        if ($result !== false && ! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
+            $this->invalidate_cache_for_write($query);
+        }
         
         return $result;
     }
@@ -704,13 +708,7 @@ class nsql
                 $this->last_insert_id = (int)$this->pdo->lastInsertId();
             }
 
-            // Cache invalidation: INSERT işlemi sonrası ilgili tabloların cache'ini temizle
-            if ($this->query_cache_enabled) {
-                $tables = $this->extract_tables_from_query($sql);
-                if (!empty($tables)) {
-                    $this->invalidate_cache_by_table($tables);
-                }
-            }
+            $this->invalidate_cache_for_write($sql);
 
             return $this->last_insert_id;
         }
@@ -773,6 +771,7 @@ class nsql
             }
 
             $affected_rows = $stmt->rowCount();
+            $this->invalidate_cache_for_write($sql);
 
             if ($use_transaction) {
                 $this->commit();
@@ -846,6 +845,8 @@ class nsql
                     $total_affected += $stmt->rowCount();
                 }
             }
+
+            $this->invalidate_cache_for_write("UPDATE {$this->quote_identifier($table)}");
 
             if ($use_transaction) {
                 $this->commit();
@@ -954,7 +955,7 @@ class nsql
         $results = $stmt->fetchAll(PDO::FETCH_OBJ);
         $this->last_results = $results;
         if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
-            $this->add_to_query_cache($cache_key, $results);
+            $this->add_to_query_cache($cache_key, $results, [], $this->extract_tables_from_query($query));
         }
 
         return $results;
@@ -1064,13 +1065,8 @@ class nsql
         $this->last_results = [];
 
         $result = $this->execute_query($sql, $params) !== false;
-        
-        // Cache invalidation: UPDATE işlemi sonrası ilgili tabloların cache'ini temizle
-        if ($result && $this->query_cache_enabled) {
-            $tables = $this->extract_tables_from_query($sql);
-            if (!empty($tables)) {
-                $this->invalidate_cache_by_table($tables);
-            }
+        if ($result) {
+            $this->invalidate_cache_for_write($sql);
         }
         
         return $result;
@@ -1082,13 +1078,8 @@ class nsql
         $this->last_results = [];
 
         $result = $this->execute_query($sql, $params) !== false;
-        
-        // Cache invalidation: DELETE işlemi sonrası ilgili tabloların cache'ini temizle
-        if ($result && $this->query_cache_enabled) {
-            $tables = $this->extract_tables_from_query($sql);
-            if (!empty($tables)) {
-                $this->invalidate_cache_by_table($tables);
-            }
+        if ($result) {
+            $this->invalidate_cache_for_write($sql);
         }
         
         return $result;
@@ -1503,10 +1494,7 @@ class nsql
                 $tables = $this->extract_tables_from_query($query);
             }
 
-            // Cache'e ekle
-            $this->add_to_query_cache($cache_key, $results, $tags, $tables);
-            
-            return true;
+            return $this->add_to_query_cache($cache_key, $results, $tags, $tables);
         } catch (\Exception $e) {
             return false;
         }

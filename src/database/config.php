@@ -49,7 +49,7 @@ class config
     public const max_chunk_size = 15000; // 10000 → 15000 (daha büyük maximum chunk)
 
     // Cache sabitleri (optimize edilmiş)
-    public const query_cache_enabled = true;
+    public const query_cache_enabled = false; // opt-in: cache süreç (instance) belleğinde tutulur
     public const query_cache_timeout = 1800; // 30 dakika (3600 → 1800, daha kısa TTL)
     public const query_cache_size_limit = 200; // 100 → 200 (daha büyük cache)
     public const statement_cache_limit = 150; // 100 → 150 (daha büyük statement cache)

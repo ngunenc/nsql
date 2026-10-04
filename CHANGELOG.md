@@ -4,6 +4,22 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.14] - 2026-10-04
+
+### Düzeltmeler
+- **Query cache eski veri (#29)**: `get_results()` (ve query builder `get()`) cache'e tablo bilgisi olmadan yazıldığı için `insert` / `update` / `delete` sonrası 30 dakikaya kadar eski sonuç dönüyordu. Artık tüm SELECT cache girdileri tablolarıyla kaydediliyor; tablosu tespit edilemeyen sorgular cache'lenmiyor.
+- **Transaction + cache**: Transaction içinde cache okunmuyor/yazılmıyor; rollback sonrası commit edilmemiş veri dönmüyor.
+- **Eksik invalidation**: `batch_insert()`, `batch_update()` ve yazma yapan `query()` (`DELETE`, `TRUNCATE`, DDL …) cache'i temizliyor. Tablo tespit edilemeyen yazmalar tüm cache'i temizler.
+- **Tablo adı çıkarımı**: Backtick/çift tırnaklı ve şema önekli adlar, düz `JOIN`, virgüllü `FROM` listesi, subquery, `INSERT IGNORE`, `REPLACE INTO`, `TRUNCATE TABLE` destekleniyor (query builder sorguları artık doğru invalidate ediliyor).
+- **Konumsal parametreler**: `?` placeholder'lı sorgular (`[$a, $b]` dizisiyle) `:0` gibi geçersiz isimle bağlandığı için `HY093` veriyordu. `batch_insert()`, `batch_update()` ve ORM `save()` bu yüzden çalışmıyordu.
+
+### Davranış değişikliği
+- **`QUERY_CACHE_ENABLED` varsayılanı `false`** (`config::query_cache_enabled`, `.env.example`). Cache'e güvenen uygulamalar `.env` içinde `QUERY_CACHE_ENABLED=true` ayarlamalı.
+
+### Testler
+- `tests/Integration/QueryCacheIntegrationTest.php`: cache açıkken yazma, batch, raw query ve rollback senaryoları
+- `tests/Unit/QueryCacheTableExtractionTest.php`: tablo adı çıkarımı
+
 ## [1.5.13] - 2026-07-30
 
 ### Düzeltmeler

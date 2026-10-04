@@ -54,10 +54,14 @@ trait query_parameter_trait
     }
 
     /**
-     * Parametre adını normalize eder
+     * Parametre adını normalize eder (konumsal `?` için 1 tabanlı int döner)
      */
-    private function normalize_parameter_name(string $key): string
+    private function normalize_parameter_name(int|string $key): int|string
     {
-        return is_int($key) ? (string)($key + 1) : (strpos($key, ':') === 0 ? $key : ":{$key}");
+        if (is_int($key)) {
+            return $key + 1;
+        }
+
+        return str_starts_with($key, ':') ? $key : ":{$key}";
     }
 }

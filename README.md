@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.13
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.14
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -29,6 +29,8 @@
 > **v1.5.12**: Pool config default/constant/env tek kaynak; Dockerfile `composer install` hataları yutulmuyor (#27, #19).
 >
 > **v1.5.13**: Sync script path CLI/env; CI Ubuntu+MySQL ana gate; gerçek coverage clover + Codecov (#6, #20, #11).
+>
+> **v1.5.14**: Query cache yazma/rollback sonrası eski veri döndürmüyor; cache artık varsayılan **kapalı** (opt-in). Konumsal `?` parametreleri ve `batch_insert` / `batch_update` düzeltildi (#29).
 
 ## 🌟 Özellikler
 
@@ -81,7 +83,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.13 --prefer-dist
+composer require ngunenc/nsql:^1.5.14 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -101,13 +103,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.13"
+        "ngunenc/nsql": "^1.5.14"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.13 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.14 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -774,8 +776,10 @@ foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
 
 Query Cache özelliği, sık kullanılan sorguların sonuçlarını önbellekte tutarak performansı artırır:
 
+> **v1.5.14+**: Query cache varsayılan olarak kapalıdır; `.env` içinde `QUERY_CACHE_ENABLED=true` ile açılır. Cache yalnızca `nsql` instance'ının belleğinde tutulur (worker'lar arası paylaşılmaz). Yazma işlemleri (`insert`, `update`, `delete`, `batch_*`, yazma yapan `query()`) ilgili tabloların cache'ini temizler; transaction içinde cache kullanılmaz. Tablosu tespit edilemeyen sorgular cache'lenmez.
+
 ```php
-// Cache otomatik olarak aktiftir (.env'de QUERY_CACHE_ENABLED=true ise)
+// .env'de QUERY_CACHE_ENABLED=true ise aktiftir
 $users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
 // İkinci çağrıda sonuç cache'den gelir
 $users = $db->get_results("SELECT * FROM users WHERE status = 'active'");
@@ -1422,6 +1426,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.14 (2026-10-04)
+  - Query cache stale data düzeltmesi, cache varsayılan kapalı; konumsal parametre ve batch insert/update düzeltmesi (#29)
 
 - v1.5.13 (2026-07-30)
   - Sync CLI path/env; CI Ubuntu gate; coverage clover + Codecov (#6, #20, #11)
