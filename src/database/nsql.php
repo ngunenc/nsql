@@ -552,7 +552,7 @@ class nsql
         foreach ($params as $key => $param) {
             $param_name = $this->normalize_parameter_name($key);
 
-            if (is_array($param) && isset($param['value'], $param['type'])) {
+            if (is_array($param) && array_key_exists('value', $param) && isset($param['type'])) {
                 // Query Builder'dan gelen yapılandırılmış parametre
                 $stmt->bindValue($param_name, $param['value'], $param['type']);
             } else {

@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.18
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.19
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -39,6 +39,8 @@
 > **v1.5.17**: `query_builder::first()` ve `Model::find()` düzeltildi; `get_row()` `LIMIT ?`/`:param`, `FOR UPDATE`, `LOCK IN SHARE MODE` ve sondaki `;` ile çalışıyor (#34).
 >
 > **v1.5.18**: Query builder yalnızca `kolon`, `tablo.kolon`, `tablo.*` ve izinli aggregate ifadelerini kabul ediyor; hepsi driver'a göre quote ediliyor. `order_by('SLEEP(5)')` gibi ifadeler reddediliyor. Serbest SQL için `select_raw()`, `where_raw()`, `order_by_raw()`, `group_by_raw()`, `having_raw()` (#33).
+>
+> **v1.5.19**: Query builder subquery / UNION / having sorguları gerçek veritabanında çalışıyor; placeholder'lar derleme anında tek sayaçla üretiliyor, `compile()` yan etkisiz; `offset()` eklendi (#35).
 
 ## 🌟 Özellikler
 
@@ -91,7 +93,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.18 --prefer-dist
+composer require ngunenc/nsql:^1.5.19 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -111,13 +113,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.18"
+        "ngunenc/nsql": "^1.5.19"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.18 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.19 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1495,6 +1497,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.19 (2026-10-04)
+  - Query builder parametre isimlendirmesi, UNION ve idempotent compile() (#35)
 
 - v1.5.18 (2026-10-04)
   - Query builder identifier güvenliği: katı kolon grameri, driver'a göre quote, *_raw() metodları (#33)
