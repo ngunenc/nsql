@@ -176,7 +176,9 @@ class session_manager
     {
         $data = '';
         foreach ($this->config['fingerprint_fields'] as $field) {
-            $data .= $_SERVER[$field] ?? '';
+            $data .= $field === 'REMOTE_ADDR'
+                ? ip_resolver::from_config()->client_ip()
+                : ($_SERVER[$field] ?? '');
         }
 
         return hash('sha256', $data);

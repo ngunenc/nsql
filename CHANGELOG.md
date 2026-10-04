@@ -4,6 +4,24 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.21] - 2026-10-04
+
+### Güvenlik (#37)
+- **İstemci IP sahteciliği**: `security_manager::get_client_ip()` `X-Forwarded-For` (ilk adres), `X-Real-IP` ve `CF-Connecting-IP` başlıklarına koşulsuz güveniyordu. Herhangi bir istemci başlık göndererek audit log'daki IP'yi, rate limit anahtarını ve oturum parmak izini istediği gibi belirleyebiliyordu. Bu başlıklar artık yalnızca `REMOTE_ADDR` `TRUSTED_PROXIES` listesindeyse dikkate alınıyor.
+- **X-Forwarded-For zinciri** sağdan sola okunuyor; güvenilir proxy olmayan ilk adres istemcidir (zincirin başına eklenen sahte adresler yok sayılır). Geçersiz bir girdide yürüme durur.
+- **HTTPS tespiti**: `is_https()` `X-Forwarded-Proto` / `X-Forwarded-Ssl` başlıklarına koşulsuz güveniyordu (düz HTTP'de `secure` cookie kararını istemci belirleyebiliyordu). Artık yalnızca güvenilir proxy'den gelirse kullanılıyor.
+- `session_manager` parmak izindeki `REMOTE_ADDR` alanı çözülmüş istemci IP'sini kullanıyor (proxy arkasında tüm kullanıcılar aynı proxy IP'sini paylaşmıyor).
+
+### Yeni
+- `TRUSTED_PROXIES` config'i: IP veya CIDR (IPv4/IPv6), virgülle ayrılmış veya dizi. `*` yalnızca isteği gönderen eşe güvenir. Varsayılan boş (hiçbir proxy'ye güvenilmez).
+- `nsql\database\security\ip_resolver`: `client_ip()`, `is_https()`, `is_trusted_proxy()`, `ip_in_range()`, `is_valid_ip()`. `[IPv6]:port` ve `IPv4:port` biçimleri destekleniyor.
+
+### Kırıcı olabilecek değişiklik
+- Proxy / load balancer / CDN arkasında çalışan uygulamalar `TRUSTED_PROXIES` ayarlamazsa `get_client_ip()` proxy adresini döndürür.
+
+### Testler
+- `tests/Unit/IpResolverTest.php`: sahte başlıkların reddi, zincir yürüme, IPv4/IPv6 CIDR, port biçimleri, `*`, `is_https()` ve `security_manager` entegrasyonu.
+
 ## [1.5.20] - 2026-10-04
 
 ### Düzeltmeler (#36)

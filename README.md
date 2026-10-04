@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.20
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.21
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -43,6 +43,8 @@
 > **v1.5.19**: Query builder subquery / UNION / having sorguları gerçek veritabanında çalışıyor; placeholder'lar derleme anında tek sayaçla üretiliyor, `compile()` yan etkisiz; `offset()` eklendi (#35).
 >
 > **v1.5.20**: Migration yükleme/yol düzeltmeleri, base_migration ile bağlantı enjeksiyonu, tembel migrations tablosu, vendor/bin/nsql (#36).
+>
+> **v1.5.21**: Proxy başlıkları yalnızca TRUSTED_PROXIES listesindeki adreslerden kabul ediliyor; yeni ip_resolver (#37).
 
 ## 🌟 Özellikler
 
@@ -95,7 +97,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.20 --prefer-dist
+composer require ngunenc/nsql:^1.5.21 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -115,13 +117,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.20"
+        "ngunenc/nsql": "^1.5.21"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.20 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.21 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -573,6 +575,31 @@ if (nsql::validate_csrf($_POST['token'] ?? '')) {
 
 ```php
 $guvenli_metin = nsql::escape_html($kullanici_girisi);
+```
+
+### Proxy / Load Balancer Arkasında İstemci IP'si
+
+`security_manager::get_client_ip()` (audit log, logger, rate limit anahtarı, oturum parmak izi) ve `security_manager::is_https()` varsayılan olarak yalnızca `REMOTE_ADDR` ve `HTTPS` / `SERVER_PORT` değerlerini kullanır. İstemcinin gönderdiği `X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `X-Forwarded-Proto` ve `X-Forwarded-Ssl` başlıkları, isteği doğrudan gönderen adres `TRUSTED_PROXIES` listesinde değilse **yok sayılır**.
+
+```env
+# nginx / HAProxy / AWS ALB özel ağda
+TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+
+# Cloudflare (güncel liste: https://www.cloudflare.com/ips/)
+TRUSTED_PROXIES=173.245.48.0/20,103.21.244.0/22,2400:cb00::/32
+
+# Sabit IP'si olmayan tek bir load balancer: yalnızca isteği gönderen eşe güven
+TRUSTED_PROXIES=*
+```
+
+`X-Forwarded-For` zinciri sağdan sola okunur; güvenilir proxy olmayan ilk adres istemci IP'sidir, bu yüzden istemcinin zincirin başına eklediği sahte adresler sonucu etkilemez.
+
+```php
+use nsql\database\security\ip_resolver;
+
+$resolver = new ip_resolver(['10.0.0.0/8'], $_SERVER);
+$ip = $resolver->client_ip();
+$https = $resolver->is_https();
 ```
 
 ## 🚀 Performans
@@ -1530,6 +1557,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.21 (2026-10-04)
+  - Güvenilir proxy desteği: TRUSTED_PROXIES, ip_resolver, sahte X-Forwarded-For/Proto koruması (#37)
 
 - v1.5.20 (2026-10-04)
   - Migration manager: tarih önekli yükleme, proje içi yollar, base_migration, vendor/bin/nsql (#36)

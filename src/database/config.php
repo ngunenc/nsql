@@ -458,6 +458,7 @@ class config
 
             // Güvenlik
             'SECURITY_STRICT_MODE' => false,
+            'TRUSTED_PROXIES' => '',
 
             // Migration (göreli yollar proje köküne göre çözülür)
             'MIGRATIONS_PATH' => 'database/migrations',
