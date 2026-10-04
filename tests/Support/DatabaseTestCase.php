@@ -40,10 +40,8 @@ abstract class DatabaseTestCase extends TestCase
     private function runMigrations(): void
     {
         try {
-            $users = new \nsql\database\migrations\create_users_table();
-            $users->up();
-            $test = new \nsql\database\migrations\create_test_table();
-            $test->up();
+            (new \Tests\Fixtures\Migrations\create_users_table())->set_connection($this->db)->up();
+            (new \Tests\Fixtures\Migrations\create_test_table())->set_connection($this->db)->up();
         } catch (\Exception $e) {
             $this->markTestSkipped('Migration failed: ' . $e->getMessage());
         }

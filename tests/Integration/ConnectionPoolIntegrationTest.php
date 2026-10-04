@@ -70,6 +70,8 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
         $created_after_a = connection_pool::get_stats()['created_connections'];
         $this->assertLessThanOrEqual($created_before + 1, $created_after_a, 'Bir nsql örneği en fazla bir fiziksel bağlantı açmalı');
 
+        // Xdebug develop modunda unset() yıkıcıyı hemen tetiklemeyebilir.
+        (fn () => $this->disconnect())->call($a);
         unset($a);
 
         $b = $this->new_db();

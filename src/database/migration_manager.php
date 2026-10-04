@@ -4,27 +4,94 @@ namespace nsql\database;
 
 class migration_manager
 {
+    private const DATE_PREFIX_PATTERN = '/^\d{4}_\d{2}_\d{2}_\d{6}_/';
+
+    private const OPTIONAL_COLUMNS = [
+        'error_message' => 'TEXT NULL',
+        'duration' => 'FLOAT NULL',
+        'rolled_back_at' => 'TIMESTAMP NULL',
+        'rolled_back_by' => 'VARCHAR(255) NULL',
+        'rollback_batch' => 'INT NULL',
+    ];
+
+    /**
+     * require_once ikinci çağrıda dosyanın döndürdüğü nesneyi vermez; sonuçlar süreç boyunca saklanır.
+     *
+     * @var array<string, mixed>
+     */
+    private static array $included_files = [];
+
     private nsql $db;
     private array $migrations = [];
     private string $migrations_table = 'migrations';
     private string $migrations_path;
     private string $seeds_path;
     private bool $dry_run = false;
+    private bool $table_ready = false;
     private array $dependencies = [];
 
-    public function __construct(nsql $db)
+    /**
+     * @param string|null $migrations_path null ise MIGRATIONS_PATH config'i veya <proje kökü>/database/migrations
+     * @param string|null $seeds_path null ise SEEDS_PATH config'i veya <proje kökü>/database/seeds
+     */
+    public function __construct(nsql $db, ?string $migrations_path = null, ?string $seeds_path = null)
     {
         $this->db = $db;
-        $this->migrations_path = __DIR__ . '/migrations';
-        $this->seeds_path = __DIR__ . '/seeds';
-        $this->init_migrations_table();
+        $this->migrations_path = $this->resolve_path($migrations_path, 'MIGRATIONS_PATH', 'database/migrations');
+        $this->seeds_path = $this->resolve_path($seeds_path, 'SEEDS_PATH', 'database/seeds');
+    }
+
+    public function get_migrations_path(): string
+    {
+        return $this->migrations_path;
+    }
+
+    public function get_seeds_path(): string
+    {
+        return $this->seeds_path;
+    }
+
+    public function set_migrations_table(string $table): void
+    {
+        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table)) {
+            throw new \InvalidArgumentException("Geçersiz migrations tablo adı: {$table}");
+        }
+
+        $this->migrations_table = $table;
+        $this->table_ready = false;
+    }
+
+    private function resolve_path(?string $path, string $config_key, string $default_relative): string
+    {
+        if ($path === null || trim($path) === '') {
+            $configured = config::get($config_key);
+            $path = is_string($configured) && trim($configured) !== '' ? $configured : $default_relative;
+        }
+
+        $path = rtrim($path, '/\\');
+        if (! self::is_absolute_path($path)) {
+            $path = rtrim(config::get_project_root(), '/\\') . DIRECTORY_SEPARATOR . $path;
+        }
+
+        return $path;
+    }
+
+    private static function is_absolute_path(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            || str_starts_with($path, '\\')
+            || preg_match('/^[A-Za-z]:[\/\\\\]/', $path) === 1;
     }
 
     /**
-     * Migrations tablosunu oluşturur
+     * Migrations tablosunu ilk ihtiyaçta oluşturur; eski şemalarda eksik kolonları ekler.
      */
-    private function init_migrations_table(): void
+    private function ensure_migrations_table(): void
     {
+        if ($this->table_ready) {
+            return;
+        }
+
         $sql = "CREATE TABLE IF NOT EXISTS {$this->migrations_table} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             migration_name VARCHAR(255) NOT NULL,
@@ -39,82 +106,119 @@ class migration_manager
         )";
 
         $this->db->query($sql);
-        
-        // Mevcut tabloya yeni kolonları ekle (eğer yoksa)
-        $this->add_migration_table_columns_if_not_exists();
+        $this->upgrade_migrations_table();
+        $this->table_ready = true;
     }
 
     /**
-     * Migrations tablosuna yeni kolonları ekler (backward compatibility için)
+     * Eski sürümlerde oluşturulmuş tabloya yalnızca eksik olan kolonları ekler.
      */
-    private function add_migration_table_columns_if_not_exists(): void
+    private function upgrade_migrations_table(): void
     {
-        try {
-            // rolled_back_at kolonu
-            $this->db->query("ALTER TABLE {$this->migrations_table} ADD COLUMN IF NOT EXISTS rolled_back_at TIMESTAMP NULL");
-        } catch (\Exception $e) {
-            // Kolon zaten varsa hata verme
+        $columns = [];
+        foreach ($this->db->get_results("SHOW COLUMNS FROM {$this->migrations_table}") as $column) {
+            $columns[strtolower((string) $column->Field)] = strtolower((string) $column->Type);
         }
-        
-        try {
-            // rolled_back_by kolonu
-            $this->db->query("ALTER TABLE {$this->migrations_table} ADD COLUMN IF NOT EXISTS rolled_back_by VARCHAR(255) NULL");
-        } catch (\Exception $e) {
-            // Kolon zaten varsa hata verme
+
+        foreach (self::OPTIONAL_COLUMNS as $name => $definition) {
+            if (! isset($columns[$name])) {
+                $this->db->query("ALTER TABLE {$this->migrations_table} ADD COLUMN {$name} {$definition}");
+            }
         }
-        
-        try {
-            // rollback_batch kolonu
-            $this->db->query("ALTER TABLE {$this->migrations_table} ADD COLUMN IF NOT EXISTS rollback_batch INT NULL");
-        } catch (\Exception $e) {
-            // Kolon zaten varsa hata verme
-        }
-        
-        try {
-            // status ENUM'a 'rolled_back' ekle
+
+        if (isset($columns['status']) && ! str_contains($columns['status'], 'rolled_back')) {
             $this->db->query("ALTER TABLE {$this->migrations_table} MODIFY COLUMN status ENUM('pending', 'completed', 'failed', 'rolled_back') DEFAULT 'pending'");
-        } catch (\Exception $e) {
-            // Zaten güncellenmişse hata verme
         }
     }
 
     /**
-     * Tüm migration dosyalarını yükler
+     * Tüm migration dosyalarını yükler.
+     *
+     * Dosya ya bir migration nesnesi döndürür (`return new class extends base_migration {...};`)
+     * ya da tarih öneki çıkarılmış dosya adıyla aynı isimde bir sınıf tanımlar.
      */
     public function load_migrations(): void
     {
+        $this->migrations = [];
+
         if (! is_dir($this->migrations_path)) {
-            mkdir($this->migrations_path, 0755, true);
+            return;
         }
 
         $files = glob($this->migrations_path . '/*.php');
         if ($files === false) {
             $files = [];
         }
+        sort($files, SORT_STRING);
+
         foreach ($files as $file) {
-            require_once $file;
-            $class_name = 'nsql\\database\\migrations\\' . basename($file, '.php');
-            if (class_exists($class_name)) {
-                $migration = new $class_name();
-                if ($migration instanceof migration) {
-                    $migration_name = basename($file);
-                    $this->migrations[$migration_name] = $migration;
-                    
-                    // Migration'dan bağımlılıkları otomatik oku
-                    $deps = $migration->get_dependencies();
-                    if (! empty($deps)) {
-                        if (! isset($this->dependencies[$migration_name])) {
-                            $this->dependencies[$migration_name] = [];
-                        }
-                        foreach ($deps as $dep) {
-                            if (! in_array($dep, $this->dependencies[$migration_name])) {
-                                $this->dependencies[$migration_name][] = $dep;
-                            }
-                        }
-                    }
+            $migration_name = basename($file);
+            $migration = $this->instantiate_from_file($file, migration::class);
+            if (! $migration instanceof migration) {
+                throw new \RuntimeException("Migration dosyası bir migration nesnesi veya sınıfı sağlamıyor: {$migration_name}");
+            }
+
+            if (method_exists($migration, 'set_connection')) {
+                $migration->set_connection($this->db);
+            }
+
+            $this->migrations[$migration_name] = $migration;
+
+            foreach ($migration->get_dependencies() as $dep) {
+                $this->dependencies[$migration_name] ??= [];
+                if (! in_array($dep, $this->dependencies[$migration_name], true)) {
+                    $this->dependencies[$migration_name][] = $dep;
                 }
             }
         }
+    }
+
+    /**
+     * Dosyanın döndürdüğü nesneyi veya dosyada tanımlı sınıfın örneğini verir.
+     */
+    private function instantiate_from_file(string $file, string $expected_type): ?object
+    {
+        $key = realpath($file) ?: $file;
+        if (! array_key_exists($key, self::$included_files)) {
+            self::$included_files[$key] = (static fn (string $__file) => require_once $__file)($file);
+        }
+
+        $returned = self::$included_files[$key];
+        if (is_object($returned)) {
+            return $returned instanceof $expected_type || $expected_type === 'object' ? $returned : null;
+        }
+
+        foreach ($this->class_candidates($file) as $class_name) {
+            if (class_exists($class_name, false)) {
+                $instance = new $class_name();
+
+                return $instance instanceof $expected_type || $expected_type === 'object' ? $instance : null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string>
+     */
+    private function class_candidates(string $file): array
+    {
+        $base = basename($file, '.php');
+        $short = preg_replace(self::DATE_PREFIX_PATTERN, '', $base) ?? $base;
+
+        $namespace = '';
+        $source = file_get_contents($file);
+        if ($source !== false && preg_match('/^\s*namespace\s+([A-Za-z0-9_\\\\]+)\s*;/m', $source, $m)) {
+            $namespace = $m[1] . '\\';
+        }
+
+        return array_values(array_unique([
+            $namespace . $short,
+            $namespace . $base,
+            'nsql\\database\\migrations\\' . $short,
+            'nsql\\database\\seeds\\' . $short,
+        ]));
     }
 
     /**
@@ -123,6 +227,7 @@ class migration_manager
      */
     public function migrate(): array
     {
+        $this->ensure_migrations_table();
         $this->load_migrations();
         $executed = [];
         $batch = $this->get_next_batch();
@@ -140,17 +245,25 @@ class migration_manager
         foreach ($sorted_migrations as $name) {
             if (! in_array($name, $applied)) {
                 // Bağımlılıkların tamamlanmış olduğunu kontrol et
-                if (! $this->check_dependencies($name)) {
+                if (! $this->check_dependencies($name, $this->dry_run ? $executed : [])) {
                     throw new \RuntimeException("Migration {$name} için bağımlılıklar karşılanmadı.");
                 }
                 
-                try {
-                    $migration = $this->migrations[$name];
-                    $migration->up();
-                    $this->log_migration($name, $batch, 'completed');
+                if ($this->dry_run) {
                     $executed[] = $name;
-                } catch (\Exception $e) {
-                    throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage());
+
+                    continue;
+                }
+
+                $start_time = microtime(true);
+                try {
+                    $this->migrations[$name]->up();
+                    $this->log_migration($name, $batch, 'completed', null, microtime(true) - $start_time);
+                    $executed[] = $name;
+                } catch (\Throwable $e) {
+                    $this->log_migration($name, $batch, 'failed', $e->getMessage(), microtime(true) - $start_time);
+
+                    throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage(), 0, $e);
                 }
             }
         }
@@ -174,6 +287,7 @@ class migration_manager
      */
     public function rollback_batch(?int $batch = null): array
     {
+        $this->ensure_migrations_table();
         $this->load_migrations();
         $rolled_back = [];
 
@@ -223,6 +337,7 @@ class migration_manager
             throw new \InvalidArgumentException('Steps değeri pozitif olmalıdır.');
         }
 
+        $this->ensure_migrations_table();
         $this->load_migrations();
         $rolled_back = [];
 
@@ -266,6 +381,7 @@ class migration_manager
      */
     public function rollback_to(string $target_migration): array
     {
+        $this->ensure_migrations_table();
         $this->load_migrations();
         $rolled_back = [];
 
@@ -382,6 +498,7 @@ class migration_manager
      */
     public function create(string $name): string
     {
+        $this->assert_valid_file_name($name);
         $timestamp = date('Y_m_d_His');
         $filename = $timestamp . '_' . $name . '.php';
         $path = $this->migrations_path . '/' . $filename;
@@ -396,36 +513,45 @@ class migration_manager
         return $path;
     }
 
+    private function assert_valid_file_name(string $name): void
+    {
+        if (! preg_match('/^[A-Za-z0-9_]+$/', $name)) {
+            throw new \InvalidArgumentException("Geçersiz ad: {$name} (yalnızca harf, rakam ve _ kullanılabilir)");
+        }
+    }
+
     private function get_migration_template(string $name): string
     {
-        $class_name = str_replace(['-', ' '], '_', $name);
+        $description = var_export($name, true);
 
         return <<<PHP
 <?php
 
-namespace nsql\\database\\migrations;
+use nsql\\database\\base_migration;
 
-use nsql\\database\\migration;
-
-class {$class_name} implements migration {
-    public function up(): void {
-        // Migration kodunu buraya yazın
+return new class extends base_migration {
+    public function up(): void
+    {
+        // \$this->db()->query('CREATE TABLE ...');
     }
 
-    public function down(): void {
-        // Geri alma kodunu buraya yazın
+    public function down(): void
+    {
+        // \$this->db()->query('DROP TABLE IF EXISTS ...');
     }
 
-    public function get_description(): string {
-        return '{$name}';
+    public function get_description(): string
+    {
+        return {$description};
     }
 
-    public function get_dependencies(): array {
-        // Bağımlılık migration dosya adlarını döndürün (örn: ['2025_05_24_000001_create_users_table.php'])
-        // Eğer bağımlılık yoksa boş array döndürün
+    public function get_dependencies(): array
+    {
+        // Bağımlı olunan migration dosya adları, örn. ['2025_05_24_000001_create_users_table.php']
         return [];
     }
-}
+};
+
 PHP;
     }
 
@@ -467,6 +593,7 @@ PHP;
      */
     public function migrate_to(string $version): array
     {
+        $this->ensure_migrations_table();
         $this->load_migrations();
         $executed = [];
         $target_found = false;
@@ -521,13 +648,16 @@ PHP;
     /**
      * Migration bağımlılıklarını kontrol eder
      */
-    private function check_dependencies(string $name): bool
+    /**
+     * @param array<string> $also_applied Dry-run sırasında uygulanmış sayılacak migration'lar
+     */
+    private function check_dependencies(string $name, array $also_applied = []): bool
     {
         if (! isset($this->dependencies[$name])) {
             return true;
         }
 
-        $applied = $this->get_applied_migrations();
+        $applied = array_merge($this->get_applied_migrations(), $also_applied);
         foreach ($this->dependencies[$name] as $dependency) {
             if (! in_array($dependency, $applied)) {
                 return false;
@@ -636,15 +766,16 @@ PHP;
      */
     public function seed(?string $class = null): void
     {
-        if (! is_dir($this->seeds_path)) {
-            mkdir($this->seeds_path, 0755, true);
-        }
-
         if ($class === null) {
+            if (! is_dir($this->seeds_path)) {
+                return;
+            }
+
             $files = glob($this->seeds_path . '/*.php');
             if ($files === false) {
                 $files = [];
             }
+            sort($files, SORT_STRING);
             foreach ($files as $file) {
                 $this->run_seeder(basename($file, '.php'));
             }
@@ -658,23 +789,21 @@ PHP;
      */
     private function run_seeder(string $class): void
     {
+        $this->assert_valid_file_name($class);
         $file = $this->seeds_path . '/' . $class . '.php';
         if (! file_exists($file)) {
             throw new \RuntimeException("Seeder dosyası bulunamadı: {$class}");
         }
 
-        require_once $file;
-        $class_name = 'nsql\\database\\seeds\\' . $class;
-        if (! class_exists($class_name)) {
-            throw new \RuntimeException("Seeder sınıfı bulunamadı: {$class_name}");
+        $seeder = $this->instantiate_from_file($file, 'object');
+        if ($seeder === null) {
+            throw new \RuntimeException("Seeder dosyası bir nesne veya sınıf sağlamıyor: {$class}");
+        }
+        if (! method_exists($seeder, 'run')) {
+            throw new \RuntimeException("Seeder sınıfında run() metodu bulunamadı: {$class}");
         }
 
-        $seeder = new $class_name();
-        if (method_exists($seeder, 'run')) {
-            $seeder->run($this->db);
-        } else {
-            throw new \RuntimeException("Seeder sınıfında run() metodu bulunamadı: {$class_name}");
-        }
+        $seeder->run($this->db);
     }
 
     /**
@@ -682,6 +811,7 @@ PHP;
      */
     public function create_seeder(string $name): string
     {
+        $this->assert_valid_file_name($name);
         $filename = $name . '.php';
         $path = $this->seeds_path . '/' . $filename;
 
@@ -697,20 +827,18 @@ PHP;
 
     private function get_seeder_template(string $name): string
     {
-        $class_name = str_replace(['-', ' '], '_', $name);
-
         return <<<PHP
 <?php
 
-namespace nsql\\database\\seeds;
-
 use nsql\\database\\nsql;
 
-class {$class_name} {
-    public function run(nsql \$db): void {
+return new class {
+    public function run(nsql \$db): void
+    {
         // Seed verilerini buraya ekleyin
     }
-}
+};
+
 PHP;
     }
 
@@ -751,6 +879,7 @@ PHP;
      */
     public function get_status(string $migration_name): ?array
     {
+        $this->ensure_migrations_table();
         $result = $this->db->get_row(
             "SELECT * FROM {$this->migrations_table} WHERE migration_name = :name",
             ['name' => $migration_name]
@@ -780,6 +909,7 @@ PHP;
      */
     public function get_all_statuses(): array
     {
+        $this->ensure_migrations_table();
         $results = $this->db->get_results(
             "SELECT * FROM {$this->migrations_table} ORDER BY batch ASC, id ASC"
         );
@@ -815,6 +945,7 @@ PHP;
             throw new \InvalidArgumentException("Geçersiz status: {$status}");
         }
 
+        $this->ensure_migrations_table();
         $results = $this->db->get_results(
             "SELECT * FROM {$this->migrations_table} WHERE status = :status ORDER BY batch ASC, id ASC",
             ['status' => $status]
@@ -845,6 +976,7 @@ PHP;
      */
     public function get_migration_history(): array
     {
+        $this->ensure_migrations_table();
         $results = $this->db->get_results(
             "SELECT * FROM {$this->migrations_table} ORDER BY batch ASC, id ASC"
         );
@@ -881,6 +1013,7 @@ PHP;
      */
     public function get_status_report(): array
     {
+        $this->ensure_migrations_table();
         $this->load_migrations();
         
         $total_migrations = count($this->migrations);
@@ -928,6 +1061,7 @@ PHP;
      */
     public function get_batch_status(int $batch): array
     {
+        $this->ensure_migrations_table();
         $results = $this->db->get_results(
             "SELECT * FROM {$this->migrations_table} WHERE batch = :batch ORDER BY id ASC",
             ['batch' => $batch]

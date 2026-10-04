@@ -458,6 +458,10 @@ class config
 
             // Güvenlik
             'SECURITY_STRICT_MODE' => false,
+
+            // Migration (göreli yollar proje köküne göre çözülür)
+            'MIGRATIONS_PATH' => 'database/migrations',
+            'SEEDS_PATH' => 'database/seeds',
         ];
     }
 

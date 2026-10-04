@@ -4,6 +4,30 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.20] - 2026-10-04
+
+### Düzeltmeler (#36)
+- **Migration yükleme**: `load_migrations()` sınıf adını dosya adının tamamından (`nsql\database\migrations\2025_..._create_x`) arıyordu; tarih önekli hiçbir migration bulunamıyor, `migrate()` sessizce boş dönüyordu. Artık dosya ya bir migration nesnesi döndürür (`return new class extends base_migration {...};`) ya da tarih öneki çıkarılmış adla, dosyadaki namespace altında bir sınıf tanımlar.
+- **Yollar**: Migration/seed dizini paketin içi (`vendor/ngunenc/nsql/src/database/migrations`) idi. Varsayılan artık `<proje kökü>/database/migrations` ve `database/seeds`; `MIGRATIONS_PATH` / `SEEDS_PATH` config'i veya constructor parametreleriyle değiştirilebilir. Göreli yollar proje köküne göre çözülür.
+- **Constructor yan etkisi**: `new migration_manager($db)` her seferinde `CREATE TABLE` ve 4 `ALTER` çalıştırıyordu. Tablo artık ilk ihtiyaçta oluşturuluyor; eski şemaya yalnızca `SHOW COLUMNS` ile eksik olduğu görülen kolonlar ekleniyor.
+- `migrate()` başarısız migration'ı `failed` olarak loglamıyor, süreyi kaydetmiyor ve `set_dry_run()` ayarını yok sayıyordu.
+- Yükleme sırasında dizin yoksa oluşturuluyordu; artık oluşturulmuyor (yalnızca `create()` / `create_seeder()` oluşturur).
+- `create()` / `create_seeder()` / `seed()` adlarında yalnızca harf, rakam ve `_` kabul ediliyor (dizin dışına yazma engellendi).
+
+### Yeni
+- `nsql\database\base_migration`: bağlantı `set_connection()` ile enjekte edilir, `$this->db()` ile kullanılır. `migration_manager` `set_connection()` metodu olan her migration'a kendi bağlantısını verir; migration içinde `new nsql()` gerekmez.
+- `migration_manager::set_migrations_table()`, `get_migrations_path()`, `get_seeds_path()`.
+- CLI: `composer.json` `"bin": ["bin/nsql"]` → paket kurulunca `vendor/bin/nsql` kullanılabilir (paket arşivinde artık `bin/` var). Autoload hem paketin kendi `vendor/`'ünden hem de kurulu olduğu projenin `vendor/`'ünden bulunur. `--path=` ve `--seeds-path=` seçenekleri.
+- `migrate:create` ve `seed:create` şablonları anonim sınıf döndürür (sınıf adı çakışması olmaz).
+
+### Kırıcı olabilecek değişiklik
+- Paketle gelen `nsql\database\migrations\create_users_table` ve `create_test_table` test fixture'larıdır; `tests/Fixtures/Migrations` altına taşındı ve autoload classmap'ten çıkarıldı.
+- `migration_manager` constructor'ında artık DB'ye dokunulmuyor; varsayılan migration dizini değişti (yukarıya bakın).
+
+### Testler
+- `tests/Integration/MigrationManagerTest.php`: tembel tablo oluşturma, varsayılan/config yolları, şablondan oluşturup çalıştırma, anonim ve sınıf tabanlı migration, bağımlılık sırası, rollback, `failed` logu, dry-run, eski tablo şemasının yükseltilmesi, seed, geçersiz ad.
+- `ConnectionPoolIntegrationTest`: bağlantı bırakma testi Xdebug `develop` modunda yıkıcının geç çalışmasından etkilenmeyecek şekilde düzeltildi.
+
 ## [1.5.19] - 2026-10-04
 
 ### Düzeltmeler (#35)
