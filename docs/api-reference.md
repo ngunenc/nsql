@@ -287,13 +287,18 @@ $decrypted = $encryption->decrypt(string $encrypted): string
 Rate limiting ve DDoS koruması.
 
 ```php
-$limiter = new rate_limiter(?nsql $db = null);
+// options: table, max_requests, window, burst (varsayılan: RATE_LIMIT_* config)
+$limiter = new rate_limiter(?nsql $db = null, ?callable $clock = null, array $options = []);
 
-// Rate limit kontrolü
+// Token bucket kontrolü (satır SELECT ... FOR UPDATE ile kilitlenir)
 $allowed = $limiter->check_rate_limit(string $identifier, string $request_type = 'default'): bool
 
-// Rate limit istatistikleri
-$stats = $limiter->get_stats(): array
+// Tablo kurulumu
+$limiter->install(): void
+rate_limiter::schema_sql(string $table = 'rate_limits'): string
+
+// Saniyede eklenen token (max_requests / window)
+$limiter->refill_rate(): float
 ```
 
 ### Audit Logger

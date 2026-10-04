@@ -4,6 +4,27 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.22] - 2026-10-04
+
+### Düzeltmeler (#38)
+- **Token bucket çalışmıyordu**: Her istekte `window_start = now - window` yazıldığı için bir sonraki istekte "pencere doldu" koşulu doğru çıkıyor ve kova her saniye tamamen yenileniyordu; limit pratikte uygulanmıyordu. Artık token'lar geçen süreyle orantılı doluyor (saniyede `max_requests / window`), kapasiteyi aşmıyor.
+- **Yarış durumu**: Okuma ve güncelleme ayrı sorgulardı; eşzamanlı istekler aynı token'ı harcayabiliyordu. Satır artık transaction içinde `INSERT ... ON DUPLICATE KEY UPDATE` + `SELECT ... FOR UPDATE` ile kilitlenip güncelleniyor. Kilit zaman aşımı gibi hatalar yutulmuyor, `PDOException` olarak yayılıyor.
+- Reddedilen istekler token harcamıyor ve `total_requests`'e sayılmıyor.
+- `RATE_LIMIT_*` değerleri sınıf sabitlerinden değil `config::get()` (.env) üzerinden okunuyor.
+- `security_manager` rate limiter'ı bağlantısız oluşturuyordu; `check_rate_limit()` her zaman hata veriyordu. `new security_manager($db)` artık bağlantıyı iletiyor; `check_rate_limit()` `request_type` parametresini de alıyor.
+- Constructor DB'ye dokunmuyor; tablo süreç başına bir kez, ilk kontrolde oluşturuluyor.
+
+### Yeni
+- `rate_limiter::__construct(?nsql $db, ?callable $clock = null, array $options = [])`: test için saat enjeksiyonu; `table`, `max_requests`, `window`, `burst` seçenekleri.
+- `rate_limiter::install()`, `rate_limiter::schema_sql()`, `rate_limiter::refill_rate()`.
+
+### Davranış değişikliği
+- `RATE_LIMIT_DECAY` artık kullanılmıyor; dolum hızı `RATE_LIMIT_MAX_REQUESTS / RATE_LIMIT_WINDOW`. `RATE_LIMIT_BURST` aynı saniyedeki en fazla istek sayısı.
+- Yeni kurulumlarda `tokens` kolonu `DOUBLE` (eski `FLOAT` tablolar çalışmaya devam eder).
+
+### Testler
+- `tests/Integration/RateLimiterTest.php`: kapasite, kademeli dolum (eski tam sıfırlama hatası), kapasite tavanı, saniyelik burst, reddedilen isteklerin sayılmaması, kimlik/tür izolasyonu, bağlantılar arası paylaşım, satır kilidi (ikinci bağlantı `1205` ile bekler), dış transaction içinde kullanım, `security_manager` entegrasyonu.
+
 ## [1.5.21] - 2026-10-04
 
 ### Güvenlik (#37)
