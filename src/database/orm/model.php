@@ -7,8 +7,12 @@ use nsql\database\query_builder;
 
 /**
  * Base Model Class
- * 
+ *
  * Active Record pattern implementasyonu
+ *
+ * Mass assignment (constructor, fill(), `$model->alan = ...`) yalnızca `$fillable` içindeki
+ * alanları kabul eder; `$fillable` boşsa hiçbir alan atanmaz. Güvenilir kaynaktan gelen
+ * veriler için force_fill() / set_attribute() kullanın.
  */
 abstract class model
 {
@@ -25,12 +29,13 @@ abstract class model
     public function __construct(?nsql $db = null, array $attributes = [])
     {
         $this->db = $db ?? new nsql();
-        $this->attributes = $attributes;
-        
+
         // Tablo adını sınıf adından türet (eğer belirtilmemişse)
         if (empty($this->table)) {
             $this->table = $this->get_table_name_from_class();
         }
+
+        $this->fill($attributes);
     }
 
     /**
@@ -41,6 +46,47 @@ abstract class model
         $class_name = (new \ReflectionClass($this))->getShortName();
         // User -> users, Product -> products
         return strtolower($class_name) . 's';
+    }
+
+    /**
+     * Yalnızca fillable alanları atar; diğerlerini yok sayar.
+     */
+    public function fill(array $attributes): static
+    {
+        foreach ($attributes as $key => $value) {
+            if ($this->is_fillable((string) $key)) {
+                $this->attributes[$key] = $value;
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Fillable kontrolü olmadan atar. Yalnızca güvenilir veriler için kullanın.
+     */
+    public function force_fill(array $attributes): static
+    {
+        foreach ($attributes as $key => $value) {
+            $this->attributes[$key] = $value;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Tek bir alanı fillable kontrolü olmadan atar. Yalnızca güvenilir veriler için kullanın.
+     */
+    public function set_attribute(string $key, mixed $value): static
+    {
+        $this->attributes[$key] = $value;
+
+        return $this;
+    }
+
+    public function is_fillable(string $key): bool
+    {
+        return in_array($key, $this->fillable, true);
     }
 
     /**
@@ -69,65 +115,79 @@ abstract class model
         $result = $instance->query()
             ->where($instance->primary_key, '=', $id)
             ->first();
-        
+
         if ($result) {
             $instance->attributes = (array)$result;
             return $instance;
         }
-        
+
         return null;
     }
 
     /**
-     * Yeni kayıt oluşturur
+     * Kaydı ekler veya günceller. Hidden alanlar da kaydedilir.
+     *
+     * @throws \InvalidArgumentException Tablo veya kolon adı geçersizse
      */
     public function save(): bool
     {
-        $data = $this->get_attributes();
-        
-        // Timestamps
+        $data = $this->attributes;
+        $is_new = empty($this->attributes[$this->primary_key]);
+
         if ($this->timestamps) {
             $now = date('Y-m-d H:i:s');
-            if (empty($this->attributes[$this->primary_key])) {
-                // Yeni kayıt
+            if ($is_new) {
                 $data[$this->created_at_column] = $now;
             }
             $data[$this->updated_at_column] = $now;
         }
 
-        if (isset($this->attributes[$this->primary_key])) {
-            // Update
+        $table = $this->db->quote_identifier($this->table);
+        $primary_key = $this->db->quote_identifier($this->primary_key);
+
+        if (! $is_new) {
             $id = $this->attributes[$this->primary_key];
-            $sql = "UPDATE {$this->table} SET ";
+            unset($data[$this->primary_key]);
+
+            if ($data === []) {
+                return true;
+            }
+
             $set_parts = [];
-            $params = [];
-            
-            foreach ($data as $key => $value) {
-                if ($key !== $this->primary_key) {
-                    $set_parts[] = "{$key} = ?";
-                    $params[] = $value;
-                }
+            foreach (array_keys($data) as $column) {
+                $set_parts[] = $this->db->quote_identifier((string) $column) . ' = ?';
             }
-            
-            $sql .= implode(', ', $set_parts) . " WHERE {$this->primary_key} = ?";
+
+            $sql = "UPDATE {$table} SET " . implode(', ', $set_parts) . " WHERE {$primary_key} = ?";
+            $params = array_values($data);
             $params[] = $id;
-            
+
             return $this->db->update($sql, $params);
-        } else {
-            // Insert
-            $columns = array_keys($data);
-            $placeholders = implode(', ', array_fill(0, count($columns), '?'));
-            $columns_str = implode(', ', $columns);
-            
-            $sql = "INSERT INTO {$this->table} ({$columns_str}) VALUES ({$placeholders})";
-            $result = $this->db->insert($sql, array_values($data));
-            
-            if ($result) {
-                $this->attributes[$this->primary_key] = $this->db->insert_id();
-            }
-            
-            return $result;
         }
+
+        unset($data[$this->primary_key]);
+
+        if ($data === []) {
+            throw new \InvalidArgumentException('Kaydedilecek alan yok.');
+        }
+
+        $columns = array_map(fn ($column) => $this->db->quote_identifier((string) $column), array_keys($data));
+        $placeholders = implode(', ', array_fill(0, count($columns), '?'));
+
+        $sql = "INSERT INTO {$table} (" . implode(', ', $columns) . ") VALUES ({$placeholders})";
+        $result = $this->db->insert($sql, array_values($data));
+
+        if ($result === false) {
+            return false;
+        }
+
+        $this->attributes[$this->primary_key] = $this->db->insert_id();
+        if ($this->timestamps) {
+            $this->attributes[$this->created_at_column] = $data[$this->created_at_column];
+            $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
+        }
+
+        return true;
     }
 
     /**
@@ -140,9 +200,10 @@ abstract class model
         }
 
         $id = $this->attributes[$this->primary_key];
-        $sql = "DELETE FROM {$this->table} WHERE {$this->primary_key} = ?";
-        
-        return $this->db->delete($sql, [$id]);
+        $table = $this->db->quote_identifier($this->table);
+        $primary_key = $this->db->quote_identifier($this->primary_key);
+
+        return $this->db->delete("DELETE FROM {$table} WHERE {$primary_key} = ?", [$id]);
     }
 
     /**
@@ -154,13 +215,18 @@ abstract class model
     }
 
     /**
-     * Attribute setter
+     * Attribute setter (yalnızca fillable alanlar)
      */
     public function __set(string $key, mixed $value): void
     {
-        if (empty($this->fillable) || in_array($key, $this->fillable)) {
+        if ($this->is_fillable($key)) {
             $this->attributes[$key] = $value;
         }
+    }
+
+    public function __isset(string $key): bool
+    {
+        return isset($this->attributes[$key]);
     }
 
     /**
@@ -169,11 +235,11 @@ abstract class model
     public function get_attributes(): array
     {
         $attributes = $this->attributes;
-        
+
         foreach ($this->hidden as $hidden_key) {
             unset($attributes[$hidden_key]);
         }
-        
+
         return $attributes;
     }
 
@@ -190,7 +256,7 @@ abstract class model
      */
     public function to_json(): string
     {
-        return json_encode($this->to_array());
+        return (string) json_encode($this->to_array());
     }
 
     /**
@@ -200,11 +266,11 @@ abstract class model
     {
         $related = new $related_class($this->db);
         $foreign_value = $this->attributes[$foreign_key] ?? null;
-        
+
         if ($foreign_value === null) {
             return null;
         }
-        
+
         return $related::find($foreign_value, $this->db);
     }
 
@@ -215,11 +281,11 @@ abstract class model
     {
         $related = new $related_class($this->db);
         $local_value = $this->attributes[$local_key] ?? null;
-        
+
         if ($local_value === null) {
             return [];
         }
-        
+
         return $related->query()
             ->where($foreign_key, '=', $local_value)
             ->get();
