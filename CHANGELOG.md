@@ -4,6 +4,30 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.23] - 2026-10-04
+
+### Güvenlik (#39)
+- **Zayıf efektif anahtar**: `encryption`, base64 anahtar **metnini** doğrudan `openssl_encrypt()` anahtarı olarak veriyordu. OpenSSL ilk 32 karakteri kullandığından efektif entropi ~192 bit'e düşüyordu. Yeni şifrelemeler base64'ten çözülmüş ham 32 byte anahtarı kullanıyor (32 byte'tan uzun anahtarlar HKDF-SHA256 ile 32 byte'a indirgenir).
+- **IV**: GCM için 16 byte yerine önerilen 12 byte IV.
+- **Yeni format `v2:`**: `"v2:" . base64(key_id[8] | iv[12] | tag[16] | ciphertext)`. `key_id` = SHA-256(ham anahtar)'ın ilk 8 byte'ı; sürüm ve `key_id` AAD olarak doğrulanıyor.
+- **Rotation sonrası çözülemeyen veri**: Şifreli veride anahtar kimliği olmadığı için arşiv anahtarları hiç kullanılmıyordu. `encryption` artık mevcut anahtarla birlikte arşiv anahtarlarını da yükler; v2 verisi `key_id` ile doğru anahtarla, v1 verisi sırayla denenerek çözülür.
+- **Katı çözme**: `decrypt()` base64'ü katı modda çözüyor ve minimum uzunluğu kontrol ediyor; bozuk girdi, değiştirilmiş veri ve bilinmeyen anahtar için açık hata veriyor.
+- **Arşiv dosyaları** `0600` izinle yazılıyor (önceden varsayılan umask). Aynı saniyedeki rotation'lar birbirinin arşivini ezmiyor.
+- **Saklama biçimi**: Anahtar dosyası ikinci kez base64 ile sarılıyordu; artık anahtar metni doğrudan yazılıyor. Eski çift base64 dosyalar okunmaya devam ediyor.
+
+### Geriye dönük uyumluluk
+- v1 (<= 1.5.22) şifreli veriler çözülmeye devam ediyor. `needs_reencrypt()` / `reencrypt()` ile v2'ye taşınabilir.
+- Yeni `v2:` verisi 1.5.22 ve öncesi sürümlerle **çözülemez**; birden fazla sürümün aynı veriyi okuduğu ortamlarda önce tüm uygulamaları güncelleyin.
+- Geçersiz anahtar artık `new encryption($key)` sırasında `InvalidArgumentException` veriyor (önceden ilk şifrelemede hata oluşuyordu).
+
+### Yeni
+- `encryption::__construct(?string $key = null, array $previous_keys = [])`, `reencrypt()`, `needs_reencrypt()`.
+- `key_manager::get_archived_keys()` (en yeniden eskiye).
+- Windows'ta anahtar dosyası izin uyarısı verilmiyor (POSIX izinleri raporlanmadığı için her zaman yanlış alarmdı).
+
+### Testler
+- `tests/Unit/EncryptionTest.php`: ham 32 byte anahtar + 12 byte IV doğrulaması (openssl ile bağımsız çözme), v1 uyumluluğu ve `reencrypt`, değiştirilmiş veri, başka anahtarın reddi, bozuk girdiler, rotation sonrası eski verinin çözülmesi, arşiv sırası ve `0600`, tek/çift base64 saklama.
+
 ## [1.5.22] - 2026-10-04
 
 ### Düzeltmeler (#38)

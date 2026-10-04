@@ -11,7 +11,6 @@ use RuntimeException;
  */
 class key_manager
 {
-    private const KEY_VERSION_PREFIX = 'v';
     private const KEY_STORAGE_FILE = 'storage/keys/encryption.key';
     private const KEY_MIN_LENGTH = 32;
     private const KEY_MAX_LENGTH = 64;
@@ -94,12 +93,7 @@ class key_manager
             }
         }
 
-        // Key'i dosyaya yaz (base64 encoded)
-        $result = file_put_contents(
-            $storage_path,
-            base64_encode($key),
-            LOCK_EX
-        );
+        $result = file_put_contents($storage_path, $key, LOCK_EX);
 
         if ($result === false) {
             throw new RuntimeException("Key storage dosyasına yazılamadı: {$storage_path}");
@@ -124,9 +118,9 @@ class key_manager
             return null;
         }
 
-        // Dosya izinlerini kontrol et
+        // Windows POSIX izinlerini raporlamaz (her zaman 0666 görünür)
         $perms = fileperms($storage_path);
-        if (($perms & 0777) !== 0600) {
+        if (PHP_OS_FAMILY !== 'Windows' && ($perms & 0777) !== 0600) {
             // Güvenlik uyarısı: dosya izinleri güvenli değil
             trigger_error(
                 "Key storage dosyası güvenli izinlere sahip değil: {$storage_path}",
@@ -139,19 +133,68 @@ class key_manager
             return null;
         }
 
-        $key = base64_decode($content, true);
-        if ($key === false) {
-            return null;
+        return self::parse_stored_key($content);
+    }
+
+    /**
+     * Dosyadaki anahtarı okur. <= 1.5.22 anahtarı ikinci kez base64 ile saklıyordu; o biçim de okunur.
+     */
+    private static function parse_stored_key(string $content): ?string
+    {
+        $content = trim($content);
+
+        // Eski biçimin dış katmanı da 32-64 byte'a çözüldüğü için önce iç katman denenir.
+        foreach ([base64_decode($content, true), $content] as $candidate) {
+            if (! is_string($candidate) || $candidate === '') {
+                continue;
+            }
+
+            try {
+                return self::validate_key($candidate);
+            } catch (RuntimeException $e) {
+                continue;
+            }
         }
 
-        return self::validate_key($key);
+        return null;
+    }
+
+    /**
+     * Arşivlenmiş (rotation öncesi) anahtarlar, en yeniden eskiye.
+     *
+     * @return array<string> Base64 anahtarlar
+     */
+    public static function get_archived_keys(): array
+    {
+        $files = glob(self::get_archive_dir() . '/*.key');
+        if ($files === false || $files === []) {
+            return [];
+        }
+
+        rsort($files, SORT_STRING);
+
+        $keys = [];
+        foreach ($files as $file) {
+            $content = file_get_contents($file);
+            $key = $content === false ? null : self::parse_stored_key($content);
+            if ($key !== null && ! in_array($key, $keys, true)) {
+                $keys[] = $key;
+            }
+        }
+
+        return $keys;
+    }
+
+    private static function get_archive_dir(): string
+    {
+        return dirname(self::get_storage_path()) . '/archive';
     }
 
     /**
      * Key rotation yapar (yeni key oluşturur ve eski key'i arşivler)
      * 
      * @param string|null $old_key Eski key (opsiyonel, otomatik yüklenir)
-     * @return array ['new_key' => string, 'old_key' => string, 'rotation_date' => string]
+     * @return array{new_key: string, old_key: string, rotation_date: string}
      */
     public static function rotate_key(?string $old_key = null): array
     {
@@ -183,18 +226,22 @@ class key_manager
      */
     private static function archive_key(string $key): bool
     {
-        $archive_dir = dirname(self::get_storage_path()) . '/archive';
-        if (!is_dir($archive_dir)) {
-            mkdir($archive_dir, 0700, true);
+        $key = self::validate_key($key);
+        $archive_dir = self::get_archive_dir();
+        if (! is_dir($archive_dir) && ! mkdir($archive_dir, 0700, true)) {
+            throw new RuntimeException("Key arşiv dizini oluşturulamadı: {$archive_dir}");
         }
 
-        $archive_file = $archive_dir . '/key_' . date('Y-m-d_His') . '.key';
-        
-        return file_put_contents(
-            $archive_file,
-            base64_encode($key),
-            LOCK_EX
-        ) !== false;
+        // Aynı saniyede birden fazla rotation olabilir; sıralama dosya adına göre yapılır.
+        $archive_file = $archive_dir . '/key_' . date('Y-m-d_His') . '_' . sprintf('%06d', (int) (fmod(microtime(true), 1) * 1_000_000)) . '_' . bin2hex(random_bytes(2)) . '.key';
+
+        if (file_put_contents($archive_file, $key, LOCK_EX) === false) {
+            throw new RuntimeException("Key arşiv dosyasına yazılamadı: {$archive_file}");
+        }
+
+        chmod($archive_file, 0600);
+
+        return true;
     }
 
     /**
