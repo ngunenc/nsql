@@ -3,6 +3,7 @@
 namespace nsql\database\security;
 
 use nsql\database\config;
+use nsql\database\nsql;
 
 class security_manager
 {
@@ -11,9 +12,12 @@ class security_manager
     private encryption $encryption;
     private audit_logger $audit_logger;
 
-    public function __construct()
+    /**
+     * @param nsql|null $db check_rate_limit() için gerekli (rate_limits tablosu bu bağlantıda tutulur)
+     */
+    public function __construct(?nsql $db = null)
     {
-        $this->rate_limiter = new rate_limiter();
+        $this->rate_limiter = new rate_limiter($db);
         $this->data_filter = new sensitive_data_filter();
         $this->encryption = new encryption();
         $this->audit_logger = new audit_logger();
@@ -300,9 +304,9 @@ class security_manager
     /**
      * Rate limiting kontrolü
      */
-    public function check_rate_limit(string $identifier): bool
+    public function check_rate_limit(string $identifier, string $request_type = 'default'): bool
     {
-        return $this->rate_limiter->check_rate_limit($identifier);
+        return $this->rate_limiter->check_rate_limit($identifier, $request_type);
     }
 
     /**

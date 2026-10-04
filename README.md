@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.21
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.22
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -45,6 +45,8 @@
 > **v1.5.20**: Migration yükleme/yol düzeltmeleri, base_migration ile bağlantı enjeksiyonu, tembel migrations tablosu, vendor/bin/nsql (#36).
 >
 > **v1.5.21**: Proxy başlıkları yalnızca TRUSTED_PROXIES listesindeki adreslerden kabul ediliyor; yeni ip_resolver (#37).
+>
+> **v1.5.22**: Rate limiter: doğru token bucket, SELECT ... FOR UPDATE ile atomik güncelleme, config::get, security_manager bağlantısı (#38).
 
 ## 🌟 Özellikler
 
@@ -97,7 +99,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.21 --prefer-dist
+composer require ngunenc/nsql:^1.5.22 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -117,13 +119,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.21"
+        "ngunenc/nsql": "^1.5.22"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.21 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.22 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -707,11 +709,19 @@ Gerçek uygulamalarda rate limiting ve veri şifreleme gibi güvenlik modülleri
 
 ```php
 use nsql\database\security\rate_limiter;
+use nsql\database\security\security_manager;
 
-$limiter = new rate_limiter();
-if (!$limiter->check('user_ip')) {
-    die('Çok fazla istek!');
+// RATE_LIMIT_MAX_REQUESTS=100, RATE_LIMIT_WINDOW=60 → kova 100 token, dakikada tamamen dolar
+// RATE_LIMIT_BURST=10 → aynı saniyede en fazla 10 istek
+$limiter = new rate_limiter($db);
+if (! $limiter->check_rate_limit(security_manager::get_client_ip(), 'api')) {
+    http_response_code(429);
+    exit('Çok fazla istek!');
 }
+
+// Ayarları kod içinde ezmek: new rate_limiter($db, null, ['max_requests' => 5, 'window' => 300, 'burst' => 5])
+// Tablo ilk çağrıda oluşturulur. DDL açık transaction'ı commit edeceğinden deploy sırasında kurmak için:
+$limiter->install();                    // veya migration içinde: rate_limiter::schema_sql()
 
 use nsql\database\security\encryption;
 use nsql\database\security\key_manager;
@@ -1557,6 +1567,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.22 (2026-10-04)
+  - Rate limiter token bucket ve yarış durumu düzeltmesi, saat enjeksiyonu, install() (#38)
 
 - v1.5.21 (2026-10-04)
   - Güvenilir proxy desteği: TRUSTED_PROXIES, ip_resolver, sahte X-Forwarded-For/Proto koruması (#37)
