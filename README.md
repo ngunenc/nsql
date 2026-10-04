@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.14
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.15
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -31,6 +31,8 @@
 > **v1.5.13**: Sync script path CLI/env; CI Ubuntu+MySQL ana gate; gerçek coverage clover + Codecov (#6, #20, #11).
 >
 > **v1.5.14**: Query cache yazma/rollback sonrası eski veri döndürmüyor; cache artık varsayılan **kapalı** (opt-in). Konumsal `?` parametreleri ve `batch_insert` / `batch_update` düzeltildi (#29).
+>
+> **v1.5.15**: Connection pool DSN başına ve süreç içi (kilit dosyası yok); kullanımdaki bağlantılar artık silinmiyor. Kopan bağlantıda statement yeniden hazırlanarak otomatik yeniden bağlanma, transaction içinde ise `ConnectionException` (#30, #31).
 
 ## 🌟 Özellikler
 
@@ -47,11 +49,11 @@
 - Güvenli oturum yönetimi
 - Rate limiting ve DDoS koruması 
 - Hassas veri filtreleme
-- Thread-safe connection pool (file-based lock)
+- Süreç içi, DSN başına connection pool
 - Güvenli IP/HTTPS tespiti (proxy/load balancer desteği)
 
 ### Performans (v1.5.0 Optimizasyonları)
-- **Connection Pool**: Thread-safe bağlantı yönetimi (file-based lock, circular buffer)
+- **Connection Pool**: DSN + kullanıcı başına süreç içi havuz, ihtiyaç anında bağlantı açma
 - **Memory Management**: Gelişmiş bellek yönetimi (circular buffer, agresif cleanup)
 - **Cache Performance**: LFU algoritması desteği, dinamik cache size, per-table TTL
 - **Cache Warming**: Önceden yükleme stratejileri ile performans artışı
@@ -83,7 +85,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.14 --prefer-dist
+composer require ngunenc/nsql:^1.5.15 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -103,13 +105,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.14"
+        "ngunenc/nsql": "^1.5.15"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.14 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.15 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -793,10 +795,15 @@ $stats = $db->get_all_cache_stats();
 
 Connection Pool, veritabanı bağlantılarını yönetir ve performansı artırır:
 
+> **v1.5.15+**: Havuz her DSN + kullanıcı için ayrıdır ve yalnızca PHP sürecinin belleğinde tutulur (PHP-FPM worker'ları arasında paylaşılmaz, kilit dosyası kullanılmaz). Her `nsql` örneği tek bir fiziksel bağlantı kullanır; örnek yok edildiğinde bağlantı havuza döner ve aynı süreçteki sonraki örnekler tarafından yeniden kullanılır.
+
 ```php
-// Pool istatistiklerini görüntüleme
+// Süreçteki tüm havuzların toplam istatistikleri
 $stats = nsql::get_pool_stats();
 print_r($stats);
+
+// Yalnızca bu örneğin havuzu
+print_r($db->get_instance_pool_stats());
 
 // Tüm istatistikleri görüntüleme (v1.4 Yeni!)
 $all_stats = $db->get_all_stats();
@@ -1335,7 +1342,10 @@ Manuel olarak bağlantı kontrolü yapmak isterseniz:
 
 ```php
 $db->ensure_connection(); // Bağlantı kopmuşsa otomatik olarak yeniden bağlanır
+$db->reconnect();         // Bağlantıyı açıkça yeniler (v1.5.15+)
 ```
+
+> **v1.5.15+**: Sorgu sırasında bağlantı koparsa (MySQL 2006/2013) kopan bağlantı atılır, statement cache temizlenir ve sorgu yeni bağlantıda yeniden hazırlanıp çalıştırılır. Transaction içindeyken bağlantı koparsa sessizce yeniden bağlanılmaz; `nsql\database\exceptions\ConnectionException` fırlatılır ve transaction baştan tekrarlanmalıdır.
 
 Her sorgudan önce bu kontrol otomatik olarak yapılır, ekstra bir işlem yapmanıza gerek yoktur.
 
@@ -1426,6 +1436,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.15 (2026-10-04)
+  - Connection pool DSN başına / süreç içi yeniden tasarım; reconnect + statement yeniden hazırlama, transaction içinde ConnectionException (#30, #31)
 
 - v1.5.14 (2026-10-04)
   - Query cache stale data düzeltmesi, cache varsayılan kapalı; konumsal parametre ve batch insert/update düzeltmesi (#29)

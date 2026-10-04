@@ -54,16 +54,12 @@ class nsql
 
     // Query analiz özellikleri trait içinde tanımlanmıştır
 
-    // Database bağlantı özellikleri
-    private ?PDO $pdo = null;
+    // Database bağlantı özellikleri ($pdo, $pool_key, $retry_limit: connection_trait)
     private int $last_insert_id = 0;
     private array $options = [];
     private string $dsn = '';
     private ?string $user = null;
     private ?string $pass = null;
-    private int $retry_limit = 2;
-    private static bool $pool_initialized = false;
-    private static array $pool_config = [];
     private ?driver_interface $driver = null;
 
     // Cache özellikleri
@@ -113,35 +109,6 @@ class nsql
         $builder = new query_builder($this);
 
         return $table ? $builder->table($table) : $builder;
-    }
-
-    private function initialize_connection(): void
-    {
-        try {
-            $this->pdo = connection_pool::get_connection();
-        } catch (PDOException $e) {
-            throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage());
-        }
-    }
-
-    private function initialize_pool(): void
-    {
-        if (! self::$pool_initialized) {
-            self::$pool_config = [
-                'dsn' => $this->dsn,
-                'username' => $this->user,
-                'password' => $this->pass,
-                'options' => $this->options,
-            ];
-
-            connection_pool::initialize(
-                self::$pool_config,
-                (int)config::get('min_connections', config::min_connections),
-                (int)config::get('max_connections', config::max_connections)
-            );
-
-            self::$pool_initialized = true;
-        }
     }
 
     public function __construct(
@@ -267,23 +234,25 @@ class nsql
         return $instance;
     }
 
-    private function disconnect(): void
-    {
-        if ($this->pdo !== null) {
-            connection_pool::release_connection($this->pdo);
-            $this->pdo = null;
-        }
-    }
-
     public function __destruct()
     {
         $this->disconnect();
     }
 
-    // Connection Pool istatistiklerini almak için yeni metod
+    /**
+     * Süreçteki tüm bağlantı havuzlarının toplam istatistikleri.
+     */
     public static function get_pool_stats(): array
     {
         return connection_pool::get_stats();
+    }
+
+    /**
+     * Yalnızca bu örneğin DSN/kullanıcı havuzuna ait istatistikler.
+     */
+    public function get_instance_pool_stats(): array
+    {
+        return connection_pool::get_stats($this->pool_key);
     }
 
     private function log_error(string $message, array $context = [], int $level = \nsql\database\logging\logger::ERROR): void
@@ -431,27 +400,6 @@ class nsql
         }
     }
 
-    /**
-     * Veritabanı bağlantısının canlı olup olmadığını kontrol eder, kopmuşsa yeniden bağlanır.
-     * @return void
-     */
-    public function ensure_connection(): void
-    {
-        if ($this->pdo === null) {
-            $this->connect();
-            return;
-        }
-        
-        try {
-            $stmt = $this->pdo->query('SELECT 1');
-            if ($stmt === false) {
-                $this->connect();
-            }
-        } catch (PDOException $e) {
-            $this->connect();
-        }
-    }
-
     private static ?session_manager $session = null;
 
     /**
@@ -528,22 +476,26 @@ class nsql
         // Parametreleri validate et
         $this->validate_param_types($params);
         
-        // Statement'ı hazırla veya cache'den al
+        return $this->run_with_reconnect($sql, $params, $fetch_mode, ...$fetch_mode_args);
+    }
+
+    /**
+     * Statement'ı hazırlar (veya cache'den alır), parametreleri bağlar ve fetch mode'u ayarlar.
+     */
+    private function prepare_bound_statement(string $sql, array $params, ?int $fetch_mode, mixed ...$fetch_mode_args): PDOStatement|false
+    {
         $stmt = $this->prepare_or_get_cached_statement($sql, $params);
         if ($stmt === false) {
             return false;
         }
 
-        // Parametreleri bağla
         $this->bind_parameters($stmt, $params);
 
-        // Fetch mode ayarla
         if ($fetch_mode !== null) {
             $stmt->setFetchMode($fetch_mode, ...$fetch_mode_args);
         }
 
-        // Sorguyu çalıştır (retry logic ile)
-        return $this->execute_with_retry($stmt, $sql);
+        return $stmt;
     }
 
     /**
@@ -612,31 +564,34 @@ class nsql
     }
 
     /**
-     * Retry logic ile sorguyu çalıştırır (GELISTIRME-011: Helper metod)
+     * Sorguyu çalıştırır; bağlantı koptuysa yeniden bağlanıp statement'ı yeni bağlantıda tekrar hazırlar.
      */
-    private function execute_with_retry(PDOStatement $stmt, string $sql): PDOStatement|false
+    private function run_with_reconnect(string $sql, array $params, ?int $fetch_mode, mixed ...$fetch_mode_args): PDOStatement|false
     {
         $attempts = 0;
-        
-        do {
+
+        while (true) {
+            $stmt = $this->prepare_bound_statement($sql, $params, $fetch_mode, ...$fetch_mode_args);
+            if ($stmt === false) {
+                return false;
+            }
+
             try {
-                $stmt->execute();
+                @$stmt->execute();
+
                 return $stmt;
             } catch (PDOException $e) {
                 $attempts++;
                 $this->handle_execution_error($e);
 
-                $error_code = $e->errorInfo[1] ?? null;
-                if ($this->should_retry($error_code, $attempts)) {
-                    $this->initialize_connection();
-                    continue;
+                if (! $this->should_retry($e, $attempts)) {
+                    return false;
                 }
 
-                return false;
+                // Eski bağlantının statement'ları geçersiz; transaction içindeyse exception fırlatır
+                $this->reconnect($e);
             }
-        } while ($attempts <= $this->retry_limit);
-
-        return false;
+        }
     }
 
     /**
@@ -662,10 +617,9 @@ class nsql
     /**
      * Retry yapılmalı mı kontrol eder (GELISTIRME-011: Helper metod)
      */
-    private function should_retry(?int $error_code, int $attempts): bool
+    private function should_retry(PDOException $e, int $attempts): bool
     {
-        $recoverable_codes = [2006, 2013]; // MySQL server has gone away, Lost connection
-        return in_array($error_code, $recoverable_codes, true) && $attempts <= $this->retry_limit;
+        return $this->is_connection_lost_error($e) && $attempts <= $this->retry_limit;
     }
 
     public function query(string $query, ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false

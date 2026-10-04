@@ -5,99 +5,127 @@ namespace nsql\database\traits;
 use PDO;
 use PDOException;
 use RuntimeException;
-use nsql\database\connection_pool;
 use nsql\database\config;
+use nsql\database\connection_pool;
+use nsql\database\exceptions\ConnectionException;
+use nsql\database\exceptions\error_codes;
 
+/**
+ * Bağlantı yaşam döngüsü: havuz kaydı, bağlantı alma/bırakma, kopan bağlantıyı yenileme.
+ */
 trait connection_trait
 {
     private int $retry_limit = 2;
-    private static bool $pool_initialized = false;
-    private static array $pool_config = [];
     private ?PDO $pdo = null;
+    private ?string $pool_key = null;
 
     /**
-     * Bağlantıyı başlatır
+     * Bu örneğin DSN/kullanıcı bilgisine ait havuzu kaydeder.
+     */
+    private function initialize_pool(): void
+    {
+        $this->pool_key = connection_pool::initialize(
+            [
+                'dsn' => $this->dsn,
+                'username' => (string) $this->user,
+                'password' => (string) $this->pass,
+                'options' => $this->options,
+            ],
+            (int) config::get('min_connections', config::min_connections),
+            (int) config::get('max_connections', config::max_connections)
+        );
+    }
+
+    /**
+     * Havuzdan bu örneğe ait fiziksel bağlantıyı alır.
      */
     private function initialize_connection(): void
     {
         try {
-            $this->pdo = connection_pool::get_connection();
+            $this->pdo = connection_pool::get_connection($this->pool_key);
+        } catch (PDOException | RuntimeException $e) {
+            $this->log_error('Veritabanı bağlantı hatası: ' . $e->getMessage());
 
-            // PDO hata modunu kontrol et ve ayarla
-            if ($this->pdo->getAttribute(\PDO::ATTR_ERRMODE) !== \PDO::ERRMODE_EXCEPTION) {
-                $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            }
-        } catch (PDOException $e) {
-            $this->log_error("Veritabanı bağlantı hatası: " . $e->getMessage());
-
-            throw new RuntimeException("Veritabanı bağlantı hatası: " . $e->getMessage(), 0, $e);
+            throw new ConnectionException(
+                'Veritabanı bağlantı hatası: ' . $e->getMessage(),
+                code: error_codes::CONNECTION_FAILED,
+                previous: $e
+            );
         }
     }
 
     /**
-     * Bağlantıyı kapatır
+     * Bağlantıyı havuza geri bırakır.
      */
     private function disconnect(): void
     {
         if ($this->pdo !== null) {
-            try {
-                connection_pool::release_connection($this->pdo);
-            } catch (PDOException $e) {
-                $this->log_error("Bağlantı kapatma hatası: " . $e->getMessage());
-            }
+            connection_pool::release_connection($this->pdo);
             $this->pdo = null;
         }
     }
 
     /**
-     * Bağlantının canlı olup olmadığını kontrol eder
+     * Bağlantının canlı olduğunu doğrular; kopmuşsa yeniden bağlanır.
+     *
+     * @throws ConnectionException Transaction sırasında bağlantı koptuysa veya yeniden bağlanılamazsa
      */
     public function ensure_connection(): void
     {
-        $attempts = 0;
-        $max_attempts = $this->retry_limit;
+        if ($this->pdo === null) {
+            $this->initialize_connection();
 
-        while ($attempts <= $max_attempts) {
-            try {
-                if ($this->pdo === null) {
-                    $this->initialize_connection();
+            return;
+        }
 
-                    return;
-                }
-
-                $stmt = $this->pdo->query('SELECT 1');
-                if ($stmt !== false) {
-                    return;
-                }
-            } catch (PDOException $e) {
-                $attempts++;
-                $this->log_error("Bağlantı kontrol hatası (Deneme $attempts/$max_attempts): " . $e->getMessage());
-
-                if ($attempts > $max_attempts) {
-                    throw new RuntimeException("Bağlantı kurulamadı ($max_attempts deneme sonrası)", 0, $e);
-                }
-
-                $this->pdo = null;
-                sleep(1); // Yeni deneme öncesi kısa bekleme
-            }
+        try {
+            @$this->pdo->query('SELECT 1');
+        } catch (PDOException $e) {
+            $this->reconnect($e);
         }
     }
 
     /**
-     * Connection Pool yapılandırmasını başlatır
+     * Mevcut bağlantıyı havuzdan atar ve yeni bir bağlantı alır.
+     *
+     * Eski bağlantıya ait prepared statement'lar geçersiz olduğundan statement cache temizlenir.
+     * Açık transaction varsa sessizce yeniden bağlanmak veri tutarlılığını bozacağından
+     * transaction durumu sıfırlanır ve exception fırlatılır.
+     *
+     * @throws ConnectionException
      */
-    private function initialize_connection_pool(array $config): void
+    public function reconnect(?\Throwable $cause = null): void
     {
-        if (!self::$pool_initialized) {
-            self::$pool_config = $config;
+        $in_transaction = $this->get_transaction_level() > 0;
 
-            connection_pool::initialize(
-                self::$pool_config,
-                (int)config::get('min_connections', config::min_connections),
-                (int)config::get('max_connections', config::max_connections)
-            );
-
-            self::$pool_initialized = true;
+        if ($this->pdo !== null) {
+            connection_pool::discard_connection($this->pdo);
+            $this->pdo = null;
         }
+        $this->clear_statement_cache();
+
+        if ($in_transaction) {
+            $this->reset_transaction_state();
+            $this->log_error('Transaction sırasında veritabanı bağlantısı koptu', [
+                'cause' => $cause?->getMessage(),
+            ]);
+
+            throw new ConnectionException(
+                'Transaction sırasında veritabanı bağlantısı koptu; transaction geri alındı. '
+                . 'İşlemi baştan tekrarlayın.',
+                code: error_codes::CONNECTION_LOST,
+                previous: $cause instanceof \Exception ? $cause : null
+            );
+        }
+
+        $this->initialize_connection();
+    }
+
+    /**
+     * Bağlantı koptuğunu gösteren MySQL hata kodları (server has gone away, lost connection).
+     */
+    private function is_connection_lost_error(PDOException $e): bool
+    {
+        return in_array((int) ($e->errorInfo[1] ?? 0), [2006, 2013], true);
     }
 }

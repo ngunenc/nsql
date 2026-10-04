@@ -21,6 +21,10 @@ trait transaction_trait
      */
     public function begin(): void
     {
+        if ($this->transaction_level === 0 && method_exists($this, 'ensure_connection')) {
+            $this->ensure_connection();
+        }
+
         $pdo = $this->require_pdo();
 
         if ($this->transaction_level === 0) {
@@ -82,6 +86,14 @@ trait transaction_trait
     public function get_transaction_level(): int
     {
         return $this->transaction_level;
+    }
+
+    /**
+     * Bağlantı kaybında sunucu tarafı transaction zaten sonlanmıştır; yerel sayaç sıfırlanır.
+     */
+    private function reset_transaction_state(): void
+    {
+        $this->transaction_level = 0;
     }
 
     /**

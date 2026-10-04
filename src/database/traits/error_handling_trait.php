@@ -85,7 +85,7 @@ trait error_handling_trait
         }
         
         // Tüm denemeler başarısız
-        throw $this->convert_to_database_exception($last_exception);
+        throw $this->convert_to_database_exception($last_exception ?? new PDOException('Tüm denemeler başarısız'));
     }
 
     /**
