@@ -211,12 +211,19 @@ from(string $table): self
 
 // WHERE clause
 where(string $column, string $operator, mixed $value): self
+// 'IN' / 'NOT IN' + dizi, '=' / 'IS' + null => IS NULL, '!=' / '<>' / 'IS NOT' + null => IS NOT NULL
+where_in(string $column, array $values): self       // boş dizi => hiçbir satır
+where_not_in(string $column, array $values): self   // boş dizi => tüm satırlar
+where_null(string $column): self
+where_not_null(string $column): self
+allow_empty_strings(bool $allow = true): self       // varsayılan: QUERY_BUILDER_ALLOW_EMPTY_STRING (true)
 
 // ORDER BY clause
 order_by(string $column, string $direction = 'ASC'): self
 
-// LIMIT clause
-limit(int $count, int $offset = 0): self
+// LIMIT / OFFSET
+limit(int $limit): self
+offset(int $offset): self   // LIMIT olmadan da çalışır
 
 // JOIN clause
 join(string $table, string $first, string $operator, string $second, string $type = 'INNER'): self

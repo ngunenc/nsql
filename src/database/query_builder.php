@@ -41,11 +41,23 @@ class query_builder
     private array $joins = [];
     /** @var list<array{builder: query_builder, all: bool}> */
     private array $unions = [];
-    private bool $allow_empty_string = false;
+    private bool $allow_empty_string;
 
     public function __construct(nsql $db)
     {
         $this->db = $db;
+        $this->allow_empty_string = (bool) config::get('query_builder_allow_empty_string', true);
+    }
+
+    /**
+     * Boş string ('') değerlerin koşullarda kullanılmasına izin verir veya engeller.
+     * Varsayılan: QUERY_BUILDER_ALLOW_EMPTY_STRING (true).
+     */
+    public function allow_empty_strings(bool $allow = true): self
+    {
+        $this->allow_empty_string = $allow;
+
+        return $this;
     }
 
     /**
@@ -133,6 +145,44 @@ class query_builder
     public function where_raw(string $condition, array $bindings = []): self
     {
         $this->where[] = ['(', $this->raw_part($condition, $bindings), ')'];
+
+        return $this;
+    }
+
+    /**
+     * WHERE kolon IN (...) ekler. Boş dizi hiçbir satırla eşleşmez (`1 = 0`).
+     *
+     * @param array<int|string, mixed> $values
+     */
+    public function where_in(string $column, array $values): self
+    {
+        $this->where[] = $this->in_part($this->compile_column($column), $values, false);
+
+        return $this;
+    }
+
+    /**
+     * WHERE kolon NOT IN (...) ekler. Boş dizi tüm satırlarla eşleşir (`1 = 1`).
+     *
+     * @param array<int|string, mixed> $values
+     */
+    public function where_not_in(string $column, array $values): self
+    {
+        $this->where[] = $this->in_part($this->compile_column($column), $values, true);
+
+        return $this;
+    }
+
+    public function where_null(string $column): self
+    {
+        $this->where[] = [$this->compile_column($column) . ' IS NULL'];
+
+        return $this;
+    }
+
+    public function where_not_null(string $column): self
+    {
+        $this->where[] = [$this->compile_column($column) . ' IS NOT NULL'];
 
         return $this;
     }
@@ -459,10 +509,17 @@ class query_builder
 
         if ($this->limit !== null) {
             $query .= ' LIMIT ' . $this->bind($this->limit, \PDO::PARAM_INT, $counter, $params);
+        } elseif ($this->offset > 0) {
+            // MySQL ve SQLite OFFSET için LIMIT ister; "sınırsız" değeri sürücüye göre.
+            $query .= match ($this->db->get_driver_name()) {
+                'mysql' => ' LIMIT 18446744073709551615',
+                'sqlite' => ' LIMIT -1',
+                default => '',
+            };
+        }
 
-            if ($this->offset > 0) {
-                $query .= ' OFFSET ' . $this->bind($this->offset, \PDO::PARAM_INT, $counter, $params);
-            }
+        if ($this->offset > 0) {
+            $query .= ' OFFSET ' . $this->bind($this->offset, \PDO::PARAM_INT, $counter, $params);
         }
 
         return $query;
@@ -541,12 +598,64 @@ class query_builder
     {
         $quoted_column = $this->compile_column($column);
         $this->validate_operator($operator);
+        $op = strtoupper(trim($operator));
 
         if ($value instanceof query_builder) {
             return ["$quoted_column $operator ", ...$this->subquery_part($value)];
         }
 
+        if ($op === 'IN' || $op === 'NOT IN') {
+            if (! is_array($value)) {
+                throw new \InvalidArgumentException("$op operatörü dizi veya subquery bekler: {$column}");
+            }
+
+            return $this->in_part($quoted_column, $value, $op === 'NOT IN');
+        }
+
+        if ($value === null) {
+            return match ($op) {
+                '=', 'IS' => ["$quoted_column IS NULL"],
+                '!=', '<>', 'IS NOT' => ["$quoted_column IS NOT NULL"],
+                default => throw new \InvalidArgumentException("NULL değeri '$operator' operatörüyle kullanılamaz: {$column}"),
+            };
+        }
+
+        if ($op === 'IS' || $op === 'IS NOT') {
+            throw new \InvalidArgumentException("$op operatörü yalnızca NULL ile kullanılabilir: {$column}");
+        }
+
+        if (is_array($value) || is_object($value)) {
+            throw new \InvalidArgumentException("'$operator' operatörü için skaler değer gerekli: {$column}");
+        }
+
         return ["$quoted_column $operator ", $this->value_part($column, $value)];
+    }
+
+    /**
+     * @param array<int|string, mixed> $values
+     * @return list<string|array>
+     */
+    private function in_part(string $quoted_column, array $values, bool $not): array
+    {
+        if ($values === []) {
+            return [$not ? '1 = 1' : '1 = 0'];
+        }
+
+        $part = [$quoted_column . ($not ? ' NOT IN (' : ' IN (')];
+        $first = true;
+        foreach ($values as $value) {
+            if (is_array($value) || is_object($value)) {
+                throw new \InvalidArgumentException('IN listesi yalnızca skaler değer içerebilir.');
+            }
+            if (! $first) {
+                $part[] = ', ';
+            }
+            $part[] = ['kind' => 'value', 'value' => $value, 'type' => $this->get_param_type($value)];
+            $first = false;
+        }
+        $part[] = ')';
+
+        return $part;
     }
 
     /**

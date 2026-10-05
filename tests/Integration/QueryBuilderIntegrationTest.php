@@ -291,6 +291,79 @@ class QueryBuilderIntegrationTest extends DatabaseTestCase
         $this->assertSame(['ali', 'ayse'], $this->col($rows, 'name'));
     }
 
+    public function test_limit_offset_and_offset_without_limit(): void
+    {
+        $rows = $this->qb()->select('id')->from('qb_products')->order_by('id')->limit(10)->offset(2)->get();
+        $this->assertSame([3, 4, 5], array_map('intval', $this->col($rows, 'id')));
+
+        $rows = $this->qb()->select('id')->from('qb_products')->order_by('id')->limit(2)->offset(1)->get();
+        $this->assertSame([2, 3], array_map('intval', $this->col($rows, 'id')));
+
+        $rows = $this->qb()->select('id')->from('qb_products')->order_by('id')->offset(3)->get();
+        $this->assertSame([4, 5], array_map('intval', $this->col($rows, 'id')));
+    }
+
+    public function test_where_in_with_array(): void
+    {
+        $rows = $this->qb()->select('id')->from('qb_products')->where('id', 'IN', [1, 3, 5])->order_by('id')->get();
+        $this->assertSame([1, 3, 5], array_map('intval', $this->col($rows, 'id')));
+
+        $rows = $this->qb()->select('id')->from('qb_products')->where_in('category', ['toy', 'game'])->order_by('id')->get();
+        $this->assertSame([3, 4, 5], array_map('intval', $this->col($rows, 'id')));
+
+        $rows = $this->qb()->select('id')->from('qb_products')->where_not_in('category', ['book'])->order_by('id')->get();
+        $this->assertSame([3, 4, 5], array_map('intval', $this->col($rows, 'id')));
+
+        $rows = $this->qb()->select('id')->from('qb_products')->where('id', 'NOT IN', [1, 2])->order_by('id')->get();
+        $this->assertSame([3, 4, 5], array_map('intval', $this->col($rows, 'id')));
+    }
+
+    public function test_where_in_empty_array(): void
+    {
+        $this->assertCount(0, $this->qb()->select('id')->from('qb_products')->where_in('id', [])->get());
+        $this->assertCount(5, $this->qb()->select('id')->from('qb_products')->where_not_in('id', [])->get());
+    }
+
+    public function test_where_null_and_is_operators(): void
+    {
+        $ids = fn ($b) => array_map('intval', $this->col($b->order_by('id')->get(), 'id'));
+
+        $this->assertSame([4], $ids($this->qb()->select('id')->from('qb_products')->where_null('user_id')));
+        $this->assertSame([1, 2, 3, 5], $ids($this->qb()->select('id')->from('qb_products')->where_not_null('user_id')));
+        $this->assertSame([4, 5], $ids($this->qb()->select('id')->from('qb_products')->where('category_id', 'IS', null)));
+        $this->assertSame([1, 2, 3], $ids($this->qb()->select('id')->from('qb_products')->where('category_id', 'IS NOT', null)));
+        $this->assertSame([4], $ids($this->qb()->select('id')->from('qb_products')->where('user_id', '=', null)));
+        $this->assertSame([1, 2, 3, 5], $ids($this->qb()->select('id')->from('qb_products')->where('user_id', '!=', null)));
+
+        $this->assertStringContainsString('`user_id` IS NULL', $this->qb()->from('qb_products')->where_null('user_id')->get_query());
+    }
+
+    public function test_invalid_value_and_operator_combinations_throw(): void
+    {
+        foreach ([
+            fn () => $this->qb()->from('qb_products')->where('id', '=', [1, 2]),
+            fn () => $this->qb()->from('qb_products')->where('id', 'IN', 5),
+            fn () => $this->qb()->from('qb_products')->where('id', 'IS', 5),
+            fn () => $this->qb()->from('qb_products')->where('id', '>', null),
+            fn () => $this->qb()->from('qb_products')->where_in('id', [[1]]),
+        ] as $call) {
+            try {
+                $call();
+                $this->fail('InvalidArgumentException bekleniyordu');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertNotSame('', $e->getMessage());
+            }
+        }
+    }
+
+    public function test_empty_string_is_allowed_by_default_and_can_be_disabled(): void
+    {
+        $this->assertCount(0, $this->qb()->select('id')->from('qb_products')->where('name', '=', '')->get());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->qb()->allow_empty_strings(false)->from('qb_products')->where('name', '=', '');
+    }
+
     public function test_having_subquery(): void
     {
         $avg = $this->qb()->select('AVG(price)')->from('qb_products');

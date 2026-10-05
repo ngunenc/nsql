@@ -4,6 +4,25 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.31] - 2026-10-05
+
+### Düzeltmeler (#48)
+- **`where('id', 'IN', [1, 2, 3])` çalışmıyordu**: dizi string'e çevrilmeye çalışılıyordu ("Array to string conversion"). Artık her eleman ayrı placeholder ile bağlanıyor. Boş dizide `IN` hiçbir satırla (`1 = 0`), `NOT IN` tüm satırlarla (`1 = 1`) eşleşiyor.
+- **`where('deleted_at', 'IS', null)` geçersiz SQL üretiyordu** (`IS :param`). `IS` / `=` + `null` artık `IS NULL`, `IS NOT` / `!=` / `<>` + `null` artık `IS NOT NULL` üretiyor (`= NULL` hiçbir satır döndürmüyordu). Diğer operatörlerle `null`, `IS` ile null olmayan değer ve skaler beklenen yerde dizi açık `InvalidArgumentException` veriyor. Aynı kurallar `having()` için de geçerli.
+- **`offset()` LIMIT olmadan yok sayılıyordu**. Artık LIMIT'siz de çalışıyor (MySQL ve SQLite'ın istediği "sınırsız" LIMIT sürücüye göre ekleniyor).
+- **Boş string her zaman exception veriyordu** ve değiştirilemiyordu (`where('name', '=', '')`). Artık varsayılan olarak izin veriliyor; eski katı davranış için `allow_empty_strings(false)` veya `QUERY_BUILDER_ALLOW_EMPTY_STRING=false`.
+
+### Yeni
+- `query_builder::where_in()`, `where_not_in()`, `where_null()`, `where_not_null()`, `allow_empty_strings()`.
+- `nsql::get_driver_name()` (`mysql` / `pgsql` / `sqlite`).
+
+### Davranış değişikliği
+- `where(col, '=', '')` artık exception yerine sorguyu çalıştırıyor.
+- `where(col, '=', null)` artık `col IS NULL` olarak çalışıyor (önceden `col = NULL` ile hiç satır dönmüyordu).
+
+### Testler
+- `QueryBuilderIntegrationTest`: `limit()->offset()`, LIMIT'siz offset, dizi ile `IN` / `NOT IN`, boş dizi, `where_null` / `IS` / `= null`, geçersiz kombinasyonlar, boş string ayarı. `docs/api-reference.md` güncellendi.
+
 ## [1.5.30] - 2026-10-05
 
 ### Güvenlik / Düzeltmeler (#43)
