@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.1
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -96,6 +96,8 @@
 >
 > **v1.13.0**: Web güvenlik yardımcıları opsiyonel nsql\security namespace'ine taşındı (#25)
 >
+> **v1.13.1**: İsimlendirme politikası (CONTRIBUTING.md) ve PascalCase exception zorunluluğu (#24)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -103,6 +105,8 @@
 > **v1.12.0**: ORM: `has_one` / `has_many` / `belongs_to` lazy load (model örnekleri), `$casts` (int, float, bool, array/json, datetime, date), `$guarded`, opsiyonel soft delete, `inflector` ile tablo adı çözümü (`ORM_TABLE_NAMING=inflector`) (#9).
 >
 > **v1.13.0**: Web güvenlik yardımcıları (`security_manager`, `session_manager`, `rate_limiter`, `ip_resolver`, `encryption`, `key_manager`, `audit_logger`) opsiyonel `nsql\security` namespace'ine taşındı; eski adlar 2.0'a kadar takma ad olarak çalışır (#25).
+>
+> **v1.13.1**: Yazılı isimlendirme politikası ([CONTRIBUTING.md](CONTRIBUTING.md)); exception'lar `PascalCase` (lint + test ile zorunlu), `model_not_found_exception` → `ModelNotFoundException` (#24).
 
 ## 🌟 Özellikler
 
@@ -156,7 +160,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.13.0 --prefer-dist
+composer require ngunenc/nsql:^1.13.1 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -176,13 +180,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.13.0"
+        "ngunenc/nsql": "^1.13.1"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.13.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.13.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1653,7 +1657,7 @@ echo json_encode($author);                 // cast'li alanlar + yüklenmiş ili�
 
 - İlişki metotları: `belongs_to($class, $foreign_key = '<ilişkili>_id', $owner_key = pk)`, `has_one` / `has_many($class, $foreign_key = '<bu_model>_id', $local_key = pk)`. Anahtar adları sınıfın snake_case adından türetilir (`BlogPost` → `blog_post_id`). İlişki metotları model örnekleri döndürür (v1.12.0 öncesi `has_many()` satır nesneleri döndürüyordu; özellik erişimi aynı çalışır).
 - Cast tipleri: `int`, `float`/`decimal`, `bool`, `string`, `array`/`json`, `object`, `datetime`, `date`. Ham değer: `get_raw_attribute()`.
-- Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find()`, `find_or_fail()` (`model_not_found_exception`), `hydrate($rows)`. `all()` geriye uyumluluk için satır nesneleri döndürmeye devam eder.
+- Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find()`, `find_or_fail()` (`ModelNotFoundException`, `DatabaseException` alt sınıfı), `hydrate($rows)`. `all()` geriye uyumluluk için satır nesneleri döndürmeye devam eder.
 - Tablo adı: `$table` verilmezse 1.x'te `strtolower(Sınıf) . 's'`. `ORM_TABLE_NAMING=inflector` ile `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people` (v2.0'da varsayılan olacak).
 
 ---
@@ -1776,12 +1780,16 @@ $db->debug();
 5. Pull Request oluşturun
 
 ### Kod Standartları
-- PSR-12 kod standartlarına uyun
+- Ayrıntılar ve isimlendirme politikası: [CONTRIBUTING.md](CONTRIBUTING.md)
+- PSR-12 biçim; 1.x'te sınıf/metot adları `snake_case`, exception'lar `PascalCase` (2.0'da sınıflar `PascalCase`'e geçecek)
 - PHPDoc ile dökümantasyon ekleyin
 - Unit testler ekleyin
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.13.1 (2026-10-05)
+  - Yazılı isimlendirme politikası (CONTRIBUTING.md); exception'lar PascalCase (lint + test), `ModelNotFoundException` (#24).
 
 - v1.13.0 (2026-10-05)
   - Web güvenlik yardımcıları opsiyonel `nsql\security` namespace'ine taşındı; eski adlar 2.0'a kadar `class_alias` (#25).

@@ -73,6 +73,15 @@ Veritabanı dışı yardımcılar opsiyonel `nsql\security` namespace'ine taşı
 `query_analyzer` ve `sensitive_data_filter` çekirdeğin parçası olarak `nsql\database\security` altında kalır.
 Geçiş: `use` satırlarında `nsql\database\security\` → `nsql\security\` (yalnızca yukarıdaki sınıflar için).
 
+## 1.x → 2.0 hazırlığı: sınıf adları PascalCase (#24, v1.13.1+)
+
+İsimlendirme politikası [CONTRIBUTING.md](CONTRIBUTING.md)'de. 2.0'da sınıf/interface/trait adları `PascalCase`'e
+taşınacak (`query_builder` → `QueryBuilder`); eski adlar 2.x boyunca `class_alias` ile çalışacak. Metot adları
+`snake_case` kalacak.
+
+- `nsql\database\orm\model_not_found_exception` → `ModelNotFoundException` (v1.13.1; eski ad 2.0'da kaldırılacak).
+  Yeni sınıf `DatabaseException` alt sınıfıdır.
+
 ## 1.x → 2.0 hazırlığı: ORM tablo adları (`ORM_TABLE_NAMING`, v1.12.0+)
 
 `$table` belirtilmeyen modellerde tablo adı 1.x'te `strtolower(Sınıf) . 's'`, 2.0'da `inflector` ile türetilecek:
