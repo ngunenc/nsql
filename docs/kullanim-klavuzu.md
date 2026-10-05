@@ -39,7 +39,7 @@ composer require ngunenc/nsql --prefer-dist
 3. Önerilen: giriş dosyanızda (ör. `public/index.php`) autoload sonrası:
 
 ```php
-\nsql\database\config::set_project_root(__DIR__); // veya proje kökü
+\nsql\database\Config::set_project_root(__DIR__); // veya proje kökü
 ```
 
 Örnek `.env` içeriği:
@@ -75,16 +75,16 @@ LOG_FILE=error_log.txt
 ### Veritabanı Bağlantısı
 
 ```php
-use nsql\database\nsql;
-use nsql\database\config;
+use nsql\database\Nsql;
+use nsql\database\Config;
 
-config::set_project_root(__DIR__); // önerilir (özellikle vendor kurulumunda)
+Config::set_project_root(__DIR__); // önerilir (özellikle vendor kurulumunda)
 
 // .env dosyasından yapılandırma ile
-$db = new nsql();
+$db = new Nsql();
 
 // veya özel parametrelerle 
-$db = new nsql(
+$db = new Nsql(
     host: 'localhost',
     db: 'veritabani_adi', 
     user: 'kullanici',
@@ -194,7 +194,7 @@ Array
 
 ```php
 // Migration dosyası oluşturma
-$manager = new migration_manager($db);
+$manager = new MigrationManager($db);
 $manager->create("create_users_table");
 
 // Migration'ları çalıştırma
@@ -222,19 +222,19 @@ $kullanicilar = $db->get_results(
 
 ```php
 // Güvenli oturum başlatma
-nsql::secure_session_start();
+Nsql::secure_session_start();
 
 // Oturum ID'sini yenileme
-$sm = nsql::session();
+$sm = Nsql::session();
 $sm->regenerate_id();
 ```
 
 ### Input Filtreleme
 
 ```php
-use nsql\database\security\sensitive_data_filter;
+use nsql\database\security\SensitiveDataFilter;
 
-$filter = new sensitive_data_filter();
+$filter = new SensitiveDataFilter();
 $temiz_veri = $filter->clean($_POST['user_input']);
 ```
 
@@ -268,7 +268,7 @@ for ($i = 0; $i < 1000; $i++) {
 
 ```php
 // Debug modunu aktif et
-$db = new nsql(debug: true);
+$db = new Nsql(debug: true);
 
 // Sorgu çalıştır
 $db->get_results("SELECT * FROM tablo");
@@ -322,11 +322,11 @@ Yayınlanan özellikler için [CHANGELOG.md](../CHANGELOG.md), sürüm geçişle
 
 ```php
 // Okuma/yazma ayrımı (v1.11.0): .env -> READ_WRITE_SPLIT=true, DB_READ_HOST=replica1,replica2
-$db = new nsql();
+$db = new Nsql();
 $db->set_read_replica(['host' => 'replica1.example.com']);
 
 // İsimlendirilmiş bağlantılar (v1.11.0)
-$reporting = nsql::connection('reporting');
+$reporting = Nsql::connection('reporting');
 
 // Redis / Memcached query cache (v1.10.1): .env -> QUERY_CACHE_DRIVER=redis
 $cache_stats = $db->get_all_cache_stats();

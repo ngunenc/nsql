@@ -34,7 +34,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             "UPDATE test_table SET name = :name WHERE id = :id",
             ['name' => 'Update Test Updated', 'id' => $id]
         );
-        $this->assertTrue($result);
+        $this->assertSame(1, $result);
 
         // Güncellenmiş kaydı kontrol et
         $row = $this->db->get_row(
@@ -59,7 +59,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             "DELETE FROM test_table WHERE id = :id",
             ['id' => $id]
         );
-        $this->assertTrue($result);
+        $this->assertSame(1, $result);
 
         // Silinen kaydın olmadığını kontrol et
         $row = $this->db->get_row(
@@ -242,7 +242,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             "UPDATE test_table SET name = :name WHERE id = :id",
             ['name' => 'Integration Test Updated', 'id' => $id]
         );
-        $this->assertTrue($updated);
+        $this->assertSame(1, $updated);
 
         // Verify Update
         $row = $this->db->get_row(
@@ -256,7 +256,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             "DELETE FROM test_table WHERE id = :id",
             ['id' => $id]
         );
-        $this->assertTrue($deleted);
+        $this->assertSame(1, $deleted);
 
         // Verify Delete
         $row = $this->db->get_row(

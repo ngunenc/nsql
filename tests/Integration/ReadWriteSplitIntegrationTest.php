@@ -138,6 +138,7 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
     {
         $db = $this->split_connection();
 
+        $db->set_throw_on_error(false);
         $this->assertSame([], $db->get_results('SELECT * FROM rw_missing_table'));
         $this->assertNotNull($db->get_last_error());
 
@@ -208,8 +209,13 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
         $this->assertSame(0, $reporting->get_transaction_level());
         $this->assertSame(0, (int) $reporting->get_row('SELECT COUNT(*) AS c FROM rw_items')->c);
 
-        $reporting->get_results('SELECT * FROM rw_missing_table');
+        try {
+            $reporting->get_results('SELECT * FROM rw_missing_table');
+            $this->fail('QueryException bekleniyordu');
+        } catch (QueryException $e) {
+        }
         $this->assertNotNull($reporting->get_last_error());
+        $this->assertSame(1, $main->get_transaction_level());
 
         $main->rollback();
         $this->assertSame(0, (int) $main->get_row('SELECT COUNT(*) AS c FROM rw_items')->c);

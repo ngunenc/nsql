@@ -4,6 +4,27 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.0.0] - 2026-10-05
+
+Geçiş rehberi: [UPGRADE.md](UPGRADE.md#1x--200). Üç bayrak `.env`'de `false`/`legacy` yapılarak 1.x davranışı geri alınabilir.
+
+### Changed (BREAKING)
+- Sınıf, interface ve trait adları ile dosya adları `PascalCase` (#24): `nsql` → `Nsql`, `config` → `Config`, `query_builder` → `QueryBuilder`, `migration_manager` → `MigrationManager`, `base_migration` → `BaseMigration`, `orm\model` → `orm\Model`, `security\session_manager` → `security\SessionManager` vb. (60 tip; tam liste `src/legacy_class_map.php`). Metot ve özellik adları değişmedi (`snake_case`).
+- `THROW_ON_ERROR` varsayılanı `true` (#47): sorgu hataları `QueryException`; `update()`/`delete()` etkilenen satır sayısı (`int`) döndürür; `safe_execute()` generic `RuntimeException` fırlatır.
+- `YIELD_UNBUFFERED` varsayılanı `true` (#45): `get_yield()` tek sorgu ile unbuffered akış yapar; akış sırasında aynı bağlantıda sorgu çalıştırılamaz (`chunk_by_id()` veya `get_yield($sql, $p, false)` kullanın). Sorgunun kendi LIMIT/OFFSET'i artık kabul edilir.
+- `ORM_TABLE_NAMING` varsayılanı `inflector` (#9): `BlogPost` → `blog_posts`, `Category` → `categories`.
+
+### Removed (BREAKING)
+- 1.x'te deprecated olan takma adlar (#25): `nsql\database\security\{security_manager, session_manager, rate_limiter, ip_resolver, encryption, key_manager, audit_logger}` → `nsql\security\*`; `nsql\database\orm\model_not_found_exception` → `ModelNotFoundException`.
+- `composer.json` `classmap` girdisi (`config.php`); PSR-4 yeterli.
+
+### Added
+- `src/legacy_autoload.php` + `src/legacy_class_map.php`: 1.x `snake_case` sınıf adları 2.x boyunca `class_alias` ile çalışır (tek kelimelik adlar PHP'nin büyük/küçük harf duyarsızlığı sayesinde doğrudan çözülür); 3.0'da kaldırılacak.
+- `LegacyClassNameTest` (tüm eski adlar yeni tiplere çözülür, kaldırılan takma adlar yok); `NamingPolicyTest` tüm `src/` tiplerinde PascalCase denetler; phpcs `Squiz.Classes.ValidClassName` tüm `src/` için.
+
+### Fixed
+- `orm/Model.php` ve `OrmPortableTest` içindeki çift UTF-8 kodlanmış Türkçe karakterler (v1.12.0).
+
 ## [1.13.3] - 2026-10-05
 
 ### Added

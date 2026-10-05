@@ -28,9 +28,9 @@ ENCRYPTION_KEY=üretilen-base64-değer
 `ENCRYPTION_KEY` tanımlı değilse kütüphane ilk kullanımda `encryption.key` oluşturur:
 
 ```php
-use nsql\security\key_manager;
+use nsql\security\KeyManager;
 
-$key = key_manager::get_key(); // yoksa üretir ve storage'a yazar
+$key = KeyManager::get_key(); // yoksa üretir ve storage'a yazar
 ```
 
 ### Anahtar rotation
@@ -38,9 +38,9 @@ $key = key_manager::get_key(); // yoksa üretir ve storage'a yazar
 Eski anahtarla şifrelenmiş veriler yeni anahtarla açılamaz. Rotate öncesi verileri çözüp yeniden şifreleyin:
 
 ```php
-use nsql\security\key_manager;
+use nsql\security\KeyManager;
 
-$info = key_manager::rotate_key();
+$info = KeyManager::rotate_key();
 // $info['old_key'], $info['new_key'], $info['rotation_date']
 ```
 

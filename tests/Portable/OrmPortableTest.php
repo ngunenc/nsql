@@ -227,9 +227,9 @@ class OrmPortableTest extends PortableTestCase
 
     public function test_table_name_resolution_modes(): void
     {
-        $this->assertSame('blogcategorys', (new BlogCategory($this->db))->get_table());
-
-        Config::set('orm_table_naming', 'inflector');
         $this->assertSame('blog_categories', (new BlogCategory($this->db))->get_table());
+
+        Config::set('orm_table_naming', 'legacy');
+        $this->assertSame('blogcategorys', (new BlogCategory($this->db))->get_table());
     }
 }

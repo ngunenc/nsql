@@ -15,10 +15,11 @@ trait StreamingTrait
     /**
      * Büyük veri setlerini satır satır döndürür (Generator)
      *
-     * Unbuffered modda (YIELD_UNBUFFERED=true veya $unbuffered=true) sorgu tek seferde çalışır ve
+     * Unbuffered modda (2.0 varsayılanı, YIELD_UNBUFFERED=true) sorgu tek seferde çalışır ve
      * satırlar sunucudan okundukça döner: sabit bellek, OFFSET yok. Akış sürerken aynı nsql
      * örneğinde başka sorgu çalıştırılamaz (MySQL kısıtı); döngü içinde yazma gerekiyorsa
-     * chunk_by_id() kullanın. Varsayılan (1.x) mod: LIMIT/OFFSET ile parça parça okuma.
+     * chunk_by_id() kullanın. YIELD_UNBUFFERED=false veya $unbuffered=false: LIMIT/OFFSET ile
+     * parça parça okuma (1.x davranışı; sorgu kendi LIMIT/OFFSET'ini içeremez).
      *
      * @param string $query SQL sorgusu
      * @param array $params Sorgu parametreleri
@@ -29,7 +30,7 @@ trait StreamingTrait
     {
         $this->set_last_called_method();
 
-        if ($unbuffered ?? (bool) Config::get('yield_unbuffered', false)) {
+        if ($unbuffered ?? (bool) Config::get('yield_unbuffered', Config::yield_unbuffered)) {
             yield from $this->stream_query($query, $params);
 
             return;

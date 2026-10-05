@@ -72,15 +72,15 @@ throw new QueryException(
     '',
     'SELECT * FROM users',
     [],
-    error_codes::QUERY_SYNTAX_ERROR
+    ErrorCodes::QUERY_SYNTAX_ERROR
 );
 
 // Hata kodundan mesaj alma
-$message = error_codes::get_message(error_codes::CONNECTION_FAILED);
+$message = ErrorCodes::get_message(ErrorCodes::CONNECTION_FAILED);
 
 // Hata kodunun kategorisini alma
-$category = error_codes::get_category(error_codes::MIGRATION_FAILED);
+$category = ErrorCodes::get_category(ErrorCodes::MIGRATION_FAILED);
 
 // Tüm hata kodlarını listeleme
-$all_codes = error_codes::get_all_codes();
+$all_codes = ErrorCodes::get_all_codes();
 ```
