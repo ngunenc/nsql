@@ -4,6 +4,23 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.10.0] - 2026-10-05
+
+### Yeni (#52)
+- **PSR-3**: `set_logger(?LoggerInterface)` — hata, yavaş sorgu ve debug logları Monolog gibi bir PSR-3 logger'a yönlendirilir; `null` dahili dosya logger'ına döner. Monolog örneği `docs/api-reference.md` içinde.
+- **Sorgu olayları**: `on_query(callable)` / `clear_query_listeners()`. Dinleyici her veritabanı sorgusundan sonra `nsql\database\events\query_event` alır: `sql`, maskeli `params`, `duration_ms`, `row_count` (unbuffered akışta `null`), `success`, `error`, `driver`. Cache'ten dönen sonuçlar olay üretmez.
+- **Yavaş sorgu logu**: `SLOW_QUERY_THRESHOLD_MS` (varsayılan 0 = kapalı). Eşiği aşan sorgular `warning` seviyesinde maskeli parametrelerle loglanır.
+- **PSR-16 query cache store**: `set_query_cache_store(?CacheInterface, $prefix)` — process içi LRU birinci seviye kalır, ıskalamada paylaşılan store'a bakılır. PSR-16'da tag/prefix silme olmadığından tablo/tag/global geçersiz kılma store'daki sürüm token'larıyla yapılır; böylece bir süreçteki yazma diğer süreçlerin cache'ini de geçersiz kılar. Transaction içindeki yazmalar commit sonrası tekrar geçersiz kılınır (commit öncesi başka süreçlerin eski veriyi cache'lemesine karşı). Store hataları sorguyu bozmaz. `get_cache_stats()['store']` kullanılan store sınıfını döndürür.
+
+### Bağımlılıklar
+- `psr/log` (^1.1 || ^2.0 || ^3.0) ve `psr/simple-cache` (^1.0 || ^2.0 || ^3.0) — yalnızca arayüz paketleri.
+
+### Dokümantasyon
+- README'deki karşılığı olmayan "Plugin / Event sistemi" ifadeleri gerçek genişletme noktalarıyla değiştirildi.
+
+### Testler
+- `QueryEventsIntegrationTest`: dinleyici alanları ve maskeleme, hatalı sorgu olayı, unbuffered akış, yavaş sorgu logu, PSR-3 yönlendirme, iki örnek arasında paylaşılan store, tag/global geçersiz kılma, transaction commit sonrası yeniden geçersiz kılma, bozuk store'a dayanıklılık.
+
 ## [1.9.3] - 2026-10-05
 
 ### Düzeltme

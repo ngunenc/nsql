@@ -2,6 +2,9 @@
 
 namespace nsql\database\traits;
 
+use nsql\database\cache\query_cache_store;
+use Psr\SimpleCache\CacheInterface;
+
 /**
  * Process içi query cache.
  *
@@ -19,6 +22,10 @@ trait cache_trait
     private int $query_cache_size_limit = 100;
     private int $query_cache_hits = 0;
     private int $query_cache_misses = 0;
+    private ?query_cache_store $query_cache_store = null;
+    /** @var array<string, true> */
+    private array $deferred_store_tables = [];
+    private bool $deferred_store_all = false;
 
     /** @var array<string, array<string, true>> tag => [key => true] */
     private array $tag_to_keys = [];
@@ -136,6 +143,25 @@ trait cache_trait
             $this->purge_expired_cache();
         }
 
+        $entry = [
+            'data' => $data,
+            'time' => time(),
+            'tags' => array_values(array_unique(array_map('strval', $tags))),
+            'tables' => array_values(array_unique(array_map(fn ($t) => strtolower(trim((string)$t)), $tables))),
+        ];
+        $this->remember_locally($key, $entry);
+        $this->query_cache_store?->put($key, $entry, $this->cache_ttl_for($entry['tables']));
+
+        return true;
+    }
+
+    /**
+     * Kaydı process içi LRU cache'e ve tablo/tag eşlemelerine ekler.
+     *
+     * @param array{data: mixed, time: int, tags: list<string>, tables: list<string>} $entry
+     */
+    private function remember_locally(string $key, array $entry): void
+    {
         $this->remove_cache_entry($key);
 
         $limit = max(1, $this->query_cache_size_limit);
@@ -143,24 +169,24 @@ trait cache_trait
             $this->evict_least_recently_used();
         }
 
-        $tags = array_values(array_unique(array_map('strval', $tags)));
-        $tables = array_values(array_unique(array_map(fn ($t) => strtolower(trim((string)$t)), $tables)));
-
-        $this->query_cache[$key] = [
-            'data' => $data,
-            'time' => time(),
-            'tags' => $tags,
-            'tables' => $tables,
-        ];
-
-        foreach ($tags as $tag) {
+        $this->query_cache[$key] = $entry;
+        foreach ($entry['tags'] as $tag) {
             $this->tag_to_keys[$tag][$key] = true;
         }
-        foreach ($tables as $table) {
+        foreach ($entry['tables'] as $table) {
             $this->table_to_keys[$table][$key] = true;
         }
+    }
 
-        return true;
+    /**
+     * Query cache için paylaşılan PSR-16 arka ucu (Redis, Memcached, framework cache'i).
+     * Process içi LRU birinci seviye olarak kalır; null = yalnızca process içi cache.
+     */
+    public function set_query_cache_store(?CacheInterface $cache, string $prefix = 'nsql_qc_'): static
+    {
+        $this->query_cache_store = $cache !== null ? new query_cache_store($cache, $prefix) : null;
+
+        return $this;
     }
 
     /**
@@ -173,6 +199,14 @@ trait cache_trait
         }
 
         if (! isset($this->query_cache[$key])) {
+            $shared = $this->query_cache_store?->get($key);
+            if ($shared !== null && $this->is_valid_cache($shared['time'], $shared['tables'])) {
+                $this->remember_locally($key, $shared);
+                $this->query_cache_hits++;
+
+                return $shared['data'];
+            }
+
             $this->query_cache_misses++;
 
             return null;
@@ -200,17 +234,22 @@ trait cache_trait
      */
     private function is_valid_cache(int $cache_time, array $tables = []): bool
     {
-        $ttl = $this->query_cache_timeout;
+        return (time() - $cache_time) <= $this->cache_ttl_for($tables);
+    }
+
+    /**
+     * Kayıt TTL'i: ilk eşleşen tablo TTL override'ı, yoksa QUERY_CACHE_TIMEOUT.
+     */
+    private function cache_ttl_for(array $tables): int
+    {
         foreach ($tables as $table) {
             $table = strtolower(trim($table));
             if (isset($this->table_ttl_overrides[$table])) {
-                $ttl = $this->table_ttl_overrides[$table];
-
-                break;
+                return $this->table_ttl_overrides[$table];
             }
         }
 
-        return (time() - $cache_time) <= $ttl;
+        return $this->query_cache_timeout;
     }
 
     private function load_cache_config(): void
@@ -255,12 +294,18 @@ trait cache_trait
             return;
         }
 
+        $normalized = [];
         foreach ((array)$tables as $table) {
             $table = strtolower(trim((string)$table));
+            $normalized[] = $table;
             foreach (array_keys($this->table_to_keys[$table] ?? []) as $key) {
                 $this->remove_cache_entry((string)$key);
             }
             unset($this->table_to_keys[$table]);
+        }
+        $this->query_cache_store?->invalidate_tables($normalized);
+        if ($this->query_cache_store !== null && $this->in_cache_transaction()) {
+            $this->deferred_store_tables += array_fill_keys($normalized, true);
         }
     }
 
@@ -275,13 +320,16 @@ trait cache_trait
             return;
         }
 
+        $normalized = [];
         foreach ((array)$tags as $tag) {
             $tag = (string)$tag;
+            $normalized[] = $tag;
             foreach (array_keys($this->tag_to_keys[$tag] ?? []) as $key) {
                 $this->remove_cache_entry((string)$key);
             }
             unset($this->tag_to_keys[$tag]);
         }
+        $this->query_cache_store?->invalidate_tags($normalized);
     }
 
     /**
@@ -311,11 +359,43 @@ trait cache_trait
     }
 
     /**
-     * Tüm cache'i temizler (clear_query_cache ile aynı)
+     * Tüm cache'i temizler; paylaşılan store varsa oradaki kayıtlar da geçersiz olur.
      */
     public function invalidate_all_cache(): void
     {
         $this->clear_query_cache();
+        $this->query_cache_store?->invalidate_all();
+        if ($this->query_cache_store !== null && $this->in_cache_transaction()) {
+            $this->deferred_store_all = true;
+        }
+    }
+
+    private function in_cache_transaction(): bool
+    {
+        return method_exists($this, 'get_transaction_level') && $this->get_transaction_level() > 0;
+    }
+
+    /**
+     * Transaction içindeki yazmalar store'u hemen geçersiz kılar; ancak commit'e kadar başka
+     * süreçler eski veriyi yeniden cache'leyebilir. Commit sonrası aynı kapsamlar tekrar
+     * geçersiz kılınır; rollback'te yalnızca kayıt silinir.
+     */
+    private function flush_deferred_cache_invalidations(bool $committed): void
+    {
+        $tables = array_keys($this->deferred_store_tables);
+        $all = $this->deferred_store_all;
+        $this->deferred_store_tables = [];
+        $this->deferred_store_all = false;
+
+        if (! $committed || $this->query_cache_store === null) {
+            return;
+        }
+
+        if ($all) {
+            $this->query_cache_store->invalidate_all();
+        } elseif ($tables !== []) {
+            $this->query_cache_store->invalidate_tables(array_map('strval', $tables));
+        }
     }
 
     /**
@@ -348,6 +428,7 @@ trait cache_trait
             'warm_queries_count' => count($this->warm_queries),
             'tracked_tables' => count($this->table_to_keys),
             'tracked_tags' => count($this->tag_to_keys),
+            'store' => $this->query_cache_store !== null ? get_class($this->query_cache_store->cache()) : null,
         ];
     }
 

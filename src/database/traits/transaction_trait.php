@@ -60,6 +60,7 @@ trait transaction_trait
         // DDL (CREATE/ALTER/DROP …) MySQL'de implicit commit yapar; sunucuda açık transaction kalmaz
         if (! $pdo->inTransaction()) {
             $this->transaction_level = 0;
+            $this->flush_deferred_cache_invalidations(true);
 
             return true;
         }
@@ -67,7 +68,10 @@ trait transaction_trait
         $this->transaction_level--;
 
         if ($this->transaction_level === 0) {
-            return $pdo->commit();
+            $committed = $pdo->commit();
+            $this->flush_deferred_cache_invalidations($committed);
+
+            return $committed;
         }
 
         return $pdo->exec("RELEASE SAVEPOINT trans{$this->transaction_level}") !== false;
@@ -88,6 +92,7 @@ trait transaction_trait
 
         if (! $pdo->inTransaction()) {
             $this->transaction_level = 0;
+            $this->flush_deferred_cache_invalidations(true);
 
             return false;
         }
@@ -95,6 +100,8 @@ trait transaction_trait
         $this->transaction_level--;
 
         if ($this->transaction_level === 0) {
+            $this->flush_deferred_cache_invalidations(false);
+
             return $pdo->rollBack();
         }
 
@@ -186,6 +193,7 @@ trait transaction_trait
      */
     private function reset_transaction_state(): void
     {
+        $this->flush_deferred_cache_invalidations(false);
         $this->transaction_level = 0;
     }
 
