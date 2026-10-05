@@ -83,15 +83,16 @@ batch_insert(string $table, array $data, bool $use_transaction = true): int
 // Örnek: $count = $db->batch_insert('users', [['name' => 'John'], ['name' => 'Jane']]);
 
 // Veri güncelleme
-update(string $sql, array $params = []): bool
+update(string $sql, array $params = []): int|bool
+// THROW_ON_ERROR=true: etkilenen satır sayısı, hata → QueryException; false: true/false (UPGRADE.md)
 // Örnek: $db->update("UPDATE users SET name = ? WHERE id = ?", ['John Doe', 1]);
 
-// Toplu veri güncelleme
+// Toplu veri güncelleme (başarısız satırda rollback + QueryException)
 batch_update(string $table, array $data, string $key_column = 'id', bool $use_transaction = true): int
 // Örnek: $count = $db->batch_update('users', [['id' => 1, 'name' => 'John'], ['id' => 2, 'name' => 'Jane']]);
 
-// Veri silme
-delete(string $sql, array $params = []): bool
+// Veri silme (dönüş: update() ile aynı)
+delete(string $sql, array $params = []): int|bool
 // Örnek: $db->delete("DELETE FROM users WHERE id = ?", [1]);
 
 // Tek satır alma
@@ -185,6 +186,12 @@ log_debug_info(string $message, mixed $data = null): void
 // Hata yönetimi
 handle_exception(Exception|Throwable $e, string $generic_message = 'Bir hata oluştu.'): string
 safe_execute(callable $fn, string $generic_message = 'Bir hata oluştu.'): mixed
+// Başarı: callable sonucu. Debug: orijinal exception. THROW_ON_ERROR=true: RuntimeException($generic_message)
+// fırlatır (orijinal hata getPrevious()). THROW_ON_ERROR=false: aynı RuntimeException'ı döndürür (eski davranış).
+
+// Hata modeli (v1.7.0+)
+throw_on_error(): bool
+set_throw_on_error(?bool $enabled): static   // null = THROW_ON_ERROR ayarı
 ```
 
 #### Static Metodlar
@@ -535,6 +542,7 @@ Pool anahtarları: `DB_MIN_CONNECTIONS` ile `MIN_CONNECTIONS` (ve benzer `DB_*` 
 | `MAX_CONNECTIONS` / `DB_MAX_CONNECTIONS` | `15` |
 | `HEALTH_CHECK_INTERVAL` | `60` |
 | `CONNECTION_IDLE_TIMEOUT` | `600` |
+| `THROW_ON_ERROR` | `false` (`true`: tüm sorgu metotları hata durumunda `QueryException`; v2.0.0'da varsayılan `true`, bkz. `UPGRADE.md`) |
 | `YIELD_UNBUFFERED` | `false` (`true`: `get_yield()` streaming; v2.0.0'da varsayılan `true`) |
 | `MEMORY_WARNING_RATIO` / `MEMORY_CRITICAL_RATIO` | `0.75` / `0.9` (`memory_limit` oranı) |
 | `MEMORY_LIMIT_WARNING` / `MEMORY_LIMIT_CRITICAL` | ayarsız (ayarlanırsa oran yerine mutlak byte) |

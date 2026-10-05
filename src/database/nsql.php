@@ -76,6 +76,8 @@ class nsql
     private array $last_results = [];
 
     private bool $streaming = false;
+    private ?bool $throw_on_error = null;
+    private ?PDOException $last_pdo_exception = null;
 
     private static ?int $last_memory_check = null;
     private static int $current_chunk_size = 1000; // Varsayılan değer
@@ -319,85 +321,82 @@ class nsql
     }
 
     /**
-     * Uygulama genelinde güvenli try-catch örüntüsü için yardımcı fonksiyon.
-     * Kapatıcı (callable) fonksiyonu güvenli şekilde çalıştırır, hata olursa handleException ile işler.
-     * 
-     * İyileştirme: Exception'ı wrap edip döndürür, böylece hata türü korunur ve getPrevious() ile erişilebilir.
+     * Callable'ı çalıştırır; hata olursa loglar, last_error / get_last_exception() günceller.
+     *
+     * Sözleşme:
+     * - Başarılı: callable'ın dönüş değeri.
+     * - Debug modu: orijinal exception fırlatılır (PDOException, mesajı genel mesajla birleştirilmiş
+     *   RuntimeException olarak).
+     * - THROW_ON_ERROR=true: `RuntimeException($generic_message)` fırlatılır; orijinal hata getPrevious()'ta.
+     * - THROW_ON_ERROR=false (1.x varsayılanı, kullanımdan kaldırılacak): aynı RuntimeException
+     *   fırlatılmaz, **döndürülür**. Sonucu `instanceof \Throwable` ile kontrol edin.
      *
      * @param callable $fn
-     * @param string $generic_message
-     * @return mixed Başarılı ise fonksiyon sonucu, hata durumunda false veya wrapped exception (debug mode)
-     * @throws \RuntimeException Debug mode'da exception fırlatır
+     * @param string $generic_message Kullanıcıya gösterilebilir genel mesaj
+     * @return mixed
+     * @throws \Throwable Debug modunda veya THROW_ON_ERROR=true iken
      */
     public function safe_execute(callable $fn, string $generic_message = 'Bir hata oluştu.'): mixed
     {
+        $this->last_exception = null;
+
         try {
-            $this->last_exception = null; // Başarılı çağrıda temizle
             return $fn();
-        } catch (\nsql\database\exceptions\DatabaseException $e) {
-            // Database exception'ları doğrudan kullan (zaten wrap edilmiş)
-            $this->last_error = $e->getMessage();
-            $this->last_exception = $e;
-            $this->log_error("Database Exception: " . $e->getMessage(), [
-                'exception' => get_class($e),
-                'code' => $e->getCode(),
-                'query' => $e->getQuery(),
-            ]);
-            
-            if ($this->debug_mode) {
-                throw $e; // Debug mode'da exception'ı olduğu gibi fırlat
-            }
-            
-            // Production'da wrapped exception döndür (getPrevious() ile erişilebilir)
-            return new \RuntimeException($generic_message, 0, $e);
-        } catch (PDOException $e) {
-            $this->last_error = $e->getMessage();
-            $this->last_exception = $e;
-            $this->log_error("PDO Error: " . $e->getMessage(), [
-                'exception' => get_class($e),
-                'code' => $e->getCode(),
-                'error_info' => $e->errorInfo ?? [],
-            ]);
-            
-            if ($this->debug_mode) {
-                throw new \RuntimeException($generic_message . ': ' . $e->getMessage(), 0, $e);
-            }
-            
-            // Production'da wrapped exception döndür
-            return new \RuntimeException($generic_message, 0, $e);
-        } catch (Exception $e) {
-            $this->last_error = $e->getMessage();
-            $this->last_exception = $e;
-            $this->log_error("General Error: " . $e->getMessage(), [
-                'exception' => get_class($e),
-                'code' => $e->getCode(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
-            
-            if ($this->debug_mode) {
-                throw $e;
-            }
-            
-            // Production'da wrapped exception döndür
-            return new \RuntimeException($generic_message, 0, $e);
         } catch (Throwable $e) {
             $this->last_error = $e->getMessage();
             $this->last_exception = $e;
-            $this->log_error("Fatal Error: " . $e->getMessage(), [
-                'exception' => get_class($e),
-                'code' => $e->getCode(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
-            
+            $this->log_error(sprintf('%s: %s', get_class($e), $e->getMessage()));
+
             if ($this->debug_mode) {
+                if ($e instanceof PDOException) {
+                    throw new \RuntimeException($generic_message . ': ' . $e->getMessage(), 0, $e);
+                }
+
                 throw $e;
             }
-            
-            // Production'da wrapped exception döndür
-            return new \RuntimeException($generic_message, 0, $e);
+
+            $safe = new \RuntimeException($generic_message, 0, $e);
+            if ($this->throw_on_error()) {
+                throw $safe;
+            }
+
+            return $safe;
         }
+    }
+
+    /**
+     * Sorgu hatalarında exception fırlatılsın mı? Örnek ayarı (set_throw_on_error) > THROW_ON_ERROR.
+     */
+    public function throw_on_error(): bool
+    {
+        return $this->throw_on_error ?? (bool) config::get('throw_on_error', config::throw_on_error);
+    }
+
+    /**
+     * Bu örnek için hata modelini ayarlar; null = THROW_ON_ERROR ayarını kullan.
+     */
+    public function set_throw_on_error(?bool $enabled): static
+    {
+        $this->throw_on_error = $enabled;
+
+        return $this;
+    }
+
+    /**
+     * Son sorgu hatasından QueryException üretir (parametreler maskelenir).
+     */
+    private function make_query_exception(string $sql, array $params): exceptions\QueryException
+    {
+        $previous = $this->last_pdo_exception;
+        $code = $previous !== null && is_numeric($previous->getCode()) ? (int) $previous->getCode() : 0;
+
+        return new exceptions\QueryException(
+            $this->last_error ?? 'Sorgu çalıştırılamadı',
+            $sql,
+            \nsql\database\security\sensitive_data_filter::mask_array($params),
+            $code,
+            $previous
+        );
     }
 
     private static ?session_manager $session = null;
@@ -484,8 +483,14 @@ class nsql
         
         // Parametreleri validate et
         $this->validate_param_types($params);
-        
-        return $this->run_with_reconnect($sql, $params, $fetch_mode, ...$fetch_mode_args);
+        $this->last_pdo_exception = null;
+
+        $stmt = $this->run_with_reconnect($sql, $params, $fetch_mode, ...$fetch_mode_args);
+        if ($stmt === false && $this->throw_on_error()) {
+            throw $this->make_query_exception($sql, $params);
+        }
+
+        return $stmt;
     }
 
     /**
@@ -609,6 +614,7 @@ class nsql
      */
     private function handle_prepare_error(PDOException $e): void
     {
+        $this->last_pdo_exception = $e;
         $this->last_error = $e->getMessage();
         $this->log_error($this->last_error);
         $this->last_results = [];
@@ -619,6 +625,7 @@ class nsql
      */
     private function handle_execution_error(PDOException $e): void
     {
+        $this->last_pdo_exception = $e;
         $this->last_error = $e->getMessage();
         $this->log_error($this->last_error);
         $this->last_results = [];
@@ -639,15 +646,9 @@ class nsql
         // GELISTIRME-009: Error handling - exception fırlatma
         $result = $this->execute_query($query, [], $fetch_mode, ...$fetch_mode_args);
         
-        if ($result === false && $this->last_error) {
-            // Exception fırlat (testErrorHandling için)
-            throw new \nsql\database\exceptions\QueryException(
-                $this->last_error,
-                $query,
-                [],
-                0,
-                new \PDOException($this->last_error)
-            );
+        // query() her iki modda da fırlatır (geriye uyumluluk)
+        if ($result === false) {
+            throw $this->make_query_exception($query, []);
         }
 
         if ($result !== false && ! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
@@ -804,10 +805,10 @@ class nsql
                 $sql = "UPDATE {$this->quote_identifier($table)} SET {$set_clause} WHERE {$this->quote_identifier($key_column)} = ?";
 
                 $stmt = $this->execute_query($sql, $params);
-                
-                if ($stmt !== false) {
-                    $total_affected += $stmt->rowCount();
+                if ($stmt === false) {
+                    throw $this->make_query_exception($sql, $params);
                 }
+                $total_affected += $stmt->rowCount();
             }
 
             $this->invalidate_cache_for_write("UPDATE {$this->quote_identifier($table)}");
@@ -907,9 +908,6 @@ class nsql
         // Sorguyu çalıştır
         $stmt = $this->execute_query($query, $params);
         if ($stmt === false) {
-            // Hata yönetimi: PDO hatasını tetikle
-            $errorInfo = ($this->pdo !== null) ? $this->pdo->errorInfo() : ['Hata', 0, 'Sorgu çalıştırılamadı'];
-            trigger_error('get_row: Sorgu başarısız! PDO error: ' . print_r($errorInfo, true), E_USER_WARNING);
             return null;
         }
         
@@ -1075,30 +1073,41 @@ class nsql
         }
     }
 
-    public function update(string $sql, array $params = []): bool
+    /**
+     * UPDATE çalıştırır.
+     *
+     * @return int|bool THROW_ON_ERROR=true: etkilenen satır sayısı (hata → QueryException).
+     *                  THROW_ON_ERROR=false: başarı için true, hata için false.
+     */
+    public function update(string $sql, array $params = []): int|bool
     {
         $this->set_last_called_method();
-        $this->last_results = [];
 
-        $result = $this->execute_query($sql, $params) !== false;
-        if ($result) {
-            $this->invalidate_cache_for_write($sql);
-        }
-        
-        return $result;
+        return $this->execute_write($sql, $params);
     }
 
-    public function delete(string $sql, array $params = []): bool
+    /**
+     * DELETE çalıştırır. Dönüş değeri update() ile aynı sözleşmeye sahiptir.
+     */
+    public function delete(string $sql, array $params = []): int|bool
     {
         $this->set_last_called_method();
+
+        return $this->execute_write($sql, $params);
+    }
+
+    private function execute_write(string $sql, array $params): int|bool
+    {
         $this->last_results = [];
 
-        $result = $this->execute_query($sql, $params) !== false;
-        if ($result) {
-            $this->invalidate_cache_for_write($sql);
+        $stmt = $this->execute_query($sql, $params);
+        if ($stmt === false) {
+            return false;
         }
-        
-        return $result;
+
+        $this->invalidate_cache_for_write($sql);
+
+        return $this->throw_on_error() ? $stmt->rowCount() : true;
     }
 
     /**
@@ -1255,6 +1264,9 @@ class nsql
                 $this->touch_connection();
             } catch (PDOException $e) {
                 $this->handle_execution_error($e);
+                if ($this->throw_on_error()) {
+                    throw $this->make_query_exception($query, $params);
+                }
 
                 return;
             }

@@ -60,6 +60,10 @@ abstract class DatabaseTestCase extends TestCase
 
     protected function tearDown(): void
     {
+        // Döngüsel referanslar yıkıcıyı GC'ye bırakabilir; bağlantı havuza hemen iade edilir.
+        if ($this->db !== null) {
+            (fn () => $this->disconnect())->call($this->db);
+        }
         $this->db = null;
     }
 }

@@ -162,7 +162,7 @@ abstract class model
             $params = array_values($data);
             $params[] = $id;
 
-            return $this->db->update($sql, $params);
+            return $this->db->update($sql, $params) !== false;
         }
 
         unset($data[$this->primary_key]);
@@ -203,7 +203,7 @@ abstract class model
         $table = $this->db->quote_identifier($this->table);
         $primary_key = $this->db->quote_identifier($this->primary_key);
 
-        return $this->db->delete("DELETE FROM {$table} WHERE {$primary_key} = ?", [$id]);
+        return $this->db->delete("DELETE FROM {$table} WHERE {$primary_key} = ?", [$id]) !== false;
     }
 
     /**

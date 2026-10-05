@@ -4,6 +4,28 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.7.0] - 2026-10-05
+
+### Yeni (#47)
+- **`THROW_ON_ERROR`** (varsayılan `false`; v2.0.0'da `true`): açıkken `get_row`, `get_results`, `insert`, `update`, `delete`, `get_yield`, `get_chunk`, `chunk_by_id` hata durumunda `query()` gibi `QueryException` fırlatır. `getPrevious()` orijinal `PDOException`'ı, `get_params()` maskelenmiş parametreleri verir. Örnek bazında: `$db->set_throw_on_error(true)`, okuma: `throw_on_error()`.
+- `THROW_ON_ERROR=true` iken `update()` / `delete()` etkilenen satır sayısını (`int`) döndürür; `0` = eşleşen satır yok, hata artık ayırt edilebilir.
+- **`safe_execute()` sözleşmesi**: `THROW_ON_ERROR=true` iken `RuntimeException($generic_message)` fırlatır (orijinal hata `getPrevious()`'ta); `false` iken eski davranış (exception nesnesi döndürülür) sürer. Docblock ve API referansı güncellendi.
+- **`UPGRADE.md`**: metot bazında davranış tablosu ve kod geçiş örnekleri.
+
+### Düzeltmeler
+- `get_row()` hata durumunda `trigger_error(E_USER_WARNING)` + `print_r(errorInfo)` ile uyarı basıyordu; kaldırıldı (hata `get_last_error()` ve log'da).
+- `batch_update()` başarısız satırları sessizce atlayıp transaction'ı commit ediyordu (kısmi güncelleme). Artık rollback + `QueryException`.
+- `query()` exception'ının `previous` alanı orijinal `PDOException` yerine mesajdan yeniden üretilmiş bir nesneydi; SQLSTATE/kod kayboluyordu.
+- ORM `model::save()` / `delete()` dönüşü açıkça `bool`.
+
+### Davranış değişikliği
+- `update()` / `delete()` dönüş tipi `bool` → `int|bool` (varsayılan modda değer değişmedi).
+- `batch_update()` başarısız satırda exception fırlatıyor.
+
+### Testler
+- `ThrowOnErrorIntegrationTest`: hatalı SQL ile 11 metodun aynı exception türünü fırlatması, eski mod dönüşleri, etkilenen satır sayısı, parametre maskeleme, `safe_execute`, `batch_update` rollback.
+- `DatabaseTestCase::tearDown` bağlantıyı havuza açıkça iade ediyor (döngüsel referans nedeniyle aralıklı "havuz dolu" hatası giderildi).
+
 ## [1.6.0] - 2026-10-05
 
 ### Yeni (#45)
