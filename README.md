@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.31
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.32
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -65,6 +65,8 @@
 > **v1.5.30**: session_manager aktif oturumu yok etmiyor; `secure` HTTPS'e göre otomatik, HSTS yalnızca HTTPS + opt-in, `X-XSS-Protection` kaldırıldı, fingerprint'te IP yok, CSRF token süreli; tek session API'si (#43).
 >
 > **v1.5.31**: Query builder: `where_in` / `where_not_in` ve `where(..., 'IN', [...])` (boş dizi güvenli), `where_null` / `where_not_null`, `IS` / `= null` doğru SQL, LIMIT'siz `offset()`, boş string yapılandırılabilir (#48).
+>
+> **v1.5.32**: Query cache iç yapısı: O(1) LRU, eviction/expiry sonrası tablo-tag eşlemeleri temizleniyor (sınırsız büyüme giderildi), gereksiz dosya kilidi ve cache_version kaldırıldı (#46).
 
 ## 🌟 Özellikler
 
@@ -117,7 +119,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.31 --prefer-dist
+composer require ngunenc/nsql:^1.5.32 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -137,13 +139,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.31"
+        "ngunenc/nsql": "^1.5.32"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.31 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.32 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1100,7 +1102,7 @@ $db->delete("DELETE FROM users WHERE id = :id", [
   - Güvenli IP/HTTPS tespiti (proxy/load balancer desteği)
 - **Thread Safety**
   - Connection pool file-based lock mekanizması
-  - Cache invalidation race condition koruması
+  - Query cache process içidir (istekler arası paylaşılmaz; dosya kilidi yok)
 
 ### Performans Optimizasyonları
 - **Bağlantı Yönetimi**
@@ -1618,6 +1620,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.32 (2026-10-05)
+  - Query cache O(1) LRU, eşleme sızıntısı düzeltmesi, dosya kilidi kaldırıldı (#46)
 
 - v1.5.31 (2026-10-05)
   - Query builder where_in/where_null, IS NULL, LIMIT'siz offset, boş string ayarı (#48)

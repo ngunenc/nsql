@@ -8,7 +8,6 @@ trait statement_cache_trait
 {
     private array $statement_cache = [];
     private array $statement_cache_usage = [];
-    private array $statement_cache_access_order = []; // LRU için optimize edilmiş sıralama
     private array $statement_cache_frequency = []; // LFU için kullanım sıklığı
     private int $statement_cache_hits = 0;
     private int $statement_cache_misses = 0;
@@ -31,6 +30,8 @@ trait statement_cache_trait
         // Dinamik cache size ayarla (memory kullanımına göre)
         $this->adjust_cache_size();
         
+        // Ekleme sırası = LRU sırası
+        unset($this->statement_cache[$key]);
         $this->statement_cache[$key] = $stmt;
         $this->statement_cache_usage[$key] = microtime(true);
         
@@ -40,17 +41,14 @@ trait statement_cache_trait
         }
 
         // Kapasite aşıldıysa en az kullanılanı çıkar
-        $current_limit = $this->get_dynamic_cache_limit();
-        if (count($this->statement_cache) > $current_limit) {
+        $current_limit = max(1, $this->get_dynamic_cache_limit());
+        while (count($this->statement_cache) > $current_limit) {
             if ($this->use_lfu_algorithm) {
                 $this->evict_least_frequently_used_statement();
             } else {
                 $this->evict_least_recently_used_statement();
             }
         }
-
-        // LRU sıralamasını güncelle (O(1) complexity)
-        $this->update_statement_access_order($key);
     }
 
     /**
@@ -70,10 +68,13 @@ trait statement_cache_trait
             $this->statement_cache_frequency[$key] = ($this->statement_cache_frequency[$key] ?? 0) + 1;
         }
         
-        $this->update_statement_access_order($key);
+        // LRU: sona taşı
+        $stmt = $this->statement_cache[$key];
+        unset($this->statement_cache[$key]);
+        $this->statement_cache[$key] = $stmt;
         $this->statement_cache_hits++;
 
-        return $this->statement_cache[$key];
+        return $stmt;
     }
 
     /**
@@ -83,7 +84,6 @@ trait statement_cache_trait
     {
         $this->statement_cache = [];
         $this->statement_cache_usage = [];
-        $this->statement_cache_access_order = [];
         $this->statement_cache_frequency = [];
         $this->statement_cache_hits = 0;
         $this->statement_cache_misses = 0;
@@ -94,38 +94,13 @@ trait statement_cache_trait
      */
     private function evict_least_recently_used_statement(): void
     {
-        if (empty($this->statement_cache_access_order)) {
-            return;
-        }
-
-        // En eski erişilen key'i al (O(1))
-        $oldest_key = array_shift($this->statement_cache_access_order);
-        
-        if (isset($this->statement_cache[$oldest_key])) {
-            unset($this->statement_cache[$oldest_key], $this->statement_cache_usage[$oldest_key]);
-        }
-    }
-
-    /**
-     * Statement LRU erişim sıralamasını günceller (O(1) complexity)
-     */
-    private function update_statement_access_order(string $key): void
-    {
-        // Key'i mevcut pozisyonundan kaldır
-        $this->remove_from_statement_access_order($key);
-        
-        // Key'i en sona ekle (en yeni erişim)
-        $this->statement_cache_access_order[] = $key;
-    }
-
-    /**
-     * Key'i statement erişim sıralamasından kaldırır (O(1) complexity)
-     */
-    private function remove_from_statement_access_order(string $key): void
-    {
-        $index = array_search($key, $this->statement_cache_access_order, true);
-        if ($index !== false) {
-            array_splice($this->statement_cache_access_order, $index, 1);
+        $oldest_key = array_key_first($this->statement_cache);
+        if ($oldest_key !== null) {
+            unset(
+                $this->statement_cache[$oldest_key],
+                $this->statement_cache_usage[$oldest_key],
+                $this->statement_cache_frequency[$oldest_key]
+            );
         }
     }
 
@@ -160,7 +135,6 @@ trait statement_cache_trait
             unset($this->statement_cache[$evict_key], 
                   $this->statement_cache_usage[$evict_key],
                   $this->statement_cache_frequency[$evict_key]);
-            $this->remove_from_statement_access_order($evict_key);
         }
     }
     

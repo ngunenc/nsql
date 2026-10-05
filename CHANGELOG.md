@@ -4,6 +4,24 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.32] - 2026-10-05
+
+### Düzeltmeler (#46)
+- **Bellek sızıntısı**: LRU eviction ve süre dolumu yalnızca cache kaydını siliyor, `table_to_keys` / `tag_to_keys` / `cache_tags` eşlemelerinde key kalıyordu; uzun süren worker'larda bu diziler sınırsız büyüyordu. Artık tüm silmeler tek bir `remove_cache_entry()` üzerinden geçiyor ve eşlemeler cache boyutuyla sınırlı kalıyor.
+- **LRU gerçekten O(1)**: Erişim sırası ayrı dizide `array_search` + `array_splice` ile (O(n)) tutuluyordu. Artık `$query_cache` dizisinin ekleme sırası LRU sırası (erişimde unset + yeniden ekleme, eviction `array_key_first`). Statement cache de aynı şekilde düzeltildi; LRU eviction LFU sayaçlarını da temizliyor.
+- **Süre dolumu per-table TTL'e uyuyor**: `purge_expired_cache()` artık `set_table_ttl()` değerlerini dikkate alıyor.
+- **`warm_cache_for_table()` her çağrıda warm query listesini büyütüyordu**: Artık sorguları doğrudan `preload_query()` ile yüklüyor.
+
+### Kaldırılanlar
+- Cache invalidation'daki dosya kilidi (`sys_get_temp_dir()/nsql_cache.lock`) ve `cache_version` sayacı. Query cache process içi bir dizi olduğu için kilit hiçbir şeyi korumuyor, her invalidation'da dosya sistemine gidiyordu.
+- Trait içindeki boş `warm_cache()` / `preload_query()` taslakları (gerçek uygulama `nsql` sınıfında).
+
+### Yeni
+- `get_cache_stats()`: `tracked_tables`, `tracked_tags` alanları.
+
+### Testler
+- `QueryCacheInternalsTest`: 10.000 sorgu sonrası eşlemelerin sınırlı kalması, LRU sırası, tablo/tag invalidation, süre dolumunda eşleme temizliği, per-table TTL, tablosuz sorgunun cache'lenmemesi, lock dosyası oluşmaması.
+
 ## [1.5.31] - 2026-10-05
 
 ### Düzeltmeler (#48)
