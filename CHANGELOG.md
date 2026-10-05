@@ -4,6 +4,15 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.13.2] - 2026-10-05
+
+### Added
+- Coverage eşiği (#40): `tests/coverage_check.php` (clover → satır coverage, en düşük dosyalar), `composer test:coverage-check`; CI PHP 8.3 job'ı %50'nin altında başarısız olur. Ölçüm: %65.4 (v1.5.13: ~%30).
+- Unit testler: `ValidatorTest`, `DriverTest` (mysql/pgsql/sqlite DSN), `QueryAnalyzerTest`, `error_codes`.
+
+### Fixed
+- `mysql_driver::parse_dsn` / `pgsql_driver::parse_dsn`: `;port=` içeren DSN'lerde `dbname` okunmuyordu, port olmayan DSN'lerde port `0` dönüyordu (v1.11.0'dan beri `nsql::connect()` portu ilettiği için bağlantıyı etkileyebiliyordu). Artık key=value ayrıştırma; eski `host:port` yazımı da desteklenir.
+
 ## [1.13.1] - 2026-10-05
 
 ### Added

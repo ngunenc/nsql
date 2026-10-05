@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.2
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -98,6 +98,8 @@
 >
 > **v1.13.1**: İsimlendirme politikası (CONTRIBUTING.md) ve PascalCase exception zorunluluğu (#24)
 >
+> **v1.13.2**: Coverage %65 ve CI'da %50 eşiği; DSN ayrıştırma düzeltmesi (#40)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -107,6 +109,8 @@
 > **v1.13.0**: Web güvenlik yardımcıları (`security_manager`, `session_manager`, `rate_limiter`, `ip_resolver`, `encryption`, `key_manager`, `audit_logger`) opsiyonel `nsql\security` namespace'ine taşındı; eski adlar 2.0'a kadar takma ad olarak çalışır (#25).
 >
 > **v1.13.1**: Yazılı isimlendirme politikası ([CONTRIBUTING.md](CONTRIBUTING.md)); exception'lar `PascalCase` (lint + test ile zorunlu), `model_not_found_exception` → `ModelNotFoundException` (#24).
+>
+> **v1.13.2**: Satır coverage %65.4 ve CI'da %50 eşiği (#40); MySQL/PostgreSQL `parse_dsn` port/dbname ayrıştırma hatası düzeltildi (`nsql::connect()` etkileniyordu).
 
 ## 🌟 Özellikler
 
@@ -160,7 +164,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.13.1 --prefer-dist
+composer require ngunenc/nsql:^1.13.2 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -180,13 +184,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.13.1"
+        "ngunenc/nsql": "^1.13.2"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.13.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.13.2 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -377,11 +381,18 @@ Kütüphanenin daha fazla özelliği ve gelişmiş kullanım örnekleri için [d
 # Tüm testleri çalıştır
 composer test
 
-# Coverage (clover + text; Xdebug / XDEBUG_MODE=coverage)
+# Query cache açıkken integration + portable
+composer test:cache
+
+# Sürücüden bağımsız testler (DB_DRIVER=mysql|pgsql|sqlite)
+composer test:portable
+
+# Coverage (clover + text; Xdebug / XDEBUG_MODE=coverage) ve %50 eşik kontrolü
 composer test:coverage
+composer test:coverage-check
 ```
 
-Ölçülen satır coverage (v1.5.13, `composer test:coverage`): yaklaşık **%30** (`src/`). Daha önce dokümante edilen “%70+” iddiası güncel ölçümle uyumlu değildir.
+Ölçülen satır coverage (v1.13.2, MySQL üzerinde tüm suite): **%65.4** (`src/`; v1.5.13'te ~%30). CI, PHP 8.3 job'ında %50'nin altına düşerse başarısız olur ve en düşük kapsamalı 10 dosyayı listeler.
 
 ### Kod Kalitesi
 
@@ -399,8 +410,9 @@ composer fix
 ### CI/CD
 
 Proje GitHub Actions ile otomatik test edilir:
-- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.4
-- PHP 8.3 job’da `coverage/clover.xml` üretilir ve Codecov’a yüklenir
+- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.4 (unit, integration, portable; query cache açık/kapalı)
+- **Portable**: PostgreSQL 16 ve SQLite üzerinde `tests/Portable`
+- PHP 8.3 job’da `coverage/clover.xml` üretilir, %50 satır coverage eşiği uygulanır ve Codecov’a yüklenir
 - Windows unit smoke isteğe bağlıdır (`continue-on-error`; MySQL service yok)
 
 ## 📂 Proje Yapısı
@@ -1787,6 +1799,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.13.2 (2026-10-05)
+  - Satır coverage %65.4 ve CI'da %50 eşiği (#40); MySQL/PostgreSQL `parse_dsn` port/dbname düzeltmesi.
 
 - v1.13.1 (2026-10-05)
   - Yazılı isimlendirme politikası (CONTRIBUTING.md); exception'lar PascalCase (lint + test), `ModelNotFoundException` (#24).
