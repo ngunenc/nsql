@@ -4,7 +4,7 @@ namespace nsql\database\drivers;
 
 /**
  * Database Driver Interface
- * 
+ *
  * Tüm database driver'ları bu interface'i implement etmelidir
  */
 interface driver_interface

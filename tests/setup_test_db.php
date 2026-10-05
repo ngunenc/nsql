@@ -29,7 +29,7 @@ try {
     // Test veritabanını oluştur
     $pdo->exec("DROP DATABASE IF EXISTS `$test_db`");
     $pdo->exec("CREATE DATABASE `$test_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-    
+
     echo "✅ Test veritabanı '$test_db' başarıyla oluşturuldu.\n";
 
     // Test veritabanına bağlan
@@ -59,7 +59,6 @@ try {
 
     echo "✅ Test tabloları başarıyla oluşturuldu.\n";
     echo "✅ Test ortamı hazır!\n";
-
 } catch (PDOException $e) {
     echo "❌ Veritabanı hatası: " . $e->getMessage() . "\n";
     exit(1);

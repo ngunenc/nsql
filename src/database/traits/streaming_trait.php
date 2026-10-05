@@ -115,7 +115,7 @@ trait streaming_trait
                 $stmt->closeCursor();
                 $stmt = null;
             }
-            
+
             // Final GC çağrısı
             gc_collect_cycles();
         }
@@ -304,11 +304,11 @@ trait streaming_trait
         try {
             // Chunk size sabit belirtilmişse auto-adjust'u devre dışı bırak
             $use_auto_adjust = ($chunk_size === null);
-            
+
             while (true) {
                 // Memory kontrolü
                 $this->check_memory_status();
-                
+
                 // Chunk size sabit belirtilmemişse auto-adjust kullan
                 if ($use_auto_adjust) {
                     $this->adjust_chunk_size();

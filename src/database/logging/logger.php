@@ -7,7 +7,7 @@ use nsql\database\traits\log_path_trait;
 
 /**
  * Logger - Structured Logging, Log Levels, Log Rotation
- * 
+ *
  * Özellikler:
  * - JSON format structured logging
  * - Log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -18,7 +18,7 @@ use nsql\database\traits\log_path_trait;
 class logger
 {
     use log_path_trait;
-    
+
     // Log seviyeleri (RFC 5424 uyumlu)
     public const DEBUG = 100;
     public const INFO = 200;
@@ -56,16 +56,16 @@ class logger
     ) {
         $this->log_file = $this->resolve_log_path($log_file ?? config::get('log_file', 'nsql.log'));
         $this->structured_format = $structured_format;
-        
+
         // Log level belirleme (environment-based)
         $this->log_level = $log_level ?? $this->get_environment_log_level();
-        
+
         // Rotation ayarları
         $this->max_file_size = (int)config::get('log_max_size', 10 * 1024 * 1024); // 10MB default
         $this->max_files = (int)config::get('log_max_files', 10);
         $this->rotation_interval = (int)config::get('log_rotation_interval', 86400); // 24 saat default
         $this->compress_old_logs = (bool)config::get('log_compress', true);
-        
+
         $this->ensure_log_directory(dirname($this->log_file));
     }
 
@@ -75,7 +75,7 @@ class logger
     private function get_environment_log_level(): int
     {
         $env = config::get_environment();
-        
+
         return match ($env) {
             'production' => self::WARNING, // Production'da sadece WARNING ve üzeri
             'testing' => self::DEBUG, // Testing'de tüm loglar
@@ -132,7 +132,7 @@ class logger
     private function write_structured_log(array $log_entry): void
     {
         $log_line = json_encode($log_entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
-        
+
         $result = @file_put_contents(
             $this->log_file,
             $log_line,
@@ -153,9 +153,9 @@ class logger
         $level = $log_entry['level'];
         $message = $log_entry['message'];
         $context = !empty($log_entry['context']) ? ' | ' . json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE) : '';
-        
+
         $log_line = "[$timestamp] [$level] $message$context" . PHP_EOL;
-        
+
         $result = @file_put_contents(
             $this->log_file,
             $log_line,
@@ -283,7 +283,7 @@ class logger
         }
 
         // Dosya adına göre sırala (en yeni önce)
-        usort($files, function($a, $b) {
+        usort($files, function ($a, $b) {
             return filemtime($b) - filemtime($a);
         });
 

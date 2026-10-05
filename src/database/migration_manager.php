@@ -233,10 +233,10 @@ class migration_manager
         $batch = $this->get_next_batch();
 
         $applied = $this->get_applied_migrations();
-        
+
         // Bağımlılık grafiğini oluştur ve sırala
         $sorted_migrations = $this->resolve_dependencies();
-        
+
         // Circular dependency kontrolü
         if ($sorted_migrations === null) {
             throw new \RuntimeException('Circular dependency tespit edildi! Migration bağımlılıklarında döngü var.');
@@ -248,7 +248,7 @@ class migration_manager
                 if (! $this->check_dependencies($name, $this->dry_run ? $executed : [])) {
                     throw new \RuntimeException("Migration {$name} için bağımlılıklar karşılanmadı.");
                 }
-                
+
                 if ($this->dry_run) {
                     $executed[] = $name;
 
@@ -311,7 +311,7 @@ class migration_manager
                 if ($this->has_dependents($name)) {
                     throw new \RuntimeException("Migration {$name} geri alınamaz: Bu migration'a bağımlı olan migration'lar var.");
                 }
-                
+
                 try {
                     $this->migrations[$name]->down();
                     $this->log_rollback($name, $batch);
@@ -408,7 +408,7 @@ class migration_manager
             }
 
             $name = $migration->migration_name;
-            
+
             // Hedef migration'a ulaştık mı?
             if ($name === $target_migration) {
                 $target_reached = true;
@@ -443,14 +443,14 @@ class migration_manager
     private function has_dependents(string $migration_name): bool
     {
         $applied = $this->get_applied_migrations();
-        
+
         foreach ($this->dependencies as $dependent => $deps) {
             // Eğer bu dependent uygulanmışsa ve bağımlılıkları arasında bu migration varsa
             if (in_array($dependent, $applied) && in_array($migration_name, $deps)) {
                 return true;
             }
         }
-        
+
         return false;
     }
 
@@ -464,7 +464,7 @@ class migration_manager
     private function log_rollback(string $name, int $batch, ?string $rolled_back_by = null): void
     {
         $rollback_batch = $this->get_next_rollback_batch();
-        
+
         $this->db->update(
             "UPDATE {$this->migrations_table} 
              SET status = 'rolled_back', 
@@ -622,7 +622,6 @@ PHP;
                 if ($this->check_dependencies($name)) {
                     $start_time = microtime(true);
                     try {
-
                         if (! $this->dry_run) {
                             $migration->up();
                             $duration = microtime(true) - $start_time;
@@ -669,26 +668,26 @@ PHP;
 
     /**
      * Bağımlılık grafiğini çözümler ve topological sort yapar
-     * 
+     *
      * @return array<string>|null Sıralanmış migration adları veya null (circular dependency varsa)
      */
     private function resolve_dependencies(): ?array
     {
         $graph = [];
         $in_degree = [];
-        
+
         // Tüm migration'ları başlat
         foreach ($this->migrations as $name => $migration) {
             $graph[$name] = [];
             $in_degree[$name] = 0;
         }
-        
+
         // Bağımlılık grafiğini oluştur
         foreach ($this->dependencies as $migration => $deps) {
             if (! isset($this->migrations[$migration])) {
                 continue; // Migration yüklenmemiş
             }
-            
+
             foreach ($deps as $dep) {
                 if (isset($this->migrations[$dep])) {
                     $graph[$dep][] = $migration; // dep -> migration (dep çalışmalı ki migration çalışsın)
@@ -696,22 +695,22 @@ PHP;
                 }
             }
         }
-        
+
         // Topological sort (Kahn's algorithm)
         $queue = [];
         $result = [];
-        
+
         // İn-degree 0 olanları bul
         foreach ($in_degree as $name => $degree) {
             if ($degree === 0) {
                 $queue[] = $name;
             }
         }
-        
+
         while (! empty($queue)) {
             $current = array_shift($queue);
             $result[] = $current;
-            
+
             // Bu migration'a bağımlı olanları güncelle
             foreach ($graph[$current] as $dependent) {
                 $in_degree[$dependent]--;
@@ -720,18 +719,18 @@ PHP;
                 }
             }
         }
-        
+
         // Circular dependency kontrolü: Eğer tüm migration'lar sıralanmadıysa döngü var
         if (count($result) !== count($this->migrations)) {
             return null;
         }
-        
+
         return $result;
     }
 
     /**
      * Circular dependency kontrolü yapar
-     * 
+     *
      * @return bool Circular dependency varsa true
      */
     public function has_circular_dependency(): bool
@@ -742,7 +741,7 @@ PHP;
 
     /**
      * Migration bağımlılık grafiğini döndürür
-     * 
+     *
      * @return array<string, array<string>> Migration adı => bağımlılık listesi
      */
     public function get_dependency_graph(): array
@@ -1015,33 +1014,33 @@ PHP;
     {
         $this->ensure_migrations_table();
         $this->load_migrations();
-        
+
         $total_migrations = count($this->migrations);
         $applied = $this->get_applied_migrations();
         $applied_count = count($applied);
-        
+
         $status_counts = $this->db->get_results(
             "SELECT status, COUNT(*) as count FROM {$this->migrations_table} GROUP BY status"
         );
-        
+
         $counts = [
             'pending' => 0,
             'completed' => 0,
             'failed' => 0,
             'rolled_back' => 0,
         ];
-        
+
         foreach ($status_counts as $row) {
             $counts[$row->status] = (int)$row->count;
         }
-        
+
         $pending_migrations = [];
         foreach ($this->migrations as $name => $migration) {
             if (! in_array($name, $applied)) {
                 $pending_migrations[] = $name;
             }
         }
-        
+
         return [
             'total_migrations' => $total_migrations,
             'applied_count' => $applied_count,

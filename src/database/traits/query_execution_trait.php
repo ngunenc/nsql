@@ -34,7 +34,7 @@ trait query_execution_trait
 
         // Sorgu bilgilerini kaydet
         $this->prepare_query_context($sql, $params);
-        
+
         // Parametreleri validate et
         $this->validate_param_types($params);
         $this->last_pdo_exception = null;

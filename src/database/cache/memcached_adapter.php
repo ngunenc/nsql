@@ -4,7 +4,7 @@ namespace nsql\database\cache;
 
 /**
  * Memcached Cache Adapter
- * 
+ *
  * Memcached kullanarak distributed cache sağlar
  */
 class memcached_adapter implements cache_adapter_interface
@@ -36,7 +36,7 @@ class memcached_adapter implements cache_adapter_interface
         try {
             $this->memcached = new \Memcached();
             $this->memcached->addServers($this->servers);
-            
+
             // Consistency hash kullan (daha iyi dağıtım)
             $this->memcached->setOption(\Memcached::OPT_DISTRIBUTION, \Memcached::DISTRIBUTION_CONSISTENT);
             $this->memcached->setOption(\Memcached::OPT_LIBKETAMA_COMPATIBLE, true);
@@ -58,7 +58,7 @@ class memcached_adapter implements cache_adapter_interface
 
         try {
             $value = $this->memcached->get($key);
-            
+
             if ($this->memcached->getResultCode() === \Memcached::RES_NOTFOUND) {
                 return null;
             }
@@ -77,7 +77,7 @@ class memcached_adapter implements cache_adapter_interface
 
         try {
             $ttl = $ttl ?? $this->default_ttl;
-            
+
             // Memcached TTL maksimum 30 gün (2592000 saniye)
             if ($ttl > 2592000) {
                 $ttl = 2592000;
@@ -90,11 +90,11 @@ class memcached_adapter implements cache_adapter_interface
                 foreach ($tags as $tag) {
                     $tag_key = "tag:{$tag}";
                     $tag_keys = $this->memcached->get($tag_key);
-                    
+
                     if ($tag_keys === false) {
                         $tag_keys = [];
                     }
-                    
+
                     if (! in_array($key, $tag_keys)) {
                         $tag_keys[] = $key;
                         $this->memcached->set($tag_key, $tag_keys, $ttl);
@@ -147,7 +147,7 @@ class memcached_adapter implements cache_adapter_interface
             foreach ($tags as $tag) {
                 $tag_key = "tag:{$tag}";
                 $keys = $this->memcached->get($tag_key);
-                
+
                 if ($keys !== false && is_array($keys)) {
                     $keys_to_delete = array_merge($keys_to_delete, $keys);
                     $this->memcached->delete($tag_key);

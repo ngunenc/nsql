@@ -50,13 +50,13 @@ trait error_model_trait
             'file' => $e->getFile(),
             'line' => $e->getLine(),
         ];
-        
+
         if (method_exists($e, 'getTraceAsString')) {
             $context['trace'] = $e->getTraceAsString();
         }
-        
+
         $this->log_error($e->getMessage(), $context, logger::ERROR);
-        
+
         if ($this->debug_mode) {
             return $e->getMessage();
         } else {
@@ -66,7 +66,7 @@ trait error_model_trait
 
     /**
      * Son yakalanan exception'ı döndürür
-     * 
+     *
      * @return \Throwable|null Son exception veya null
      */
     public function get_last_exception(): ?\Throwable
@@ -174,12 +174,12 @@ trait error_model_trait
                     true
                 );
             }
-            
+
             $context = [];
             if ($data !== null) {
                 $context['data'] = $data;
             }
-            
+
             $this->logger->debug($message, $context);
         }
     }

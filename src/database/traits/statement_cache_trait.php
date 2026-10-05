@@ -30,12 +30,12 @@ trait statement_cache_trait
     {
         // Dinamik cache size ayarla (memory kullanımına göre)
         $this->adjust_cache_size();
-        
+
         // Ekleme sırası = LRU sırası
         unset($this->statement_cache[$key]);
         $this->statement_cache[$key] = $stmt;
         $this->statement_cache_usage[$key] = microtime(true);
-        
+
         // LFU için frequency başlat
         if ($this->use_lfu_algorithm && !isset($this->statement_cache_frequency[$key])) {
             $this->statement_cache_frequency[$key] = 0;
@@ -63,12 +63,12 @@ trait statement_cache_trait
         }
 
         $this->statement_cache_usage[$key] = microtime(true);
-        
+
         // LFU için frequency artır
         if ($this->use_lfu_algorithm) {
             $this->statement_cache_frequency[$key] = ($this->statement_cache_frequency[$key] ?? 0) + 1;
         }
-        
+
         // LRU: sona taşı
         $stmt = $this->statement_cache[$key];
         unset($this->statement_cache[$key]);
@@ -117,28 +117,32 @@ trait statement_cache_trait
         // En düşük frequency'ye sahip key'i bul
         $min_frequency = PHP_INT_MAX;
         $evict_key = null;
-        
+
         foreach ($this->statement_cache_frequency as $key => $frequency) {
             if (!isset($this->statement_cache[$key])) {
                 continue;
             }
-            
+
             // Aynı frequency'de ise en eski erişim zamanını kullan
-            if ($frequency < $min_frequency || 
-                ($frequency === $min_frequency && $evict_key !== null && 
-                 ($this->statement_cache_usage[$key] ?? 0) < ($this->statement_cache_usage[$evict_key] ?? 0))) {
+            if (
+                $frequency < $min_frequency ||
+                ($frequency === $min_frequency && $evict_key !== null &&
+                 ($this->statement_cache_usage[$key] ?? 0) < ($this->statement_cache_usage[$evict_key] ?? 0))
+            ) {
                 $min_frequency = $frequency;
                 $evict_key = $key;
             }
         }
-        
+
         if ($evict_key !== null) {
-            unset($this->statement_cache[$evict_key], 
-                  $this->statement_cache_usage[$evict_key],
-                  $this->statement_cache_frequency[$evict_key]);
+            unset(
+                $this->statement_cache[$evict_key],
+                $this->statement_cache_usage[$evict_key],
+                $this->statement_cache_frequency[$evict_key]
+            );
         }
     }
-    
+
     /**
      * Dinamik cache size ayarlar (memory kullanımına göre)
      */
@@ -149,13 +153,13 @@ trait statement_cache_trait
         if (!$dynamic_cache_enabled) {
             return;
         }
-        
+
         $memory_usage = memory_get_usage(true);
         $memory_limit = method_exists($this, 'memory_thresholds')
             ? $this->memory_thresholds()['warning']
             : (int) \nsql\database\config::get('memory_limit_warning', \nsql\database\config::memory_limit_warning);
         $usage_ratio = $memory_usage / $memory_limit;
-        
+
         // Memory kullanımı yüksekse cache limit'i azalt
         if ($usage_ratio > 0.75) {
             $this->base_cache_limit = max(10, (int)($this->base_cache_limit * 0.7));
@@ -164,7 +168,7 @@ trait statement_cache_trait
             $this->base_cache_limit = min(200, (int)($this->base_cache_limit * 1.2));
         }
     }
-    
+
     /**
      * Dinamik cache limit'i döndürür
      */
@@ -176,10 +180,10 @@ trait statement_cache_trait
         }
         return $this->statement_cache_limit;
     }
-    
+
     /**
      * LFU algoritmasını etkinleştir/devre dışı bırak
-     * 
+     *
      * @param bool $enabled LFU algoritması aktif edilsin mi?
      * @return void
      */
@@ -187,10 +191,10 @@ trait statement_cache_trait
     {
         $this->use_lfu_algorithm = $enabled;
     }
-    
+
     /**
      * Statement cache istatistiklerini döndürür
-     * 
+     *
      * @return array{
      *     size: int,
      *     limit: int,

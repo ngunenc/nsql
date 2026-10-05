@@ -28,14 +28,14 @@ class CrudIntegrationTest extends DatabaseTestCase
             ['name' => 'Update Test Original']
         );
         $this->assertTrue($id > 0);
-        
+
         // Kaydı güncelle
         $result = $this->db->update(
             "UPDATE test_table SET name = :name WHERE id = :id",
             ['name' => 'Update Test Updated', 'id' => $id]
         );
         $this->assertTrue($result);
-        
+
         // Güncellenmiş kaydı kontrol et
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",
@@ -53,14 +53,14 @@ class CrudIntegrationTest extends DatabaseTestCase
             ['name' => 'Delete Test']
         );
         $this->assertTrue($id > 0);
-        
+
         // Kaydı sil
         $result = $this->db->delete(
             "DELETE FROM test_table WHERE id = :id",
             ['id' => $id]
         );
         $this->assertTrue($result);
-        
+
         // Silinen kaydın olmadığını kontrol et
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",
@@ -76,12 +76,12 @@ class CrudIntegrationTest extends DatabaseTestCase
             "INSERT INTO test_table (name) VALUES (:name)",
             ['name' => 'GetRow Test']
         );
-        
+
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",
             ['id' => $id]
         );
-        
+
         $this->assertNotNull($row);
         $this->assertIsObject($row);
         $this->assertEquals('GetRow Test', $row->name);
@@ -93,7 +93,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             "SELECT * FROM test_table WHERE id = :id",
             ['id' => 99999]
         );
-        
+
         $this->assertNull($row);
     }
 
@@ -112,7 +112,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             $count++;
             $this->assertIsObject($row);
         }
-        
+
         $this->assertGreaterThanOrEqual(10, $count);
     }
 
@@ -122,15 +122,15 @@ class CrudIntegrationTest extends DatabaseTestCase
             "INSERT INTO test_table (name) VALUES (:name)",
             ['name' => 'InsertId Test 1']
         );
-        
+
         $insertId = $this->db->insert_id();
         $this->assertEquals($id1, $insertId);
-        
+
         $id2 = $this->db->insert(
             "INSERT INTO test_table (name) VALUES (:name)",
             ['name' => 'InsertId Test 2']
         );
-        
+
         $this->assertGreaterThan($id1, $id2);
     }
 
@@ -140,7 +140,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             "SELECT * FROM test_table WHERE id = :id",
             ['id' => 99999]
         );
-        
+
         $this->assertIsArray($results);
         $this->assertEmpty($results);
     }
@@ -153,15 +153,15 @@ class CrudIntegrationTest extends DatabaseTestCase
             "INSERT INTO test_table (name, value) VALUES (:name, :value)",
             ['name' => 'test', 'value' => null]
         );
-        
+
         $this->assertIsInt($id);
         $this->assertTrue($id > 0);
-        
+
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",
             ['id' => $id]
         );
-        
+
         // NULL değerlerin doğru şekilde işlendiğini kontrol et
         $this->assertNotNull($row);
         $this->assertNull($row->value); // NULL değerin doğru işlendiğini kontrol et
@@ -176,7 +176,7 @@ class CrudIntegrationTest extends DatabaseTestCase
                 ['name' => "Large Data Test $i"]
             );
         }
-        
+
         $results = $this->db->get_results("SELECT * FROM test_table WHERE name LIKE 'Large Data Test%'");
         $this->assertGreaterThanOrEqual(100, count($results));
     }
@@ -195,7 +195,7 @@ class CrudIntegrationTest extends DatabaseTestCase
         foreach ($this->db->get_chunk("SELECT * FROM test_table", [], 2) as $chunk) {
             $count += count($chunk);
         }
-        
+
         $this->assertEquals(5, $count);
     }
 
@@ -208,14 +208,14 @@ class CrudIntegrationTest extends DatabaseTestCase
                 ['name' => "Chunk Perf Test $i"]
             );
         }
-        
+
         $startTime = microtime(true);
         $count = 0;
         foreach ($this->db->get_chunk("SELECT * FROM test_table WHERE name LIKE 'Chunk Perf Test%'", [], 10) as $chunk) {
             $count += count($chunk);
         }
         $endTime = microtime(true);
-        
+
         $this->assertGreaterThanOrEqual(50, $count);
         $this->assertLessThan(5, $endTime - $startTime); // 5 saniyeden az sürmeli
     }
@@ -228,7 +228,7 @@ class CrudIntegrationTest extends DatabaseTestCase
             ['name' => 'Integration Test']
         );
         $this->assertTrue($id > 0);
-        
+
         // Read
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",
@@ -236,28 +236,28 @@ class CrudIntegrationTest extends DatabaseTestCase
         );
         $this->assertNotNull($row);
         $this->assertEquals('Integration Test', $row->name);
-        
+
         // Update
         $updated = $this->db->update(
             "UPDATE test_table SET name = :name WHERE id = :id",
             ['name' => 'Integration Test Updated', 'id' => $id]
         );
         $this->assertTrue($updated);
-        
+
         // Verify Update
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",
             ['id' => $id]
         );
         $this->assertEquals('Integration Test Updated', $row->name);
-        
+
         // Delete
         $deleted = $this->db->delete(
             "DELETE FROM test_table WHERE id = :id",
             ['id' => $id]
         );
         $this->assertTrue($deleted);
-        
+
         // Verify Delete
         $row = $this->db->get_row(
             "SELECT * FROM test_table WHERE id = :id",

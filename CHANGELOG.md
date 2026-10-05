@@ -4,6 +4,17 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.9.2] - 2026-10-05
+
+### Değişen
+- **Minimum PHP 8.1** (`composer.json`: `>=8.1`). Kod v1.6.0'dan beri PHP 8.1 özellikleri kullanıyordu (`array_is_list()`, `readonly` property); PHP 8.0'da çalışmıyordu. PHP 8.0 Kasım 2023'ten beri desteklenmiyor. CI matrisi 8.1–8.4.
+- `composer.json` `config.platform.php = 8.1.0`: lock dosyası 8.1 ile uyumlu çözülür (dev araçları Symfony 6.4 hattında).
+
+### Düzeltme (CI)
+- `ConfigEnvMappingTest` CI'ın verdiği `DB_HOST` gibi ortam değişkenlerini silip geri yüklemiyordu; sonraki entegrasyon testleri varsayılan `localhost`'a (Linux'ta unix soket, SQLSTATE 2002) düşüyordu. Değişkenler artık test sonunda geri yükleniyor.
+- `VendorRootDetectionTest`: Windows'ta `sys_get_temp_dir()` 8.3 kısa ad (`RUNNER~1`) döndürdüğünde karşılaştırma `realpath` ile yapılıyor.
+- `phpcs.xml.dist`: PSR-12; proje politikası olan snake_case sınıf/metot/sabit isimleri (#24) ve CRLF checkout satır sonları hariç, satır uzunluğu 160 (uyarı). `composer lint` bu ruleset'i kullanır; mevcut kod `phpcbf` ile düzeltildi (yalnızca boşluk/girinti).
+
 ## [1.9.1] - 2026-10-05
 
 ### Değişen (#16) — iç mimari, public API aynı

@@ -7,7 +7,7 @@ use nsql\database\exceptions\error_codes;
 
 /**
  * Cache Exception
- * 
+ *
  * Cache işlem hatalarını temsil eder
  */
 class CacheException extends DatabaseException
@@ -28,7 +28,7 @@ class CacheException extends DatabaseException
         if (empty($message)) {
             $message = error_codes::get_message($code);
         }
-        
+
         parent::__construct($message, $code, $previous);
         $this->cache_key = $cache_key;
         $this->cache_adapter = $cache_adapter;

@@ -13,19 +13,19 @@ class mysql_driver implements driver_interface
         $port = $config['port'] ?? 3306;
         $dbname = $config['dbname'] ?? '';
         $charset = $config['charset'] ?? 'utf8mb4';
-        
+
         $dsn = "mysql:host={$host}";
-        
+
         if (isset($config['port'])) {
             $dsn .= ";port={$port}";
         }
-        
+
         if ($dbname) {
             $dsn .= ";dbname={$dbname}";
         }
-        
+
         $dsn .= ";charset={$charset}";
-        
+
         return $dsn;
     }
 

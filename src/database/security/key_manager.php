@@ -6,7 +6,7 @@ use RuntimeException;
 
 /**
  * Encryption Key Manager
- * 
+ *
  * Güvenli key yönetimi, rotation ve storage sağlar
  */
 class key_manager
@@ -17,13 +17,13 @@ class key_manager
 
     /**
      * Mevcut encryption key'i alır
-     * 
+     *
      * Öncelik sırası:
      * 1. Environment variable (ENCRYPTION_KEY)
      * 2. Config dosyası (encryption_key)
      * 3. Güvenli key storage dosyası
      * 4. Yeni key oluştur ve sakla
-     * 
+     *
      * @return string Encryption key
      */
     public static function get_key(): string
@@ -55,20 +55,20 @@ class key_manager
 
     /**
      * Yeni encryption key oluşturur
-     * 
+     *
      * @return string Yeni encryption key
      */
     public static function generate_key(): string
     {
         // 32 byte (256 bit) güçlü key oluştur
         $key = base64_encode(random_bytes(32));
-        
+
         return self::validate_key($key);
     }
 
     /**
      * Key'i güvenli storage'a kaydeder
-     * 
+     *
      * @param string $key Encryption key
      * @return bool Başarılı ise true
      */
@@ -107,7 +107,7 @@ class key_manager
 
     /**
      * Key'i güvenli storage'dan yükler
-     * 
+     *
      * @return string|null Key bulunursa key, bulunamazsa null
      */
     public static function load_key_from_storage(): ?string
@@ -192,7 +192,7 @@ class key_manager
 
     /**
      * Key rotation yapar (yeni key oluşturur ve eski key'i arşivler)
-     * 
+     *
      * @param string|null $old_key Eski key (opsiyonel, otomatik yüklenir)
      * @return array{new_key: string, old_key: string, rotation_date: string}
      */
@@ -220,7 +220,7 @@ class key_manager
 
     /**
      * Eski key'i arşivler (geçmiş için saklar)
-     * 
+     *
      * @param string $key Eski key
      * @return bool Başarılı ise true
      */
@@ -246,7 +246,7 @@ class key_manager
 
     /**
      * Key'in geçerli olup olmadığını kontrol eder
-     * 
+     *
      * @param string $key Kontrol edilecek key
      * @return string Geçerli key
      * @throws RuntimeException Key geçersiz ise
@@ -254,7 +254,7 @@ class key_manager
     private static function validate_key(string $key): string
     {
         $key = trim($key);
-        
+
         if (empty($key)) {
             throw new RuntimeException('Encryption key boş olamaz');
         }
@@ -281,7 +281,7 @@ class key_manager
 
     /**
      * Key storage dosya yolunu döndürür
-     * 
+     *
      * @return string Storage dosya yolu
      */
     private static function get_storage_path(): string
@@ -304,7 +304,7 @@ class key_manager
 
     /**
      * Key storage dosyasının var olup olmadığını kontrol eder
-     * 
+     *
      * @return bool Key storage dosyası varsa true
      */
     public static function key_exists(): bool
@@ -315,13 +315,13 @@ class key_manager
 
     /**
      * Key storage dosyasını siler (dikkatli kullanılmalı!)
-     * 
+     *
      * @return bool Başarılı ise true
      */
     public static function delete_key_storage(): bool
     {
         $storage_path = self::get_storage_path();
-        
+
         if (file_exists($storage_path)) {
             return unlink($storage_path);
         }

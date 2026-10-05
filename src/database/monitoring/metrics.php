@@ -6,7 +6,7 @@ use nsql\database\nsql;
 
 /**
  * Metrics
- * 
+ *
  * Performans metrikleri toplama ve raporlama
  */
 class metrics
@@ -42,7 +42,7 @@ class metrics
     {
         try {
             $stats = $this->db->get_all_stats();
-            
+
             return [
                 'connection_pool' => $stats['connection_pool'] ?? [],
                 'query_count' => $stats['query_analyzer']['total_queries'] ?? 0,
@@ -62,7 +62,7 @@ class metrics
     {
         try {
             $stats = $this->db->get_cache_stats();
-            
+
             return [
                 'enabled' => $stats['enabled'],
                 'size' => $stats['size'],
@@ -86,7 +86,7 @@ class metrics
     {
         try {
             $stats = $this->db->get_memory_stats();
-            
+
             return [
                 'current_usage' => $stats['current_usage'],
                 'peak_usage' => $stats['peak_usage'],
@@ -107,7 +107,7 @@ class metrics
     {
         try {
             $stats = $this->db->get_pool_stats();
-            
+
             return [
                 'active_connections' => $stats['active_connections'] ?? 0,
                 'idle_connections' => $stats['idle_connections'] ?? 0,
@@ -128,7 +128,7 @@ class metrics
     {
         try {
             $stats = $this->db->get_query_analyzer_stats();
-            
+
             return [
                 'total_queries' => $stats['total_queries'] ?? 0,
                 'slow_queries' => $stats['slow_queries'] ?? 0,

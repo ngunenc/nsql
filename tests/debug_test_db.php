@@ -52,7 +52,6 @@ try {
         $count = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
         echo "📊 users kayıt sayısı: $count\n";
     }
-
 } catch (PDOException $e) {
     echo "❌ Veritabanı hatası: " . $e->getMessage() . "\n";
     exit(1);

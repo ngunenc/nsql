@@ -6,7 +6,7 @@ use nsql\database\config;
 
 /**
  * Log Path Trait
- * 
+ *
  * Ortak log path ve directory metodları
  * GELISTIRME-010: Code duplication azaltma
  */

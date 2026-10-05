@@ -4,7 +4,7 @@ namespace nsql\database\cache;
 
 /**
  * Cache Adapter Interface
- * 
+ *
  * Tüm cache adapter'ları bu interface'i implement etmelidir
  */
 interface cache_adapter_interface

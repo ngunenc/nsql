@@ -85,7 +85,7 @@ if (! defined('NSQL_TEMPLATE')) {
         <?= htmlspecialchars($method) ?>
     </div>
     
-    <?php if ($error): ?>
+    <?php if ($error) : ?>
         <div class="error">
             ⚠️ <strong>Hata:</strong> <?= htmlspecialchars($error) ?>
         </div>
@@ -95,21 +95,21 @@ if (! defined('NSQL_TEMPLATE')) {
         <strong>Sorgu:</strong>
         <pre><?= htmlspecialchars($query) ?></pre>
     </div>
-      <?php if ($params): ?>
+      <?php if ($params) : ?>
         <div class="info">
             <strong>Parametreler:</strong>
             <pre><?= htmlspecialchars($params) ?></pre>
         </div>
-    <?php endif; ?>
+      <?php endif; ?>
 
-    <?php if (isset($results) && $results !== '[]'): ?>
+    <?php if (isset($results) && $results !== '[]') : ?>
         <div class="info results">
             <strong>Sonuçlar:</strong>
             <pre><?= htmlspecialchars($results) ?></pre>
         </div>
     <?php endif; ?>
 
-    <?php if (isset($results) && $results === '[]'): ?>
+    <?php if (isset($results) && $results === '[]') : ?>
         <div class="info">
             <em>Sorgu sonucu boş</em>
         </div>

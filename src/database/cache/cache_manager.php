@@ -4,7 +4,7 @@ namespace nsql\database\cache;
 
 /**
  * Cache Manager
- * 
+ *
  * Strategy pattern ile cache adapter'ları yönetir
  * Fallback mekanizması ile primary adapter başarısız olursa secondary adapter kullanır
  */

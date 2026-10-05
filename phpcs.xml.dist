@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<ruleset name="nsql">
+    <description>PSR-12; snake_case sınıf/metot/sabit isimleri proje politikasıdır (#24).</description>
+
+    <file>src</file>
+    <file>tests</file>
+    <exclude-pattern>tests/Fixtures/*</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg value="sp"/>
+    <config name="ignore_warnings_on_exit" value="1"/>
+
+    <rule ref="PSR12">
+        <exclude name="PSR1.Methods.CamelCapsMethodName"/>
+        <exclude name="Squiz.Classes.ValidClassName"/>
+        <exclude name="Generic.NamingConventions.UpperCaseConstantName"/>
+        <!-- core.autocrlf=true olan Windows checkout'larında CRLF; depo LF tutar -->
+        <exclude name="Generic.Files.LineEndings"/>
+    </rule>
+
+    <rule ref="Generic.Files.LineLength">
+        <properties>
+            <property name="lineLimit" value="160"/>
+            <property name="absoluteLineLimit" value="0"/>
+        </properties>
+    </rule>
+
+    <rule ref="PSR1.Classes.ClassDeclaration.MultipleClasses">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
+</ruleset>

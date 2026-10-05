@@ -6,7 +6,7 @@ use InvalidArgumentException;
 
 /**
  * Validator - Input Validation Sistemi
- * 
+ *
  * Özellikler:
  * - Validation rules
  * - Custom validators
@@ -18,7 +18,7 @@ class validator
 {
     /**
      * Değeri validate eder
-     * 
+     *
      * @param mixed $value Validasyon edilecek değer
      * @param array $rules Validation kuralları
      * @return bool
@@ -31,7 +31,7 @@ class validator
                 throw new InvalidArgumentException("Validation failed for rule: $rule");
             }
         }
-        
+
         return true;
     }
 
@@ -251,17 +251,17 @@ class validator
     public static function validate_many(array $data, array $rules): array
     {
         $errors = [];
-        
+
         foreach ($rules as $field => $field_rules) {
             $value = $data[$field] ?? null;
-            
+
             try {
                 self::validate($value, $field_rules);
             } catch (InvalidArgumentException $e) {
                 $errors[$field] = $e->getMessage();
             }
         }
-        
+
         return $errors;
     }
 
@@ -283,12 +283,12 @@ class validator
         if (is_array($param) || is_object($param)) {
             return false;
         }
-        
+
         // Resource'ları reddet
         if (is_resource($param)) {
             return false;
         }
-        
+
         return true;
     }
 }
