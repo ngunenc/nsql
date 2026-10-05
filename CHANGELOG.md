@@ -4,6 +4,22 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.12.0] - 2026-10-05
+
+### Added
+- **ORM ilişkileri** (#9): `has_one()`, `has_many()` (opsiyonel `scope`), `belongs_to()`; anahtarlar snake_case sınıf adından türetilir. Alt sınıftaki parametresiz public ilişki metotları özellik gibi erişildiğinde bir kez yüklenir (`$post->author`); `load()`, `relation_loaded()`, `unset_relation()`.
+- **Casting**: `$casts` — int, float/decimal, bool, string, array/json, object, datetime, date. Okumada PHP tipine, yazmada veritabanı değerine çevrilir; `get_attribute()`, `get_raw_attribute()`.
+- `$guarded` (varsayılan `['*']`): `$fillable` boşken guarded dışındaki alanlar atanabilir.
+- Soft delete: `$soft_deletes`, `delete()` → `deleted_at`, `restore()`, `force_delete()`, `trashed()`, `query_with_trashed()`.
+- Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find_or_fail()` (`model_not_found_exception`), `hydrate()`; `JsonSerializable` (`to_array()` cast'li alanlar + yüklenmiş ilişkiler).
+- `orm\inflector`: snake_case + çoğullaştırma (düzensiz/sayılamayan kelimeler). `ORM_TABLE_NAMING=inflector` ile `BlogPost` → `blog_posts`; 1.x varsayılanı `legacy` (v2.0'da inflector).
+- Portable ORM testleri (MySQL, PostgreSQL, SQLite) ve `InflectorTest`.
+
+### Changed
+- İlişki metotları satır nesneleri yerine model örnekleri döndürür; `belongs_to()` `$owner_key`'e uyar.
+- `$db` verilmeyen modeller `nsql::connection()` örneğini paylaşır.
+- `model` için `@phpstan-consistent-constructor`: alt sınıf constructor'ları imzayı korumalıdır.
+
 ## [1.11.1] - 2026-10-05
 
 ### Added

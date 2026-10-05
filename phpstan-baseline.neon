@@ -249,8 +249,3 @@ parameters:
 			message: "#^Call to an undefined static method object\\:\\:find\\(\\)\\.$#"
 			count: 1
 			path: src/database/orm/model.php
-
-		-
-			message: "#^Unsafe usage of new static\\(\\)\\.$#"
-			count: 2
-			path: src/database/orm/model.php

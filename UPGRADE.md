@@ -54,3 +54,23 @@ try {
 - `safe_execute()` sonucunu `instanceof \Throwable` ile kontrol eden kod `try/catch`'e geçmeli.
 - `batch_update()` artık başarısız bir satırı atlamıyor; tüm işlem geri alınıp `QueryException` fırlatılıyor
   (iki modda da).
+
+## 1.x → 2.0 hazırlığı: ORM tablo adları (`ORM_TABLE_NAMING`, v1.12.0+)
+
+`$table` belirtilmeyen modellerde tablo adı 1.x'te `strtolower(Sınıf) . 's'`, 2.0'da `inflector` ile türetilecek:
+
+| Sınıf | 1.x (`legacy`) | 2.0 (`inflector`) |
+|-------|----------------|-------------------|
+| `User` | `users` | `users` |
+| `BlogPost` | `blogposts` | `blog_posts` |
+| `Category` | `categorys` | `categories` |
+| `Person` | `persons` | `people` |
+
+Şimdiden geçmek için `ORM_TABLE_NAMING=inflector`; tablo adınızı sabitlemek için modelde `protected string $table = '...';`.
+
+### v1.12.0 ORM davranış değişiklikleri (1.x içinde)
+
+- `has_many()` / `has_one()` / `belongs_to()` model örnekleri döndürür (`has_many()` önceden satır nesneleri döndürüyordu).
+  `$item->kolon` erişimi aynı çalışır; `(array) $item` yerine `$item->to_array()` kullanın.
+- `belongs_to()` artık `$owner_key` parametresine uyar (önceden her zaman ilişkili modelin birincil anahtarıyla arıyordu).
+- `$db` verilmeyen modeller her seferinde yeni `nsql` açmak yerine `nsql::connection()` örneğini paylaşır.
