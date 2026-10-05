@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use nsql\database\config;
-use nsql\database\traits\cache_trait;
+use nsql\database\Config;
+use nsql\database\traits\CacheTrait;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -12,7 +12,7 @@ class QueryCacheTableExtractionTest extends TestCase
     private function extract(string $sql): array
     {
         $subject = new class () {
-            use cache_trait;
+            use CacheTrait;
 
             public function extract(string $sql): array
             {
@@ -61,7 +61,7 @@ class QueryCacheTableExtractionTest extends TestCase
 
     public function test_query_cache_is_disabled_by_default(): void
     {
-        $this->assertFalse(config::query_cache_enabled);
-        $this->assertFalse(config::default_values()['QUERY_CACHE_ENABLED']);
+        $this->assertFalse(Config::query_cache_enabled);
+        $this->assertFalse(Config::default_values()['QUERY_CACHE_ENABLED']);
     }
 }

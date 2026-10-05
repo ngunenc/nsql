@@ -3,8 +3,8 @@
 namespace Tests\Unit;
 
 use InvalidArgumentException;
-use nsql\database\exceptions\error_codes;
-use nsql\database\validation\validator;
+use nsql\database\exceptions\ErrorCodes;
+use nsql\database\validation\Validator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -64,12 +64,12 @@ class ValidatorTest extends TestCase
             $this->expectException(InvalidArgumentException::class);
         }
 
-        $this->assertTrue(validator::validate($value, $rules));
+        $this->assertTrue(Validator::validate($value, $rules));
     }
 
     public function test_validate_many_collects_errors_per_field(): void
     {
-        $errors = validator::validate_many(
+        $errors = Validator::validate_many(
             ['name' => 'Ali', 'age' => 'x'],
             ['name' => ['required' => true], 'age' => ['numeric' => true], 'email' => ['required' => true]]
         );
@@ -80,25 +80,25 @@ class ValidatorTest extends TestCase
 
     public function test_sql_identifier_and_param(): void
     {
-        $this->assertTrue(validator::validate_sql_identifier('users_2'));
-        $this->assertFalse(validator::validate_sql_identifier('2users'));
-        $this->assertFalse(validator::validate_sql_identifier('users; DROP'));
-        $this->assertFalse(validator::validate_sql_identifier(str_repeat('a', 65)));
+        $this->assertTrue(Validator::validate_sql_identifier('users_2'));
+        $this->assertFalse(Validator::validate_sql_identifier('2users'));
+        $this->assertFalse(Validator::validate_sql_identifier('users; DROP'));
+        $this->assertFalse(Validator::validate_sql_identifier(str_repeat('a', 65)));
 
-        $this->assertTrue(validator::validate_sql_param('x'));
-        $this->assertTrue(validator::validate_sql_param(null));
-        $this->assertFalse(validator::validate_sql_param(['x']));
-        $this->assertFalse(validator::validate_sql_param(new \stdClass()));
+        $this->assertTrue(Validator::validate_sql_param('x'));
+        $this->assertTrue(Validator::validate_sql_param(null));
+        $this->assertFalse(Validator::validate_sql_param(['x']));
+        $this->assertFalse(Validator::validate_sql_param(new \stdClass()));
     }
 
     public function test_error_codes_messages_and_categories(): void
     {
-        $this->assertSame('Veritabanı bağlantısı başarısız', error_codes::get_message(error_codes::CONNECTION_FAILED));
-        $this->assertSame('Bilinmeyen hata kodu: 42', error_codes::get_message(42));
-        $this->assertSame('query', error_codes::get_category(error_codes::QUERY_TIMEOUT));
-        $this->assertSame('unknown', error_codes::get_category(9999));
+        $this->assertSame('Veritabanı bağlantısı başarısız', ErrorCodes::get_message(ErrorCodes::CONNECTION_FAILED));
+        $this->assertSame('Bilinmeyen hata kodu: 42', ErrorCodes::get_message(42));
+        $this->assertSame('query', ErrorCodes::get_category(ErrorCodes::QUERY_TIMEOUT));
+        $this->assertSame('unknown', ErrorCodes::get_category(9999));
 
-        $all = error_codes::get_all_codes();
+        $all = ErrorCodes::get_all_codes();
         $this->assertArrayHasKey('VALIDATION_INVALID_TABLE', $all);
         foreach ($all as $name => $info) {
             $this->assertStringStartsNotWith('Bilinmeyen', $info['message'], $name);

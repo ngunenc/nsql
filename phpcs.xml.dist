@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <ruleset name="nsql">
-    <description>PSR-12; isimlendirme politikası için CONTRIBUTING.md (#24): 1.x'te sınıf/metot/sabit snake_case, exception'lar PascalCase.</description>
+    <description>PSR-12; isimlendirme politikası için CONTRIBUTING.md (#24): sınıflar PascalCase, metot/özellik/config sabitleri snake_case.</description>
 
     <file>src</file>
     <file>tests</file>
@@ -24,9 +24,9 @@
         </properties>
     </rule>
 
-    <!-- Exception sınıfları PascalCase olmalı (#24) -->
+    <!-- Sınıf/interface/trait adları PascalCase olmalı (#24, 2.0) -->
     <rule ref="Squiz.Classes.ValidClassName">
-        <include-pattern>*xception.php</include-pattern>
+        <include-pattern>src/*</include-pattern>
     </rule>
 
     <rule ref="PSR1.Classes.ClassDeclaration.MultipleClasses">

@@ -3,7 +3,7 @@
 namespace Tests\Integration;
 
 use Tests\Support\DatabaseTestCase;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 class SecurityIntegrationTest extends DatabaseTestCase
 {
@@ -11,15 +11,15 @@ class SecurityIntegrationTest extends DatabaseTestCase
     {
         // XSS koruması testi
         $input = '<script>alert("xss")</script>';
-        $escaped = nsql::escape_html($input);
+        $escaped = Nsql::escape_html($input);
         $this->assertNotEquals($input, $escaped);
 
         // CSRF token testi
-        $token = \nsql\security\session_manager::get_csrf_token();
-        $this->assertTrue(\nsql\security\session_manager::validate_csrf_token($token));
+        $token = \nsql\security\SessionManager::get_csrf_token();
+        $this->assertTrue(\nsql\security\SessionManager::validate_csrf_token($token));
 
         // Şifreleme testi
-        $encryption = new \nsql\security\encryption();
+        $encryption = new \nsql\security\Encryption();
         $data = 'sensitive_data';
         $encrypted = $encryption->encrypt($data);
         $decrypted = $encryption->decrypt($encrypted);
@@ -61,7 +61,7 @@ class SecurityIntegrationTest extends DatabaseTestCase
         ];
 
         foreach ($xssInputs as $input) {
-            $escaped = nsql::escape_html($input);
+            $escaped = Nsql::escape_html($input);
             $this->assertNotEquals($input, $escaped);
             $this->assertStringNotContainsString('<script>', $escaped);
         }
@@ -70,14 +70,14 @@ class SecurityIntegrationTest extends DatabaseTestCase
     public function testCSRFProtection()
     {
         // Token oluştur
-        $token1 = nsql::csrf_token();
+        $token1 = Nsql::csrf_token();
         $this->assertNotEmpty($token1);
 
         // Aynı token'ı doğrula
-        $this->assertTrue(nsql::validate_csrf($token1));
+        $this->assertTrue(Nsql::validate_csrf($token1));
 
         // Farklı token'ı doğrula (başarısız olmalı)
-        $token2 = nsql::csrf_token();
-        $this->assertFalse(nsql::validate_csrf('invalid_token'));
+        $token2 = Nsql::csrf_token();
+        $this->assertFalse(Nsql::validate_csrf('invalid_token'));
     }
 }

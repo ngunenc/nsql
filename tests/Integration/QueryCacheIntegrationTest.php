@@ -2,8 +2,8 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
-use nsql\database\nsql;
+use nsql\database\Config;
+use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -15,18 +15,18 @@ class QueryCacheIntegrationTest extends DatabaseTestCase
     {
         parent::setUp();
 
-        config::set('query_cache_enabled', true);
-        $this->db = new nsql(
-            host: config::get('db_host', 'localhost'),
-            db: config::get('db_name', 'nsql_test_db'),
-            user: config::get('db_user', 'root'),
-            pass: config::get('db_pass', '')
+        Config::set('query_cache_enabled', true);
+        $this->db = new Nsql(
+            host: Config::get('db_host', 'localhost'),
+            db: Config::get('db_name', 'nsql_test_db'),
+            user: Config::get('db_user', 'root'),
+            pass: Config::get('db_pass', '')
         );
     }
 
     protected function tearDown(): void
     {
-        config::set('query_cache_enabled', self::query_cache_suite());
+        Config::set('query_cache_enabled', self::query_cache_suite());
         parent::tearDown();
     }
 

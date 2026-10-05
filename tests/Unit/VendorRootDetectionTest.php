@@ -2,32 +2,32 @@
 
 namespace Tests\Unit;
 
-use nsql\database\config;
+use nsql\database\Config;
 use PHPUnit\Framework\TestCase;
 
 class VendorRootDetectionTest extends TestCase
 {
     public function test_detects_vendor_package_paths(): void
     {
-        $this->assertTrue(config::is_vendor_package_path(
+        $this->assertTrue(Config::is_vendor_package_path(
             '/var/www/app/vendor/ngunenc/nsql'
         ));
-        $this->assertTrue(config::is_vendor_package_path(
+        $this->assertTrue(Config::is_vendor_package_path(
             'C:\\app\\vendor\\ngunenc\\nsql\\storage\\keys'
         ));
-        $this->assertFalse(config::is_vendor_package_path('/var/www/app'));
-        $this->assertFalse(config::is_vendor_package_path('/var/www/app/storage'));
+        $this->assertFalse(Config::is_vendor_package_path('/var/www/app'));
+        $this->assertFalse(Config::is_vendor_package_path('/var/www/app/storage'));
     }
 
     public function test_resolve_away_from_vendor_returns_app_root(): void
     {
         $this->assertSame(
             '/var/www/app',
-            str_replace('\\', '/', config::resolve_away_from_vendor('/var/www/app/vendor/ngunenc/nsql'))
+            str_replace('\\', '/', Config::resolve_away_from_vendor('/var/www/app/vendor/ngunenc/nsql'))
         );
         $this->assertSame(
             '/var/www/app',
-            str_replace('\\', '/', config::resolve_away_from_vendor('/var/www/app/vendor/ngunenc/nsql/storage/keys'))
+            str_replace('\\', '/', Config::resolve_away_from_vendor('/var/www/app/vendor/ngunenc/nsql/storage/keys'))
         );
     }
 
@@ -36,7 +36,7 @@ class VendorRootDetectionTest extends TestCase
         $path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_app_root_test';
         $this->assertSame(
             rtrim($path, '/\\'),
-            config::prefer_application_root($path)
+            Config::prefer_application_root($path)
         );
     }
 
@@ -47,17 +47,17 @@ class VendorRootDetectionTest extends TestCase
         mkdir($pkg, 0700, true);
         file_put_contents($app . DIRECTORY_SEPARATOR . '.env', "DB_HOST=localhost\n");
 
-        config::set_project_root($pkg);
-        config::refresh();
+        Config::set_project_root($pkg);
+        Config::refresh();
 
-        $root = str_replace('\\', '/', config::get_project_root());
+        $root = str_replace('\\', '/', Config::get_project_root());
         // Windows'ta sys_get_temp_dir() 8.3 kısa adı (RUNNER~1) döndürebilir
         $expected = str_replace('\\', '/', (string) realpath($app));
         $root = str_replace('\\', '/', (string) (realpath($root) ?: $root));
         $this->assertSame($expected, $root);
 
-        config::set_project_root(dirname(__DIR__, 2));
-        config::refresh();
+        Config::set_project_root(dirname(__DIR__, 2));
+        Config::refresh();
 
         // cleanup
         @unlink($app . DIRECTORY_SEPARATOR . '.env');

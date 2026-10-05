@@ -5,7 +5,7 @@ namespace Tests\Integration;
 use Tests\Support\DatabaseTestCase;
 
 /**
- * #34: get_row() LIMIT ekleme mantığı; query_builder::first() ve model::find().
+ * #34: get_row() LIMIT ekleme mantığı; QueryBuilder::first() ve Model::find().
  */
 class GetRowLimitTest extends DatabaseTestCase
 {

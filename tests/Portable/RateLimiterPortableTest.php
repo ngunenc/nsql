@@ -2,7 +2,7 @@
 
 namespace Tests\Portable;
 
-use nsql\security\rate_limiter;
+use nsql\security\RateLimiter;
 use Tests\Support\PortableTestCase;
 
 class RateLimiterPortableTest extends PortableTestCase
@@ -22,9 +22,9 @@ class RateLimiterPortableTest extends PortableTestCase
         parent::tearDown();
     }
 
-    private function limiter(int $max_requests, int $window): rate_limiter
+    private function limiter(int $max_requests, int $window): RateLimiter
     {
-        return new rate_limiter(
+        return new RateLimiter(
             $this->db,
             fn (): int => $this->now,
             ['table' => $this->table, 'max_requests' => $max_requests, 'window' => $window, 'burst' => 1000]

@@ -2,22 +2,22 @@
 
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
-use nsql\database\config;
-use nsql\database\nsql;
+use nsql\database\Config;
+use nsql\database\Nsql;
 
-config::set_project_root(dirname(__DIR__));
+Config::set_project_root(dirname(__DIR__));
 
 try {
 
     // Bağlantı: .env (DB_HOST, DB_NAME, DB_USER, DB_PASS, …) veya constructor argümanları
-    $db = new nsql();
+    $db = new Nsql();
 
     // SELECT tek satır örneği
     $kullanici = $db->get_row(
         "SELECT * FROM kullanicilar WHERE id = :id",
         ['id' => 1]
     );
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -26,7 +26,7 @@ try {
         "SELECT * FROM kullanicilar"
     );
     
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -37,7 +37,7 @@ try {
         ->select('id', 'tam_isim', 'eposta')
         ->order_by('tam_isim', 'ASC')
         ->get();
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -45,14 +45,14 @@ try {
     $tekKullanici = $db->table('kullanicilar')
         ->where('tam_isim', '=', 'Necip GÜNENÇ')
         ->first();
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
     // Tüm kullanıcıları getir
     $sorgu = "SELECT * FROM sayfalar";
     $kullanicilar = $db->get_results($sorgu, []);
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -61,26 +61,26 @@ try {
     foreach ($buyuk as $row) {
         // Büyük veri setleri işlenirken çıktı verilmez; gerektiğinde burada kullanılır
     }
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
     //Tek Satır Veri getirme
     $sorgu = "select * from kullanicilar where id = :id";
     $veri = $db->get_row($sorgu, ['id' => 1]);
-    if (config::get('DEBUG_MODE', false)) {
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
     // Tek satır döndürme (İsim al) - XSS güvenli çıktı
     $ad = $db->get_row("SELECT tam_isim FROM kullanicilar WHERE id = :id", ['id' => 1]);
-    echo isset($ad->tam_isim) ? nsql::escape_html($ad->tam_isim) : 'Kullanıcı bulunamadı';
-    if (config::get('DEBUG_MODE', false)) {
+    echo isset($ad->tam_isim) ? Nsql::escape_html($ad->tam_isim) : 'Kullanıcı bulunamadı';
+    if (Config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
 } catch (Exception $e) {
     // Hata mesajını kullanıcıya güvenli ve genel bir formatta göster
     $generic = 'Bir hata oluştu.';
-    echo nsql::escape_html($generic);
+    echo Nsql::escape_html($generic);
 }

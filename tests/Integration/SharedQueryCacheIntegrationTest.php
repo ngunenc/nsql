@@ -2,10 +2,10 @@
 
 namespace Tests\Integration;
 
-use nsql\database\cache\adapter_simple_cache;
-use nsql\database\cache\query_cache_store_factory;
-use nsql\database\config;
-use nsql\database\nsql;
+use nsql\database\cache\AdapterSimpleCache;
+use nsql\database\cache\QueryCacheStoreFactory;
+use nsql\database\Config;
+use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 use Tests\Support\JsonCacheAdapter;
 
@@ -14,7 +14,7 @@ use Tests\Support\JsonCacheAdapter;
  */
 class SharedQueryCacheIntegrationTest extends DatabaseTestCase
 {
-    /** @var list<nsql> */
+    /** @var list<Nsql> */
     private array $extra = [];
 
     protected function setUp(): void
@@ -31,22 +31,22 @@ class SharedQueryCacheIntegrationTest extends DatabaseTestCase
             (fn () => $this->disconnect())->call($db);
         }
         $this->extra = [];
-        config::set('query_cache_driver', config::query_cache_driver);
-        config::set('redis_port', 6379);
-        config::set('query_cache_enabled', self::query_cache_suite());
-        query_cache_store_factory::reset();
+        Config::set('query_cache_driver', Config::query_cache_driver);
+        Config::set('redis_port', 6379);
+        Config::set('query_cache_enabled', self::query_cache_suite());
+        QueryCacheStoreFactory::reset();
 
         parent::tearDown();
     }
 
-    private function connection(): nsql
+    private function connection(): Nsql
     {
-        config::set('query_cache_enabled', true);
-        $db = new nsql(
-            host: config::get('db_host', 'localhost'),
-            db: config::get('db_name', 'nsql_test_db'),
-            user: config::get('db_user', 'root'),
-            pass: config::get('db_pass', '')
+        Config::set('query_cache_enabled', true);
+        $db = new Nsql(
+            host: Config::get('db_host', 'localhost'),
+            db: Config::get('db_name', 'nsql_test_db'),
+            user: Config::get('db_user', 'root'),
+            pass: Config::get('db_pass', '')
         );
         $this->extra[] = $db;
 
@@ -55,7 +55,7 @@ class SharedQueryCacheIntegrationTest extends DatabaseTestCase
 
     public function test_rows_from_json_backend_are_objects(): void
     {
-        $store = new adapter_simple_cache(new JsonCacheAdapter());
+        $store = new AdapterSimpleCache(new JsonCacheAdapter());
         $writer = $this->connection()->set_query_cache_store($store);
         $reader = $this->connection()->set_query_cache_store($store);
         $queries = 0;
@@ -79,7 +79,7 @@ class SharedQueryCacheIntegrationTest extends DatabaseTestCase
 
     public function test_write_through_one_instance_invalidates_json_backend(): void
     {
-        $store = new adapter_simple_cache(new JsonCacheAdapter());
+        $store = new AdapterSimpleCache(new JsonCacheAdapter());
         $a = $this->connection()->set_query_cache_store($store);
         $a->get_results('SELECT * FROM sq_items');
 
@@ -91,8 +91,8 @@ class SharedQueryCacheIntegrationTest extends DatabaseTestCase
 
     public function test_unreachable_redis_falls_back_to_process_cache(): void
     {
-        config::set('query_cache_driver', 'redis');
-        config::set('redis_port', 1);
+        Config::set('query_cache_driver', 'redis');
+        Config::set('redis_port', 1);
 
         $db = $this->connection();
 

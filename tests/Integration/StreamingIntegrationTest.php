@@ -2,7 +2,7 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
+use nsql\database\Config;
 use PDO;
 use Tests\Support\DatabaseTestCase;
 
@@ -46,7 +46,7 @@ class StreamingIntegrationTest extends DatabaseTestCase
 
     public function test_unbuffered_get_yield_with_params_and_config_flag(): void
     {
-        config::set('yield_unbuffered', true);
+        Config::set('yield_unbuffered', true);
         try {
             $count = 0;
             foreach ($this->db->get_yield('SELECT id FROM test_table WHERE id > :min', ['min' => 2000]) as $row) {
@@ -54,7 +54,7 @@ class StreamingIntegrationTest extends DatabaseTestCase
             }
             $this->assertSame(500, $count);
         } finally {
-            config::set('yield_unbuffered', false);
+            Config::set('yield_unbuffered', false);
         }
     }
 
@@ -170,7 +170,7 @@ class StreamingIntegrationTest extends DatabaseTestCase
         ini_set('memory_limit', '1G');
         try {
             $thresholds = (fn () => $this->memory_thresholds())->call($this->db);
-            if (config::has('memory_limit_warning') || config::has('memory_limit_critical')) {
+            if (Config::has('memory_limit_warning') || Config::has('memory_limit_critical')) {
                 $this->markTestSkipped('.env mutlak bellek eşiği tanımlıyor');
             }
 
@@ -178,15 +178,15 @@ class StreamingIntegrationTest extends DatabaseTestCase
             $this->assertSame((int) ($gb * 0.75), $thresholds['warning']);
             $this->assertSame((int) ($gb * 0.9), $thresholds['critical']);
 
-            config::set('memory_critical_ratio', 0.5);
+            Config::set('memory_critical_ratio', 0.5);
             $this->assertSame((int) ($gb * 0.5), (fn () => $this->memory_thresholds())->call($this->db)['critical']);
 
-            config::set('memory_limit_critical', 123456789);
+            Config::set('memory_limit_critical', 123456789);
             $this->assertSame(123456789, (fn () => $this->memory_thresholds())->call($this->db)['critical']);
         } finally {
             ini_set('memory_limit', (string) $original);
-            config::refresh();
-            config::set('query_cache_enabled', self::query_cache_suite());
+            Config::refresh();
+            Config::set('query_cache_enabled', self::query_cache_suite());
         }
     }
 }

@@ -18,8 +18,8 @@
 		"psr-4": {
 			"nsql\\": "src/"
 		},
-		"classmap": [
-			"src/database/config.php"
+		"files": [
+			"src/legacy_autoload.php"
 		]
 	},
 	"autoload-dev": {

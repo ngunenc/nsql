@@ -11,20 +11,20 @@
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-use nsql\database\nsql;
-use nsql\database\monitoring\endpoint_guard;
-use nsql\database\monitoring\metrics;
+use nsql\database\Nsql;
+use nsql\database\monitoring\EndpointGuard;
+use nsql\database\monitoring\Metrics;
 
 header('Content-Type: application/json');
-endpoint_guard::protect();
+EndpointGuard::protect();
 
 try {
-    $db = new nsql();
-    $metrics = new metrics($db);
+    $db = new Nsql();
+    $metrics = new Metrics($db);
     $result = $metrics->get_all();
 
     http_response_code(200);
     echo json_encode($result, JSON_PRETTY_PRINT);
 } catch (\Throwable $e) {
-    endpoint_guard::fail_closed($e, 500);
+    EndpointGuard::fail_closed($e, 500);
 }

@@ -11,20 +11,20 @@
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-use nsql\database\nsql;
-use nsql\database\monitoring\endpoint_guard;
-use nsql\database\monitoring\health_check;
+use nsql\database\Nsql;
+use nsql\database\monitoring\EndpointGuard;
+use nsql\database\monitoring\HealthCheck;
 
 header('Content-Type: application/json');
-endpoint_guard::protect();
+EndpointGuard::protect();
 
 try {
-    $db = new nsql();
-    $health_check = new health_check($db);
+    $db = new Nsql();
+    $health_check = new HealthCheck($db);
     $result = $health_check->check();
 
     http_response_code($result['status'] === 'healthy' ? 200 : 503);
     echo json_encode($result, JSON_PRETTY_PRINT);
 } catch (\Throwable $e) {
-    endpoint_guard::fail_closed($e, 503);
+    EndpointGuard::fail_closed($e, 503);
 }

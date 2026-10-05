@@ -2,17 +2,17 @@
 
 namespace Tests\Unit;
 
-use nsql\database\cache\cache_manager;
-use nsql\database\cache\in_memory_adapter;
-use nsql\database\cache\memcached_adapter;
-use nsql\database\cache\redis_adapter;
+use nsql\database\cache\CacheManager;
+use nsql\database\cache\InMemoryAdapter;
+use nsql\database\cache\MemcachedAdapter;
+use nsql\database\cache\RedisAdapter;
 use PHPUnit\Framework\TestCase;
 
 class CacheAdapterSmokeTest extends TestCase
 {
     public function test_in_memory_adapter_roundtrip_and_tags(): void
     {
-        $adapter = new in_memory_adapter(60, 50);
+        $adapter = new InMemoryAdapter(60, 50);
         $this->assertTrue($adapter->is_available());
         $this->assertSame('in_memory', $adapter->get_name());
 
@@ -26,8 +26,8 @@ class CacheAdapterSmokeTest extends TestCase
 
     public function test_cache_manager_uses_in_memory_fallback(): void
     {
-        $manager = new cache_manager(
-            new in_memory_adapter(60, 20),
+        $manager = new CacheManager(
+            new InMemoryAdapter(60, 20),
             null,
             false
         );
@@ -40,7 +40,7 @@ class CacheAdapterSmokeTest extends TestCase
 
     public function test_redis_adapter_reports_availability_without_extension(): void
     {
-        $adapter = new redis_adapter();
+        $adapter = new RedisAdapter();
         if (! extension_loaded('redis')) {
             $this->assertFalse($adapter->is_available());
             $this->assertNull($adapter->get('x'));
@@ -60,7 +60,7 @@ class CacheAdapterSmokeTest extends TestCase
 
     public function test_memcached_adapter_reports_availability_without_extension(): void
     {
-        $adapter = new memcached_adapter();
+        $adapter = new MemcachedAdapter();
         if (! extension_loaded('memcached')) {
             $this->assertFalse($adapter->is_available());
             $this->assertNull($adapter->get('x'));

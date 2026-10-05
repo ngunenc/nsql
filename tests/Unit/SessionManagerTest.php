@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use nsql\database\config;
-use nsql\security\session_manager;
+use nsql\database\Config;
+use nsql\security\SessionManager;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
@@ -31,7 +31,7 @@ class SessionManagerTest extends TestCase
         $_SESSION['user_id'] = 42;
         $id = session_id();
 
-        (new session_manager(['send_headers' => false]))->start();
+        (new SessionManager(['send_headers' => false]))->start();
 
         $this->assertSame(PHP_SESSION_ACTIVE, session_status());
         $this->assertSame($id, session_id());
@@ -44,7 +44,7 @@ class SessionManagerTest extends TestCase
     public function test_validate_regenerates_id_after_interval(): void
     {
         $this->prepare_session_ini();
-        $manager = new session_manager(['send_headers' => false, 'regenerate_interval' => 60]);
+        $manager = new SessionManager(['send_headers' => false, 'regenerate_interval' => 60]);
         $manager->start();
         $id = session_id();
 
@@ -61,7 +61,7 @@ class SessionManagerTest extends TestCase
     public function test_ip_change_does_not_kill_session_by_default(): void
     {
         $this->prepare_session_ini();
-        $manager = new session_manager(['send_headers' => false]);
+        $manager = new SessionManager(['send_headers' => false]);
         $manager->start();
 
         $_SERVER['REMOTE_ADDR'] = '198.51.100.7';
@@ -75,7 +75,7 @@ class SessionManagerTest extends TestCase
     public function test_fingerprint_ip_prefix_tolerates_same_subnet(): void
     {
         $this->prepare_session_ini();
-        $manager = new session_manager(['send_headers' => false, 'fingerprint_ip' => 'prefix']);
+        $manager = new SessionManager(['send_headers' => false, 'fingerprint_ip' => 'prefix']);
         $manager->start();
 
         $_SERVER['REMOTE_ADDR'] = '203.0.113.99';
@@ -89,7 +89,7 @@ class SessionManagerTest extends TestCase
 
     public function test_http_request_gets_no_hsts_and_no_xss_header(): void
     {
-        $headers = (new session_manager(['hsts' => true]))->security_headers();
+        $headers = (new SessionManager(['hsts' => true]))->security_headers();
 
         $this->assertArrayNotHasKey('Strict-Transport-Security', $headers);
         $this->assertArrayNotHasKey('X-XSS-Protection', $headers);
@@ -100,53 +100,53 @@ class SessionManagerTest extends TestCase
     {
         $_SERVER['HTTPS'] = 'on';
 
-        $this->assertArrayNotHasKey('Strict-Transport-Security', (new session_manager())->security_headers());
+        $this->assertArrayNotHasKey('Strict-Transport-Security', (new SessionManager())->security_headers());
         $this->assertSame(
             'max-age=31536000; includeSubDomains',
-            (new session_manager(['hsts' => true]))->security_headers()['Strict-Transport-Security']
+            (new SessionManager(['hsts' => true]))->security_headers()['Strict-Transport-Security']
         );
         $this->assertSame(
             'max-age=600',
-            (new session_manager(['hsts' => 'max-age=600']))->security_headers()['Strict-Transport-Security']
+            (new SessionManager(['hsts' => 'max-age=600']))->security_headers()['Strict-Transport-Security']
         );
     }
 
     public function test_secure_flag_follows_https_unless_explicit(): void
     {
-        $this->assertFalse((new session_manager())->is_secure());
-        $this->assertTrue((new session_manager(['secure' => true]))->is_secure());
+        $this->assertFalse((new SessionManager())->is_secure());
+        $this->assertTrue((new SessionManager(['secure' => true]))->is_secure());
 
         $_SERVER['HTTPS'] = 'on';
-        $this->assertTrue((new session_manager())->is_secure());
-        $this->assertFalse((new session_manager(['secure' => false]))->is_secure());
+        $this->assertTrue((new SessionManager())->is_secure());
+        $this->assertFalse((new SessionManager(['secure' => false]))->is_secure());
     }
 
     public function test_ip_prefix(): void
     {
-        $this->assertSame('203.0.113.0/24', session_manager::ip_prefix('203.0.113.77'));
-        $this->assertSame('2001:db8:1:2::/64', session_manager::ip_prefix('2001:db8:1:2:aaaa:bbbb:cccc:dddd'));
+        $this->assertSame('203.0.113.0/24', SessionManager::ip_prefix('203.0.113.77'));
+        $this->assertSame('2001:db8:1:2::/64', SessionManager::ip_prefix('2001:db8:1:2:aaaa:bbbb:cccc:dddd'));
     }
 
     public function test_csrf_token_expires_and_rotates(): void
     {
         $_SESSION = [];
-        config::set('csrf_token_ttl', 100);
+        Config::set('csrf_token_ttl', 100);
 
-        $token = session_manager::get_csrf_token();
-        $this->assertTrue(session_manager::validate_csrf_token($token));
-        $this->assertSame($token, session_manager::get_csrf_token());
+        $token = SessionManager::get_csrf_token();
+        $this->assertTrue(SessionManager::validate_csrf_token($token));
+        $this->assertSame($token, SessionManager::get_csrf_token());
 
         $_SESSION['csrf_token_time'] = time() - 101;
-        $this->assertFalse(session_manager::validate_csrf_token($token));
-        $fresh = session_manager::get_csrf_token();
+        $this->assertFalse(SessionManager::validate_csrf_token($token));
+        $fresh = SessionManager::get_csrf_token();
         $this->assertNotSame($token, $fresh);
-        $this->assertTrue(session_manager::validate_csrf_token($fresh));
+        $this->assertTrue(SessionManager::validate_csrf_token($fresh));
 
-        $rotated = session_manager::rotate_csrf_token();
-        $this->assertFalse(session_manager::validate_csrf_token($fresh));
-        $this->assertTrue(session_manager::validate_csrf_token($rotated));
+        $rotated = SessionManager::rotate_csrf_token();
+        $this->assertFalse(SessionManager::validate_csrf_token($fresh));
+        $this->assertTrue(SessionManager::validate_csrf_token($rotated));
 
-        config::set('csrf_token_ttl', null);
+        Config::set('csrf_token_ttl', null);
         $_SESSION = [];
     }
 }

@@ -2,29 +2,29 @@
 
 namespace Tests\Unit;
 
-use nsql\database\config;
-use nsql\database\connection_pool;
-use nsql\security\security_manager;
-use nsql\database\security\sensitive_data_filter;
+use nsql\database\Config;
+use nsql\database\ConnectionPool;
+use nsql\security\SecurityManager;
+use nsql\database\security\SensitiveDataFilter;
 use PHPUnit\Framework\TestCase;
 
 class SensitiveDataFilterTest extends TestCase
 {
     protected function setUp(): void
     {
-        config::set_project_root(dirname(__DIR__, 2));
-        config::refresh();
+        Config::set_project_root(dirname(__DIR__, 2));
+        Config::refresh();
     }
 
     protected function tearDown(): void
     {
-        config::set('sensitive_keys', null);
-        config::set('log_dir', null);
+        Config::set('sensitive_keys', null);
+        Config::set('log_dir', null);
     }
 
     public function test_default_keys_are_masked_including_named_placeholders(): void
     {
-        $masked = sensitive_data_filter::mask_array([
+        $masked = SensitiveDataFilter::mask_array([
             'password' => 'p@ss',
             ':user_password' => 'x',
             'api_token' => 't',
@@ -46,14 +46,14 @@ class SensitiveDataFilterTest extends TestCase
 
     public function test_positional_params_are_not_treated_as_keys(): void
     {
-        $this->assertSame(['a', 'b'], sensitive_data_filter::mask_array(['a', 'b']));
+        $this->assertSame(['a', 'b'], SensitiveDataFilter::mask_array(['a', 'b']));
     }
 
     public function test_sensitive_keys_config_extends_list(): void
     {
-        config::set('sensitive_keys', 'phone, iban_no');
+        Config::set('sensitive_keys', 'phone, iban_no');
 
-        $masked = sensitive_data_filter::mask_array(['phone' => '555', 'iban_no' => 'TR', 'city' => 'x']);
+        $masked = SensitiveDataFilter::mask_array(['phone' => '555', 'iban_no' => 'TR', 'city' => 'x']);
 
         $this->assertSame('********', $masked['phone']);
         $this->assertSame('********', $masked['iban_no']);
@@ -64,7 +64,7 @@ class SensitiveDataFilterTest extends TestCase
     {
         $obj = (object) ['password' => 'secret', 'name' => 'a'];
 
-        $filtered = (new sensitive_data_filter())->filter($obj);
+        $filtered = (new SensitiveDataFilter())->filter($obj);
 
         $this->assertSame('********', $filtered->password);
         $this->assertSame('secret', $obj->password);
@@ -73,9 +73,9 @@ class SensitiveDataFilterTest extends TestCase
     public function test_security_manager_debug_log_is_masked(): void
     {
         $dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_mask_' . uniqid('', true);
-        config::set('log_dir', $dir);
+        Config::set('log_dir', $dir);
 
-        security_manager::log_debug_info('login', ['user' => 'ali', 'password' => 'hunter2', 'token' => 'abc'], 'mask.txt');
+        SecurityManager::log_debug_info('login', ['user' => 'ali', 'password' => 'hunter2', 'token' => 'abc'], 'mask.txt');
 
         $content = (string) file_get_contents($dir . DIRECTORY_SEPARATOR . 'mask.txt');
         $this->assertStringNotContainsString('hunter2', $content);
@@ -90,7 +90,7 @@ class SensitiveDataFilterTest extends TestCase
     {
         $e = new \PDOException("SQLSTATE[HY000] [1045] Access denied for user 'root'@'db.internal' (using password: YES)");
 
-        $message = connection_pool::safe_error_message($e);
+        $message = ConnectionPool::safe_error_message($e);
 
         $this->assertStringNotContainsString('root', $message);
         $this->assertStringNotContainsString('db.internal', $message);

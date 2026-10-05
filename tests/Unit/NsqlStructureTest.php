@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use nsql\database\nsql;
+use nsql\database\Nsql;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
@@ -10,14 +10,14 @@ class NsqlStructureTest extends TestCase
 {
     public function test_facade_stays_small(): void
     {
-        $file = (string) (new ReflectionClass(nsql::class))->getFileName();
+        $file = (string) (new ReflectionClass(Nsql::class))->getFileName();
 
         $this->assertLessThan(800, count((array) file($file)));
     }
 
     public function test_class_does_not_redeclare_trait_members(): void
     {
-        $class = new ReflectionClass(nsql::class);
+        $class = new ReflectionClass(Nsql::class);
         $trait_properties = [];
         $trait_methods = [];
         foreach ($class->getTraits() as $trait) {

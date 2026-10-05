@@ -3,7 +3,7 @@
 namespace nsql\database\exceptions;
 
 use Exception;
-use nsql\database\exceptions\error_codes;
+use nsql\database\exceptions\ErrorCodes;
 
 /**
  * Query Exception
@@ -19,12 +19,12 @@ class QueryException extends DatabaseException
         string $message = '',
         ?string $sql = null,
         array $params = [],
-        int $code = error_codes::QUERY_FAILED,
+        int $code = ErrorCodes::QUERY_FAILED,
         ?Exception $previous = null
     ) {
         // Eğer mesaj boşsa, hata kodundan mesaj al
         if (empty($message)) {
-            $message = error_codes::get_message($code);
+            $message = ErrorCodes::get_message($code);
         }
 
         parent::__construct($message, $code, $previous);

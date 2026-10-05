@@ -2,7 +2,7 @@
 
 namespace Tests\Integration;
 
-use nsql\database\query_builder;
+use nsql\database\QueryBuilder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\DatabaseTestCase;
 
@@ -11,9 +11,9 @@ use Tests\Support\DatabaseTestCase;
  */
 class QueryBuilderIdentifierSecurityTest extends DatabaseTestCase
 {
-    private function builder(): query_builder
+    private function builder(): QueryBuilder
     {
-        return new query_builder($this->db);
+        return new QueryBuilder($this->db);
     }
 
     public static function malicious_columns(): array

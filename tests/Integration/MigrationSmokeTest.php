@@ -2,7 +2,7 @@
 
 namespace Tests\Integration;
 
-use nsql\database\migration;
+use nsql\database\Migration;
 use Tests\Fixtures\Migrations\create_test_table;
 use Tests\Fixtures\Migrations\create_users_table;
 use Tests\Support\DatabaseTestCase;
@@ -14,8 +14,8 @@ class MigrationSmokeTest extends DatabaseTestCase
         $users = new create_users_table();
         $test = new create_test_table();
 
-        $this->assertInstanceOf(migration::class, $users);
-        $this->assertInstanceOf(migration::class, $test);
+        $this->assertInstanceOf(Migration::class, $users);
+        $this->assertInstanceOf(Migration::class, $test);
         $this->assertNotSame('', $users->get_description());
         $this->assertNotSame('', $test->get_description());
         $this->assertSame([], $users->get_dependencies());

@@ -2,16 +2,16 @@
 
 namespace Tests\Unit;
 
-use nsql\database\drivers\driver_factory;
-use nsql\database\drivers\pgsql_driver;
-use nsql\database\drivers\sqlite_driver;
+use nsql\database\drivers\DriverFactory;
+use nsql\database\drivers\PgsqlDriver;
+use nsql\database\drivers\SqliteDriver;
 use PHPUnit\Framework\TestCase;
 
 class DriverTest extends TestCase
 {
     public function test_pgsql_dsn_round_trip(): void
     {
-        $driver = new pgsql_driver();
+        $driver = new PgsqlDriver();
         $dsn = $driver->build_dsn(['host' => 'db', 'port' => 6543, 'dbname' => 'app', 'charset' => 'UTF8']);
 
         $this->assertSame("pgsql:host=db;port=6543;dbname=app;options='--client_encoding=UTF8'", $dsn);
@@ -32,7 +32,7 @@ class DriverTest extends TestCase
 
     public function test_mysql_dsn_parsing(): void
     {
-        $driver = new \nsql\database\drivers\mysql_driver();
+        $driver = new \nsql\database\drivers\MysqlDriver();
 
         $this->assertSame(
             ['driver' => 'mysql', 'host' => 'db', 'port' => 3307, 'dbname' => 'app', 'charset' => 'utf8'],
@@ -52,12 +52,12 @@ class DriverTest extends TestCase
     public function test_pgsql_rejects_invalid_dsn(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        (new pgsql_driver())->parse_dsn('mysql:host=x');
+        (new PgsqlDriver())->parse_dsn('mysql:host=x');
     }
 
     public function test_sqlite_dsn_paths(): void
     {
-        $driver = new sqlite_driver();
+        $driver = new SqliteDriver();
 
         $this->assertSame('sqlite::memory:', $driver->build_dsn([]));
         $this->assertSame('sqlite:/tmp/app.sqlite', $driver->build_dsn(['path' => '/tmp/app.sqlite']));
@@ -77,12 +77,12 @@ class DriverTest extends TestCase
         $pdo->exec('CREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, v TEXT)');
         $pdo->exec("INSERT INTO t (v) VALUES ('a'), ('b')");
 
-        $this->assertSame(2, (new sqlite_driver())->get_last_insert_id($pdo));
+        $this->assertSame(2, (new SqliteDriver())->get_last_insert_id($pdo));
     }
 
     public function test_factory_creates_drivers_by_name(): void
     {
-        $this->assertInstanceOf(pgsql_driver::class, driver_factory::create('pgsql'));
-        $this->assertInstanceOf(sqlite_driver::class, driver_factory::create('sqlite'));
+        $this->assertInstanceOf(PgsqlDriver::class, DriverFactory::create('pgsql'));
+        $this->assertInstanceOf(SqliteDriver::class, DriverFactory::create('sqlite'));
     }
 }

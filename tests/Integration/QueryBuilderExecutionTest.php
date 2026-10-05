@@ -2,7 +2,7 @@
 
 namespace Tests\Integration;
 
-use nsql\database\query_builder;
+use nsql\database\QueryBuilder;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -19,9 +19,9 @@ class QueryBuilderExecutionTest extends DatabaseTestCase
         }
     }
 
-    private function qb(): query_builder
+    private function qb(): QueryBuilder
     {
-        return new query_builder($this->db);
+        return new QueryBuilder($this->db);
     }
 
     private function names(array $rows): array

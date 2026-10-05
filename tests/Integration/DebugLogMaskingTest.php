@@ -2,9 +2,9 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
+use nsql\database\Config;
 use nsql\database\exceptions\ConnectionException;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -19,14 +19,14 @@ class DebugLogMaskingTest extends DatabaseTestCase
     {
         parent::setUp();
         $this->dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_debug_' . uniqid('', true);
-        config::set('log_dir', $this->dir);
-        config::set('log_file', 'debug.txt');
+        Config::set('log_dir', $this->dir);
+        Config::set('log_file', 'debug.txt');
     }
 
     protected function tearDown(): void
     {
-        config::set('log_dir', null);
-        config::set('log_file', null);
+        Config::set('log_dir', null);
+        Config::set('log_file', null);
         foreach (glob($this->dir . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
             @unlink($file);
         }
@@ -34,13 +34,13 @@ class DebugLogMaskingTest extends DatabaseTestCase
         parent::tearDown();
     }
 
-    private function debug_db(): nsql
+    private function debug_db(): Nsql
     {
-        return new nsql(
-            host: config::get('db_host', 'localhost'),
-            db: config::get('db_name', 'nsql_test_db'),
-            user: config::get('db_user', 'root'),
-            pass: config::get('db_pass', ''),
+        return new Nsql(
+            host: Config::get('db_host', 'localhost'),
+            db: Config::get('db_name', 'nsql_test_db'),
+            user: Config::get('db_user', 'root'),
+            pass: Config::get('db_pass', ''),
             debug: true
         );
     }
@@ -76,11 +76,11 @@ class DebugLogMaskingTest extends DatabaseTestCase
 
     public function test_last_called_method_is_not_tracked_outside_debug_mode(): void
     {
-        $db = new nsql(
-            host: config::get('db_host', 'localhost'),
-            db: config::get('db_name', 'nsql_test_db'),
-            user: config::get('db_user', 'root'),
-            pass: config::get('db_pass', ''),
+        $db = new Nsql(
+            host: Config::get('db_host', 'localhost'),
+            db: Config::get('db_name', 'nsql_test_db'),
+            user: Config::get('db_user', 'root'),
+            pass: Config::get('db_pass', ''),
         );
         $db->get_results('SELECT 1 AS x');
 
@@ -102,9 +102,9 @@ class DebugLogMaskingTest extends DatabaseTestCase
     public function test_connection_error_message_has_no_credentials(): void
     {
         try {
-            $db = new nsql(
-                host: config::get('db_host', 'localhost'),
-                db: config::get('db_name', 'nsql_test_db'),
+            $db = new Nsql(
+                host: Config::get('db_host', 'localhost'),
+                db: Config::get('db_name', 'nsql_test_db'),
                 user: 'nsql_no_such_user',
                 pass: 'wrong-password'
             );

@@ -2,7 +2,7 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
+use nsql\database\Config;
 use nsql\database\exceptions\QueryException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\DatabaseTestCase;
@@ -14,12 +14,12 @@ class ThrowOnErrorIntegrationTest extends DatabaseTestCase
 {
     protected function tearDown(): void
     {
-        config::set('throw_on_error', false);
+        Config::set('throw_on_error', false);
         parent::tearDown();
     }
 
     /**
-     * @return array<string, array{callable(\nsql\database\nsql): mixed}>
+     * @return array<string, array{callable(\nsql\database\Nsql): mixed}>
      */
     public static function failing_calls(): array
     {
@@ -41,7 +41,7 @@ class ThrowOnErrorIntegrationTest extends DatabaseTestCase
     #[DataProvider('failing_calls')]
     public function test_all_methods_throw_query_exception(callable $call): void
     {
-        config::set('throw_on_error', true);
+        Config::set('throw_on_error', true);
 
         try {
             $call($this->db);
@@ -78,7 +78,7 @@ class ThrowOnErrorIntegrationTest extends DatabaseTestCase
 
     public function test_exception_params_are_masked(): void
     {
-        config::set('throw_on_error', true);
+        Config::set('throw_on_error', true);
 
         try {
             $this->db->get_row('SELECT * FROM no_such_table WHERE password = :password', ['password' => 'hunter2']);

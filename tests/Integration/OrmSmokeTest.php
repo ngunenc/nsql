@@ -2,11 +2,11 @@
 
 namespace Tests\Integration;
 
-use nsql\database\orm\model;
-use nsql\database\query_builder;
+use nsql\database\orm\Model;
+use nsql\database\QueryBuilder;
 use Tests\Support\DatabaseTestCase;
 
-class TestTableModel extends model
+class TestTableModel extends Model
 {
     protected string $table = 'test_table';
     protected array $fillable = ['name'];
@@ -19,7 +19,7 @@ class OrmSmokeTest extends DatabaseTestCase
     {
         $model = new TestTableModel($this->db);
         $builder = $model->query();
-        $this->assertInstanceOf(query_builder::class, $builder);
+        $this->assertInstanceOf(QueryBuilder::class, $builder);
         $sql = $builder->select('*')->where('name', '=', 'x')->get_query();
         $this->assertStringContainsString('test_table', $sql);
     }

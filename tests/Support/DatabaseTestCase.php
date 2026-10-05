@@ -2,7 +2,7 @@
 
 namespace Tests\Support;
 
-use nsql\database\nsql;
+use nsql\database\Nsql;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
  */
 abstract class DatabaseTestCase extends TestCase
 {
-    protected ?nsql $db = null;
+    protected ?Nsql $db = null;
     private static bool $migrated = false;
 
     public static function query_cache_suite(): bool
@@ -25,15 +25,15 @@ abstract class DatabaseTestCase extends TestCase
 
     protected function setUp(): void
     {
-        \nsql\database\config::set_environment('testing');
-        \nsql\database\config::set_project_root(dirname(__DIR__, 2));
-        \nsql\database\config::set('query_cache_enabled', self::query_cache_suite());
+        \nsql\database\Config::set_environment('testing');
+        \nsql\database\Config::set_project_root(dirname(__DIR__, 2));
+        \nsql\database\Config::set('query_cache_enabled', self::query_cache_suite());
 
-        $this->db = new nsql(
-            host: \nsql\database\config::get('db_host', 'localhost'),
-            db: \nsql\database\config::get('db_name', 'nsql_test_db'),
-            user: \nsql\database\config::get('db_user', 'root'),
-            pass: \nsql\database\config::get('db_pass', '')
+        $this->db = new Nsql(
+            host: \nsql\database\Config::get('db_host', 'localhost'),
+            db: \nsql\database\Config::get('db_name', 'nsql_test_db'),
+            user: \nsql\database\Config::get('db_user', 'root'),
+            pass: \nsql\database\Config::get('db_pass', '')
         );
 
         if (! self::$migrated) {

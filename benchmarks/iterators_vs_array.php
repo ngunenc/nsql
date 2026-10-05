@@ -1,7 +1,7 @@
 <?php
 
 $ctx = require __DIR__ . '/bootstrap.php';
-/** @var \nsql\database\nsql $nsql */
+/** @var \nsql\database\Nsql $nsql */
 /** @var PDO $pdo */
 $nsql = $ctx['nsql'];
 

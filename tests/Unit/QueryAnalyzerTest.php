@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use nsql\database\security\query_analyzer;
+use nsql\database\security\QueryAnalyzer;
 use PHPUnit\Framework\TestCase;
 
 class QueryAnalyzerTest extends TestCase
@@ -17,7 +17,7 @@ class QueryAnalyzerTest extends TestCase
 
     public function test_safe_query_has_no_risk(): void
     {
-        $report = (new query_analyzer())->analyze_query('SELECT id, name FROM users WHERE id = ?');
+        $report = (new QueryAnalyzer())->analyze_query('SELECT id, name FROM users WHERE id = ?');
 
         $this->assertSame('SELECT id, name FROM users WHERE id = ?', $report['query']);
         $this->assertSame([], array_values(array_filter(
@@ -29,7 +29,7 @@ class QueryAnalyzerTest extends TestCase
 
     public function test_dangerous_writes_are_flagged(): void
     {
-        $analyzer = new query_analyzer();
+        $analyzer = new QueryAnalyzer();
 
         $this->assertContains('delete_without_where', self::types($analyzer->analyze_query('DELETE FROM users')));
         $this->assertContains('drop_table', self::types($analyzer->analyze_query('DROP TABLE users')));
@@ -41,7 +41,7 @@ class QueryAnalyzerTest extends TestCase
 
     public function test_injection_patterns_are_flagged(): void
     {
-        $report = (new query_analyzer())->analyze_query("SELECT * FROM users WHERE id = 1 OR SLEEP(5) -- x");
+        $report = (new QueryAnalyzer())->analyze_query("SELECT * FROM users WHERE id = 1 OR SLEEP(5) -- x");
 
         $categories = array_unique(array_column($report['issues'], 'category'));
         $this->assertContains('security', $categories);
@@ -51,10 +51,10 @@ class QueryAnalyzerTest extends TestCase
     public function test_complexity_and_length(): void
     {
         $joins = 'SELECT a.id FROM a JOIN b ON b.a = a.id JOIN c ON c.b = b.id JOIN d ON d.c = c.id JOIN e ON e.d = d.id';
-        $this->assertContains('complex_joins', self::types((new query_analyzer())->analyze_query($joins)));
+        $this->assertContains('complex_joins', self::types((new QueryAnalyzer())->analyze_query($joins)));
 
         $long = 'SELECT id FROM t WHERE ' . implode(' AND ', array_fill(0, 7, 'x = 1')) . str_repeat(' ', 1000);
-        $types = self::types((new query_analyzer())->analyze_query($long));
+        $types = self::types((new QueryAnalyzer())->analyze_query($long));
         $this->assertContains('complex_conditions', $types);
         $this->assertContains('long_query', $types);
     }

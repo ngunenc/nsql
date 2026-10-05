@@ -6,17 +6,17 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use nsql\database\config;
+use nsql\database\Config;
 
 // Test ortamını ayarla
-config::set_environment('testing');
-config::set_project_root(dirname(__DIR__));
+Config::set_environment('testing');
+Config::set_project_root(dirname(__DIR__));
 
 // Veritabanı bağlantı bilgileri
-$host = config::get('db_host', 'localhost');
-$user = config::get('db_user', 'root');
-$pass = config::get('db_pass', '');
-$test_db = config::get('db_name', 'nsql_test_db');
+$host = Config::get('db_host', 'localhost');
+$user = Config::get('db_user', 'root');
+$pass = Config::get('db_pass', '');
+$test_db = Config::get('db_name', 'nsql_test_db');
 
 try {
     // Test veritabanına bağlan

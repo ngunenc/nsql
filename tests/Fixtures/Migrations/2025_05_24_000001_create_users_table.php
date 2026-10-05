@@ -2,9 +2,9 @@
 
 namespace Tests\Fixtures\Migrations;
 
-use nsql\database\base_migration;
+use nsql\database\BaseMigration;
 
-class create_users_table extends base_migration
+class create_users_table extends BaseMigration
 {
     public function up(): void
     {

@@ -3,7 +3,7 @@
 namespace nsql\database\exceptions;
 
 use Exception;
-use nsql\database\exceptions\error_codes;
+use nsql\database\exceptions\ErrorCodes;
 
 /**
  * Migration Exception
@@ -21,12 +21,12 @@ class MigrationException extends DatabaseException
         ?string $migration_name = null,
         ?string $migration_batch = null,
         ?string $operation = null,
-        int $code = error_codes::MIGRATION_FAILED,
+        int $code = ErrorCodes::MIGRATION_FAILED,
         ?Exception $previous = null
     ) {
         // Eğer mesaj boşsa, hata kodundan mesaj al
         if (empty($message)) {
-            $message = error_codes::get_message($code);
+            $message = ErrorCodes::get_message($code);
         }
 
         parent::__construct($message, $code, $previous);

@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use nsql\database\monitoring\endpoint_guard;
+use nsql\database\monitoring\EndpointGuard;
 use PHPUnit\Framework\TestCase;
 
 class EndpointGuardTest extends TestCase
@@ -45,24 +45,24 @@ class EndpointGuardTest extends TestCase
         putenv('NSQL_MONITORING_ENABLED=false');
         $_ENV['NSQL_MONITORING_ENABLED'] = 'false';
 
-        $this->assertFalse(endpoint_guard::is_enabled());
+        $this->assertFalse(EndpointGuard::is_enabled());
     }
 
     public function test_enabled_by_default(): void
     {
-        $this->assertTrue(endpoint_guard::is_enabled());
+        $this->assertTrue(EndpointGuard::is_enabled());
     }
 
     public function test_extract_bearer_token(): void
     {
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer secret-token-123';
-        $this->assertSame('secret-token-123', endpoint_guard::extract_request_token());
+        $this->assertSame('secret-token-123', EndpointGuard::extract_request_token());
     }
 
     public function test_extract_custom_header_token(): void
     {
         $_SERVER['HTTP_X_NSQL_MONITORING_TOKEN'] = 'header-token';
-        $this->assertSame('header-token', endpoint_guard::extract_request_token());
+        $this->assertSame('header-token', EndpointGuard::extract_request_token());
     }
 
     private function set_env(string $key, string $value): void
@@ -74,15 +74,15 @@ class EndpointGuardTest extends TestCase
     public function test_query_token_is_ignored_by_default(): void
     {
         $_GET['token'] = 'query-token';
-        $this->assertFalse(endpoint_guard::allows_query_token());
-        $this->assertNull(endpoint_guard::extract_request_token());
+        $this->assertFalse(EndpointGuard::allows_query_token());
+        $this->assertNull(EndpointGuard::extract_request_token());
     }
 
     public function test_query_token_is_accepted_when_opted_in(): void
     {
         $this->set_env('NSQL_MONITORING_ALLOW_QUERY_TOKEN', 'true');
         $_GET['token'] = 'query-token';
-        $this->assertSame('query-token', endpoint_guard::extract_request_token());
+        $this->assertSame('query-token', EndpointGuard::extract_request_token());
     }
 
     public function test_correct_query_token_gets_401_by_default(): void
@@ -90,7 +90,7 @@ class EndpointGuardTest extends TestCase
         $this->set_env('NSQL_MONITORING_TOKEN', 'cfg-token');
         $_GET['token'] = 'cfg-token';
 
-        $denied = endpoint_guard::authorize();
+        $denied = EndpointGuard::authorize();
 
         $this->assertNotNull($denied);
         $this->assertSame(401, $denied['status']);
@@ -100,34 +100,34 @@ class EndpointGuardTest extends TestCase
     {
         $this->set_env('NSQL_MONITORING_TOKEN', 'cfg-token');
         $_SERVER['HTTP_X_NSQL_MONITORING_TOKEN'] = 'cfg-token';
-        $this->assertNull(endpoint_guard::authorize());
+        $this->assertNull(EndpointGuard::authorize());
 
         unset($_SERVER['HTTP_X_NSQL_MONITORING_TOKEN']);
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer cfg-token';
-        $this->assertNull(endpoint_guard::authorize());
+        $this->assertNull(EndpointGuard::authorize());
     }
 
     public function test_wrong_token_and_missing_config_are_denied(): void
     {
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer whatever';
-        $this->assertSame(403, endpoint_guard::authorize()['status']);
+        $this->assertSame(403, EndpointGuard::authorize()['status']);
 
         $this->set_env('NSQL_MONITORING_TOKEN', 'cfg-token');
-        $this->assertSame(401, endpoint_guard::authorize()['status']);
+        $this->assertSame(401, EndpointGuard::authorize()['status']);
 
         $this->set_env('NSQL_MONITORING_ENABLED', 'false');
-        $this->assertSame(404, endpoint_guard::authorize()['status']);
+        $this->assertSame(404, EndpointGuard::authorize()['status']);
     }
 
     public function test_configured_token_from_env(): void
     {
         putenv('NSQL_MONITORING_TOKEN=cfg-token');
         $_ENV['NSQL_MONITORING_TOKEN'] = 'cfg-token';
-        $this->assertSame('cfg-token', endpoint_guard::get_configured_token());
+        $this->assertSame('cfg-token', EndpointGuard::get_configured_token());
     }
 
     public function test_missing_configured_token_is_null(): void
     {
-        $this->assertNull(endpoint_guard::get_configured_token());
+        $this->assertNull(EndpointGuard::get_configured_token());
     }
 }
