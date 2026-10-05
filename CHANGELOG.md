@@ -4,6 +4,18 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.27] - 2026-10-05
+
+### Testler (#40, altyapı)
+- **Cache açık suite**: `NSQL_TEST_QUERY_CACHE=1` ile tüm entegrasyon testleri query cache açıkken koşuyor. Yeni `composer test:cache` script'i ve CI'da ayrı adım. `QueryCacheSuiteTest` her iki modun gerçekten istenen durumda çalıştığını doğruluyor.
+- **Query builder testleri gerçek sorgu çalıştırıyor**: `QueryBuilderIntegrationTest` yalnızca SQL metnini kontrol ediyordu ve tabloda olmayan kolonlar (`category`, `price`) kullanıyordu. Artık kendi fixture tablolarıyla (`qb_products`, `qb_users`, `qb_categories`) join, group by/having, union, subquery (where/select/from/having) sorgularını çalıştırıp sonuçları doğruluyor. MySQL desteklemediği için `FULL JOIN` yalnızca SQL üretimi olarak test ediliyor.
+
+### Düzeltmeler
+- **`config::set()` ezilebiliyordu**: `set_project_root()` / `refresh()` sonrasında ilk `get()`'ten önce yapılan `config::set()` çağrısı, ilk `get()` sırasında `.env` yüklenirken siliniyordu (ör. `QUERY_CACHE_ENABLED=true` olan bir `.env` varken `set('query_cache_enabled', false)` etkisizdi). `set()` artık önce bootstrap yapıyor.
+
+### Testler
+- `ConfigEnvMappingTest::test_set_before_bootstrap_is_not_overwritten_by_env_file`.
+
 ## [1.5.26] - 2026-10-05
 
 ### Yapı (#22)

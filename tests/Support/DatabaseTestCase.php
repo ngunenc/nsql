@@ -7,16 +7,27 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * MySQL entegrasyon testleri için ortak kurulum.
+ *
+ * NSQL_TEST_QUERY_CACHE=1 ile tüm entegrasyon testleri query cache açıkken koşar
+ * (`composer test:cache`).
  */
 abstract class DatabaseTestCase extends TestCase
 {
     protected ?nsql $db = null;
     private static bool $migrated = false;
 
+    public static function query_cache_suite(): bool
+    {
+        $flag = getenv('NSQL_TEST_QUERY_CACHE');
+
+        return $flag !== false && filter_var($flag, FILTER_VALIDATE_BOOLEAN);
+    }
+
     protected function setUp(): void
     {
         \nsql\database\config::set_environment('testing');
         \nsql\database\config::set_project_root(dirname(__DIR__, 2));
+        \nsql\database\config::set('query_cache_enabled', self::query_cache_suite());
 
         $this->db = new nsql(
             host: \nsql\database\config::get('db_host', 'localhost'),

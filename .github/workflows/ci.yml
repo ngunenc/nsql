@@ -76,6 +76,9 @@ jobs:
         env:
           XDEBUG_MODE: coverage
 
+      - name: Run integration tests with query cache enabled
+        run: composer test:cache
+
       - name: Run PHPStan
         run: composer stan
 

@@ -124,4 +124,14 @@ class ConfigEnvMappingTest extends TestCase
         $this->assertSame(9, config::get('MIN_CONNECTIONS'));
         $this->assertSame(9, config::get('db_min_connections'));
     }
+
+    public function test_set_before_bootstrap_is_not_overwritten_by_env_file(): void
+    {
+        file_put_contents($this->tempRoot . DIRECTORY_SEPARATOR . '.env', "QUERY_CACHE_ENABLED=true\n");
+        config::set_project_root($this->tempRoot);
+
+        config::set('query_cache_enabled', false);
+
+        $this->assertFalse(config::get('query_cache_enabled'));
+    }
 }

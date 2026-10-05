@@ -26,7 +26,7 @@ class QueryCacheIntegrationTest extends DatabaseTestCase
 
     protected function tearDown(): void
     {
-        config::set('query_cache_enabled', false);
+        config::set('query_cache_enabled', self::query_cache_suite());
         parent::tearDown();
     }
 

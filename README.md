@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.26
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.27
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -55,6 +55,8 @@
 > **v1.5.25**: Boş `src/database/schema/` stub'ı ve şema validasyonu vaatleri kaldırıldı; MVP ayrı roadmap issue'sunda (#8, #54).
 >
 > **v1.5.26**: Kökteki demo `examples/basic.php`'ye, monitoring örnekleri `examples/monitoring/`'e taşındı; tek storage kökü; `debug()` log'u artık CWD'ye değil `storage/logs`'a yazıyor; `bin/` dist pakete dahil (#22).
+>
+> **v1.5.27**: Test altyapısı: entegrasyon testleri cache açık modda da koşuyor (`composer test:cache`, CI), query builder testleri gerçek sorgu çalıştırıyor; `config::set()` bootstrap öncesi çağrıda `.env` tarafından ezilmiyor (#40).
 
 ## 🌟 Özellikler
 
@@ -107,7 +109,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.26 --prefer-dist
+composer require ngunenc/nsql:^1.5.27 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -127,13 +129,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.26"
+        "ngunenc/nsql": "^1.5.27"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.26 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.27 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1590,6 +1592,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.27 (2026-10-05)
+  - Cache açık entegrasyon suite'i, gerçek sorgulu query builder testleri, config::set() bootstrap düzeltmesi (#40)
 
 - v1.5.26 (2026-10-05)
   - Klasör düzeni: examples/, tek storage kökü, log yolu düzeltmesi, bin/ dist'e dahil (#22)
