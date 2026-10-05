@@ -29,6 +29,12 @@ class query_builder
     private array $columns = [['*']];
     /** @var list<list<string|array>> */
     private array $where = [];
+    /** @var list<'AND'|'OR'> where[] ile aynı indeks; ilk eleman yok sayılır */
+    private array $where_bools = [];
+    /** @var 'AND'|'OR' */
+    private string $next_where_bool = 'AND';
+    /** table() ile verilen düz tablo adı (yazma işlemleri için); subquery FROM'da null */
+    private ?string $table_name = null;
     /** @var list<string> */
     private array $group_by = [];
     /** @var list<list<string|array>> */
@@ -68,6 +74,7 @@ class query_builder
     public function table(string $table): self
     {
         $this->table = [$this->compile_reference($table)];
+        $this->table_name = $table;
 
         return $this;
     }
@@ -86,6 +93,7 @@ class query_builder
             }
 
             $this->table = $this->subquery_part($table, $alias);
+            $this->table_name = null;
 
             return $this;
         }
@@ -102,9 +110,11 @@ class query_builder
     {
         $this->columns = [];
         foreach ($columns as $column) {
-            $this->columns[] = $column instanceof query_builder
-                ? $this->subquery_part($column)
-                : [$this->compile_column((string) $column, true)];
+            $this->columns[] = match (true) {
+                $column instanceof query_builder => $this->subquery_part($column),
+                $column instanceof raw_expression => [$this->raw_part($column->sql, $column->bindings)],
+                default => [$this->compile_column((string) $column, true)],
+            };
         }
 
         return $this;
@@ -124,17 +134,148 @@ class query_builder
     }
 
     /**
-     * WHERE koşulu ekler
+     * WHERE koşulu ekler. Callable verilirse parantezli koşul grubu oluşturur.
      *
-     * @param string $column Sütun adı
-     * @param string $operator Operatör (=, >, <, etc.)
+     * @param string|callable(self): mixed $column Sütun adı veya grup callable'ı
+     * @param string|null $operator Operatör (=, >, <, etc.)
      * @param mixed $value Değer veya subquery builder
      */
-    public function where(string $column, string $operator, $value): self
+    public function where(string|callable $column, ?string $operator = null, $value = null): self
     {
-        $this->where[] = $this->condition_part($column, $operator, $value);
+        if (! is_string($column)) {
+            return $this->where_group($column);
+        }
+        if ($operator === null) {
+            throw new \InvalidArgumentException('where() için operatör gerekli.');
+        }
+
+        $this->add_where($this->condition_part($column, $operator, $value));
 
         return $this;
+    }
+
+    /**
+     * OR ile bağlanan WHERE koşulu. Callable verilirse parantezli grup oluşturur.
+     */
+    public function or_where(string|callable $column, ?string $operator = null, mixed $value = null): self
+    {
+        return $this->with_or(fn () => $this->where($column, $operator, $value));
+    }
+
+    public function or_where_in(string $column, array $values): self
+    {
+        return $this->with_or(fn () => $this->where_in($column, $values));
+    }
+
+    public function or_where_null(string $column): self
+    {
+        return $this->with_or(fn () => $this->where_null($column));
+    }
+
+    /**
+     * WHERE kolon BETWEEN min AND max
+     */
+    public function where_between(string $column, mixed $min, mixed $max): self
+    {
+        return $this->between($column, $min, $max, false);
+    }
+
+    public function where_not_between(string $column, mixed $min, mixed $max): self
+    {
+        return $this->between($column, $min, $max, true);
+    }
+
+    public function or_where_between(string $column, mixed $min, mixed $max): self
+    {
+        return $this->with_or(fn () => $this->between($column, $min, $max, false));
+    }
+
+    /**
+     * Koşul doğruysa $callback, değilse (varsa) $default çalıştırılır. Callable builder'ı ve koşulu alır.
+     *
+     * @param callable(self, mixed): mixed $callback
+     * @param (callable(self, mixed): mixed)|null $default
+     */
+    public function when(mixed $condition, callable $callback, ?callable $default = null): self
+    {
+        if ($condition) {
+            $callback($this, $condition);
+        } elseif ($default !== null) {
+            $default($this, $condition);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Doğrulanmadan SQL'e eklenen ifade: where() değeri, insert/update/upsert değeri veya select()
+     * kolonu olarak kullanılabilir. Değerler için `:ad` placeholder'ı ve $bindings kullanın;
+     * kullanıcı girdisini SQL metnine eklemeyin.
+     *
+     * @param array<string, mixed> $bindings
+     */
+    public static function raw(string $sql, array $bindings = []): raw_expression
+    {
+        return new raw_expression($sql, $bindings);
+    }
+
+    /**
+     * Parantezli WHERE grubu: $fn koşulları geçici bir builder'a ekler.
+     */
+    private function where_group(callable $fn): self
+    {
+        $group = new self($this->db);
+        $group->allow_empty_string = $this->allow_empty_string;
+        $fn($group);
+
+        if ($group->where === []) {
+            return $this;
+        }
+
+        $part = ['('];
+        foreach ($group->where as $i => $condition) {
+            if ($i > 0) {
+                $part[] = ' ' . $group->where_bools[$i] . ' ';
+            }
+            array_push($part, ...$condition);
+        }
+        $part[] = ')';
+        $this->add_where($part);
+
+        return $this;
+    }
+
+    private function between(string $column, mixed $min, mixed $max, bool $not): self
+    {
+        $this->add_where([
+            $this->compile_column($column) . ($not ? ' NOT BETWEEN ' : ' BETWEEN '),
+            $this->value_part($column, $min),
+            ' AND ',
+            $this->value_part($column, $max),
+        ]);
+
+        return $this;
+    }
+
+    private function with_or(callable $fn): self
+    {
+        $this->next_where_bool = 'OR';
+        try {
+            $fn();
+        } finally {
+            $this->next_where_bool = 'AND';
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param list<string|array> $part
+     */
+    private function add_where(array $part): void
+    {
+        $this->where[] = $part;
+        $this->where_bools[] = $this->next_where_bool;
     }
 
     /**
@@ -144,7 +285,7 @@ class query_builder
      */
     public function where_raw(string $condition, array $bindings = []): self
     {
-        $this->where[] = ['(', $this->raw_part($condition, $bindings), ')'];
+        $this->add_where(['(', $this->raw_part($condition, $bindings), ')']);
 
         return $this;
     }
@@ -156,7 +297,7 @@ class query_builder
      */
     public function where_in(string $column, array $values): self
     {
-        $this->where[] = $this->in_part($this->compile_column($column), $values, false);
+        $this->add_where($this->in_part($this->compile_column($column), $values, false));
 
         return $this;
     }
@@ -168,21 +309,21 @@ class query_builder
      */
     public function where_not_in(string $column, array $values): self
     {
-        $this->where[] = $this->in_part($this->compile_column($column), $values, true);
+        $this->add_where($this->in_part($this->compile_column($column), $values, true));
 
         return $this;
     }
 
     public function where_null(string $column): self
     {
-        $this->where[] = [$this->compile_column($column) . ' IS NULL'];
+        $this->add_where([$this->compile_column($column) . ' IS NULL']);
 
         return $this;
     }
 
     public function where_not_null(string $column): self
     {
-        $this->where[] = [$this->compile_column($column) . ' IS NOT NULL'];
+        $this->add_where([$this->compile_column($column) . ' IS NOT NULL']);
 
         return $this;
     }
@@ -193,7 +334,7 @@ class query_builder
     public function where_in_subquery(string $column, query_builder $subquery, bool $not = false): self
     {
         $operator = $not ? 'NOT IN' : 'IN';
-        $this->where[] = [$this->compile_column($column) . " $operator ", ...$this->subquery_part($subquery)];
+        $this->add_where([$this->compile_column($column) . " $operator ", ...$this->subquery_part($subquery)]);
 
         return $this;
     }
@@ -204,7 +345,7 @@ class query_builder
     public function where_exists(query_builder $subquery, bool $not = false): self
     {
         $operator = $not ? 'NOT EXISTS' : 'EXISTS';
-        $this->where[] = ["$operator ", ...$this->subquery_part($subquery)];
+        $this->add_where(["$operator ", ...$this->subquery_part($subquery)]);
 
         return $this;
     }
@@ -434,6 +575,316 @@ class query_builder
     }
 
     /**
+     * Satır sayısını döndürür. GROUP BY, UNION veya LIMIT/OFFSET varsa sorgu alt sorgu olarak sayılır.
+     */
+    public function count(string $column = '*'): int
+    {
+        $aggregate = 'COUNT(' . ($column === '*' ? '*' : $this->compile_reference($column)) . ') AS '
+            . $this->db->quote_identifier('aggregate');
+
+        if ($this->group_by !== [] || $this->unions !== [] || $this->limit !== null || $this->offset > 0) {
+            $outer = new self($this->db);
+            $outer->from(clone $this, 'nsql_count');
+            $outer->columns = [[$aggregate]];
+            $row = $outer->first();
+        } else {
+            $query = clone $this;
+            $query->columns = [[$aggregate]];
+            $query->order_by = [];
+            $row = $query->first();
+        }
+
+        return (int) ($row->aggregate ?? 0);
+    }
+
+    /**
+     * Koşullara uyan en az bir satır var mı?
+     */
+    public function exists(): bool
+    {
+        $query = clone $this;
+        $query->columns = [['1 AS ' . $this->db->quote_identifier('nsql_exists')]];
+        $query->order_by = [];
+
+        return $query->first() !== null;
+    }
+
+    /**
+     * Tek kolonun değerlerini liste olarak döndürür; $key verilirse o kolon dizi anahtarı olur.
+     *
+     * @return array<int|string, mixed>
+     */
+    public function pluck(string $column, ?string $key = null): array
+    {
+        $query = clone $this;
+        $key === null ? $query->select($column) : $query->select($column, $key);
+
+        $value_property = $this->result_property($column);
+        $key_property = $key === null ? null : $this->result_property($key);
+
+        $result = [];
+        foreach ($query->get() as $row) {
+            if ($key_property === null) {
+                $result[] = $row->{$value_property} ?? null;
+            } else {
+                $result[(string) ($row->{$key_property} ?? '')] = $row->{$value_property} ?? null;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * İlk satırın tek kolon değerini döndürür (satır yoksa null).
+     */
+    public function value(string $column): mixed
+    {
+        $query = clone $this;
+        $row = $query->select($column)->first();
+
+        return $row?->{$this->result_property($column)} ?? null;
+    }
+
+    /**
+     * Sayfalı sonuç.
+     *
+     * @return array{data: array<int, object>, total: int, per_page: int, current_page: int, last_page: int}
+     */
+    public function paginate(int $per_page = 15, int $page = 1): array
+    {
+        if ($per_page < 1 || $page < 1) {
+            throw new \InvalidArgumentException('per_page ve page en az 1 olmalıdır.');
+        }
+
+        $total = $this->count();
+        $data = $total === 0 ? [] : (clone $this)->limit($per_page)->offset(($page - 1) * $per_page)->get();
+
+        return [
+            'data' => $data,
+            'total' => $total,
+            'per_page' => $per_page,
+            'current_page' => $page,
+            'last_page' => max(1, (int) ceil($total / $per_page)),
+        ];
+    }
+
+    /**
+     * Tek satır ekler, eklenen kaydın ID'sini döndürür. Hata → QueryException.
+     *
+     * @param array<string, mixed> $data kolon => değer (değer query_builder::raw() olabilir)
+     */
+    public function insert(array $data): int|string
+    {
+        $this->assert_writable('insert');
+        [$sql, $params] = $this->compile_insert([$data]);
+        $this->db->statement($sql, $params);
+
+        return $this->db->insert_id();
+    }
+
+    /**
+     * Çok satır ekler, eklenen satır sayısını döndürür. Placeholder sınırını aşan veri parçalara
+     * bölünür ve tek transaction içinde eklenir.
+     *
+     * @param list<array<string, mixed>> $rows
+     */
+    public function insert_many(array $rows): int
+    {
+        $this->assert_writable('insert_many');
+        if ($rows === []) {
+            return 0;
+        }
+
+        $first = reset($rows);
+        $per_chunk = max(1, intdiv(60000, max(1, is_array($first) ? count($first) : 1)));
+        $chunks = array_chunk($rows, $per_chunk);
+
+        $run = function () use ($chunks): int {
+            $total = 0;
+            foreach ($chunks as $chunk) {
+                [$sql, $params] = $this->compile_insert($chunk);
+                $total += $this->db->statement($sql, $params);
+            }
+
+            return $total;
+        };
+
+        return count($chunks) > 1 ? $this->db->transaction($run) : $run();
+    }
+
+    /**
+     * WHERE koşullarına uyan satırları günceller, etkilenen satır sayısını döndürür.
+     * Koşulsuz güncelleme yalnızca $allow_without_where=true ile yapılır.
+     *
+     * @param array<string, mixed> $data kolon => değer (değer query_builder::raw() olabilir)
+     */
+    public function update(array $data, bool $allow_without_where = false): int
+    {
+        $this->assert_writable('update', $allow_without_where);
+        if ($data === [] || array_is_list($data)) {
+            throw new \InvalidArgumentException('update() kolon => değer dizisi bekler.');
+        }
+
+        $counter = 0;
+        $params = [];
+        $sets = [];
+        foreach ($data as $column => $value) {
+            $sets[] = $this->compile_reference((string) $column) . ' = '
+                . $this->render([$this->value_part((string) $column, $value)], $counter, $params);
+        }
+
+        $sql = 'UPDATE ' . $this->write_table() . ' SET ' . implode(', ', $sets) . $this->compile_where($counter, $params);
+
+        return $this->db->statement($sql, $params);
+    }
+
+    /**
+     * WHERE koşullarına uyan satırları siler, silinen satır sayısını döndürür.
+     * Koşulsuz silme yalnızca $allow_without_where=true ile yapılır.
+     */
+    public function delete(bool $allow_without_where = false): int
+    {
+        $this->assert_writable('delete', $allow_without_where);
+
+        $counter = 0;
+        $params = [];
+        $sql = 'DELETE FROM ' . $this->write_table() . $this->compile_where($counter, $params);
+
+        return $this->db->statement($sql, $params);
+    }
+
+    /**
+     * Ekle; benzersiz anahtar çakışırsa $update_columns kolonlarını güncelle.
+     * MySQL: ON DUPLICATE KEY UPDATE; PostgreSQL/SQLite: ON CONFLICT ($unique_by) DO UPDATE ($unique_by zorunlu).
+     *
+     * @param array<string, mixed>|list<array<string, mixed>> $rows Tek satır veya satır listesi
+     * @param array<int|string, mixed> $update_columns ['kolon', …] (yeni değerle) veya ['kolon' => değer]
+     * @param list<string> $unique_by Çakışma hedefi kolonları
+     * @return int Sürücünün bildirdiği etkilenen satır sayısı (MySQL: ekleme 1, güncelleme 2)
+     */
+    public function upsert(array $rows, array $update_columns, array $unique_by = []): int
+    {
+        $this->assert_writable('upsert');
+        $rows = array_is_list($rows) ? $rows : [$rows];
+        if ($update_columns === []) {
+            throw new \InvalidArgumentException('upsert() için en az bir güncellenecek kolon gerekli.');
+        }
+
+        $driver = $this->db->get_driver_name();
+        if ($driver !== 'mysql' && $unique_by === []) {
+            throw new \InvalidArgumentException("upsert(): {$driver} için \$unique_by (çakışma kolonları) zorunludur.");
+        }
+
+        $counter = 0;
+        $params = [];
+        [$sql] = $this->compile_insert($rows, $counter, $params);
+
+        $sets = [];
+        foreach ($update_columns as $key => $value) {
+            if (is_int($key)) {
+                $column = $this->compile_reference((string) $value);
+                $sets[] = $column . ' = ' . ($driver === 'mysql' ? "VALUES({$column})" : "EXCLUDED.{$column}");
+            } else {
+                $sets[] = $this->compile_reference($key) . ' = '
+                    . $this->render([$this->value_part($key, $value)], $counter, $params);
+            }
+        }
+
+        if ($driver === 'mysql') {
+            $sql .= ' ON DUPLICATE KEY UPDATE ' . implode(', ', $sets);
+        } else {
+            $targets = implode(', ', array_map(fn ($c) => $this->compile_reference($c), $unique_by));
+            $sql .= " ON CONFLICT ({$targets}) DO UPDATE SET " . implode(', ', $sets);
+        }
+
+        return $this->db->statement($sql, $params);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @param array<string, array{value: mixed, type: int}> $params
+     * @return array{0: string, 1: array<string, array{value: mixed, type: int}>}
+     */
+    private function compile_insert(array $rows, ?int &$counter = null, ?array &$params = null): array
+    {
+        $counter ??= 0;
+        $params ??= [];
+
+        $first = reset($rows);
+        if (! is_array($first) || $first === [] || array_is_list($first)) {
+            throw new \InvalidArgumentException('insert: her satır kolon => değer dizisi olmalıdır.');
+        }
+
+        $columns = array_map('strval', array_keys($first));
+        $quoted = array_map(fn ($c) => $this->compile_reference($c), $columns);
+
+        $values = [];
+        foreach ($rows as $index => $row) {
+            if (! is_array($row) || count($row) !== count($columns)) {
+                throw new \InvalidArgumentException("insert: {$index}. satırın kolonları ilk satırla aynı olmalıdır.");
+            }
+
+            $placeholders = [];
+            foreach ($columns as $column) {
+                if (! array_key_exists($column, $row)) {
+                    throw new \InvalidArgumentException("insert: {$index}. satırda '{$column}' kolonu yok.");
+                }
+                $placeholders[] = $this->render([$this->value_part($column, $row[$column])], $counter, $params);
+            }
+            $values[] = '(' . implode(', ', $placeholders) . ')';
+        }
+
+        $sql = 'INSERT INTO ' . $this->write_table() . ' (' . implode(', ', $quoted) . ') VALUES ' . implode(', ', $values);
+
+        return [$sql, $params];
+    }
+
+    /**
+     * Yazma işlemleri yalnızca düz tablo ve WHERE ile çalışır.
+     */
+    private function assert_writable(string $operation, bool $allow_without_where = true): void
+    {
+        if ($this->table_name === null) {
+            throw new \LogicException("{$operation}(): table() ile düz bir tablo adı belirtilmeli.");
+        }
+
+        if ($this->joins !== [] || $this->unions !== [] || $this->group_by !== [] || $this->having !== []
+            || $this->order_by !== [] || $this->limit !== null || $this->offset > 0) {
+            throw new \LogicException("{$operation}(): JOIN, UNION, GROUP BY, HAVING, ORDER BY, LIMIT ve OFFSET desteklenmez.");
+        }
+
+        if (in_array($operation, ['update', 'delete'], true) && ! $allow_without_where && $this->where === []) {
+            throw new \LogicException(
+                "{$operation}(): WHERE koşulu yok; tüm tabloyu etkilemek için {$operation}(…, true) kullanın."
+            );
+        }
+    }
+
+    private function write_table(): string
+    {
+        $table = $this->table[0] ?? null;
+        if ($this->table_name === null || ! is_string($table)) {
+            throw new \LogicException('Yazma işlemleri için table() ile düz bir tablo adı belirtilmeli.');
+        }
+
+        return $table;
+    }
+
+    /**
+     * Sonuç nesnesindeki özellik adı: `x AS takma_ad` → takma_ad, `tablo.kolon` → kolon.
+     */
+    private function result_property(string $column): string
+    {
+        if (preg_match('/\s+AS\s+(\S+)$/i', trim($column), $m)) {
+            return $this->unquote($m[1]);
+        }
+
+        $parts = explode('.', trim($column));
+
+        return $this->unquote((string) end($parts));
+    }
+
+    /**
      * SQL sorgusunu döndürür
      */
     public function get_query(): string
@@ -485,9 +936,7 @@ class query_builder
                 : " {$join_type} JOIN {$table} ON {$join['condition']}";
         }
 
-        if ($this->where !== []) {
-            $query .= ' WHERE ' . $this->render_list($this->where, ' AND ', $counter, $params);
-        }
+        $query .= $this->compile_where($counter, $params);
 
         if ($this->group_by !== []) {
             $query .= ' GROUP BY ' . implode(', ', $this->group_by);
@@ -523,6 +972,26 @@ class query_builder
         }
 
         return $query;
+    }
+
+    /**
+     * @param array<string, array{value: mixed, type: int}> $params
+     */
+    private function compile_where(int &$counter, array &$params): string
+    {
+        if ($this->where === []) {
+            return '';
+        }
+
+        $sql = '';
+        foreach ($this->where as $i => $part) {
+            if ($i > 0) {
+                $sql .= ' ' . $this->where_bools[$i] . ' ';
+            }
+            $sql .= $this->render($part, $counter, $params);
+        }
+
+        return ' WHERE ' . $sql;
     }
 
     /**
@@ -602,6 +1071,10 @@ class query_builder
 
         if ($value instanceof query_builder) {
             return ["$quoted_column $operator ", ...$this->subquery_part($value)];
+        }
+
+        if ($value instanceof raw_expression) {
+            return ["$quoted_column $operator ", $this->raw_part($value->sql, $value->bindings)];
         }
 
         if ($op === 'IN' || $op === 'NOT IN') {
@@ -690,6 +1163,10 @@ class query_builder
 
     private function value_part(string $column, mixed $value): array
     {
+        if ($value instanceof raw_expression) {
+            return $this->raw_part($value->sql, $value->bindings);
+        }
+
         $type = $this->get_param_type($value);
 
         if ($type === \PDO::PARAM_STR && ! $this->allow_empty_string && trim((string) $value) === '') {
