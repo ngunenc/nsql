@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.23
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.24
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -49,6 +49,8 @@
 > **v1.5.22**: Rate limiter: doğru token bucket, SELECT ... FOR UPDATE ile atomik güncelleme, config::get, security_manager bağlantısı (#38).
 >
 > **v1.5.23**: Şifreleme v2: ham 32 byte anahtar, 12 byte IV, key_id ile rotation sonrası çözme; v1 verisi okunmaya devam ediyor (#39).
+>
+> **v1.5.24**: PHPStan seviyesi tek kaynakta: `phpstan.neon` level 8 + baseline; `composer stan` ve CI aynı config'i kullanıyor (#21). `bin/nsql` çalıştırılabilir (#12).
 
 ## 🌟 Özellikler
 
@@ -101,7 +103,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.23 --prefer-dist
+composer require ngunenc/nsql:^1.5.24 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -121,13 +123,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.23"
+        "ngunenc/nsql": "^1.5.24"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.23 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.24 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1581,6 +1583,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.24 (2026-10-05)
+  - PHPStan seviye tutarlılığı ve baseline (#21); bin/nsql çalıştırma biti (#12)
 
 - v1.5.23 (2026-10-04)
   - Şifreleme v2 formatı, arşiv anahtarlarıyla çözme, reencrypt(), arşiv 0600 (#39)
