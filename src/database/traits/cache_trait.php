@@ -15,6 +15,8 @@ trait cache_trait
     /** @var array<string, array{data: mixed, time: int, tags: list<string>, tables: list<string>}> */
     private array $query_cache = [];
     private bool $query_cache_enabled = false;
+    private int $query_cache_timeout = 3600;
+    private int $query_cache_size_limit = 100;
     private int $query_cache_hits = 0;
     private int $query_cache_misses = 0;
 

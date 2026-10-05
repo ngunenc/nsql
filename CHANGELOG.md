@@ -4,6 +4,17 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.9.1] - 2026-10-05
+
+### Değişen (#16) — iç mimari, public API aynı
+- `nsql.php` 1742 satırdan ~490 satıra indi; sınıf artık bağlantı kurulumu, okuma metotları (`get_row`, `get_results`, `query`) ve istatistikleri içeren bir facade.
+- Yeni `nsql\database\optimization\memory_monitor` sınıfı: bellek eşikleri, uyarı/kritik kontrolü, uyarlanabilir chunk boyutu ve bellek istatistikleri (süreç geneli statik durum). `nsql` içindeki statik bellek değişkenleri kaldırıldı.
+- Sorumluluk trait'leri: `query_execution_trait` (prepare/bind/execute, reconnect retry), `write_operations_trait` (insert/batch_insert/batch_update/statement/update/delete), `streaming_trait` (get_yield, chunk_by_id, get_chunk), `error_model_trait` (loglama, safe_execute, THROW_ON_ERROR, QueryException), `session_facade_trait` (statik session/CSRF kısayolları).
+- Çift tanımlar kaldırıldı: `nsql` sınıfında trait'lerle aynı adlı property'ler (`$query_cache_enabled`, `$statement_cache`, `$statement_cache_usage`, cache limit/timeout) ve `debug_trait::log_error()` (gölgelenen eski düz dosya logger'ı).
+
+### Testler
+- `MemoryMonitorTest` (limit ayrıştırma, eşikler, chunk boyutu) ve `NsqlStructureTest` (facade < 800 satır, sınıf ile trait'ler arasında ve trait'ler arasında aynı adlı üye yok).
+
 ## [1.9.0] - 2026-10-05
 
 ### Yeni (#49)

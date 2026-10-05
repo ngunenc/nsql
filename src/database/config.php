@@ -482,7 +482,7 @@ class config
             'MAX_RESULT_SET_SIZE' => self::max_result_set_size,
             'MEMORY_CHECK_INTERVAL' => self::memory_check_interval,
             // MEMORY_LIMIT_WARNING / MEMORY_LIMIT_CRITICAL bilerek varsayılansız: ayarlanmadıklarında
-            // eşikler ini memory_limit'e oranla hesaplanır (nsql::memory_thresholds).
+            // eşikler ini memory_limit'e oranla hesaplanır (optimization\memory_monitor::thresholds).
             'MEMORY_WARNING_RATIO' => self::memory_warning_ratio,
             'MEMORY_CRITICAL_RATIO' => self::memory_critical_ratio,
             'YIELD_UNBUFFERED' => self::yield_unbuffered,

@@ -8,6 +8,7 @@ trait statement_cache_trait
 {
     private array $statement_cache = [];
     private array $statement_cache_usage = [];
+    private int $statement_cache_limit = 100;
     private array $statement_cache_frequency = []; // LFU için kullanım sıklığı
     private int $statement_cache_hits = 0;
     private int $statement_cache_misses = 0;
