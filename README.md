@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.11.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.11.1
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -90,7 +90,11 @@
 >
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı ve okuma/yazma ayrımı (#51)
 >
+> **v1.11.1**: CI'da PostgreSQL ve SQLite testleri; sürücüden bağımsız migration ve rate limiter (#53)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
+>
+> **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
 
 ## 🌟 Özellikler
 
@@ -144,7 +148,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.11.0 --prefer-dist
+composer require ngunenc/nsql:^1.11.1 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -164,13 +168,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.11.0"
+        "ngunenc/nsql": "^1.11.1"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.11.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.11.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1221,12 +1225,39 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 |-------------|-------------|--------------|---------|
 | 1.0.x       | 8.0.0      | 8.2.x        | Tam destek |
 | 1.1.x       | 8.0.0      | 8.3.x        | Tam destek |
+| 1.9.2+      | 8.1.0      | 8.4.x        | CI: 8.1–8.4 |
 
 ### Veritabanı Uyumluluğu
-| Veritabanı     | Minimum Sürüm | Önerilen Sürüm |
-|----------------|---------------|----------------|
-| MySQL          | 5.7.8        | 8.0+          |
-| MariaDB        | 10.2         | 10.6+         |
+| Veritabanı     | Minimum Sürüm | Önerilen Sürüm | CI |
+|----------------|---------------|----------------|----|
+| MySQL          | 5.7.8        | 8.0+          | Tüm testler (8.0) |
+| MariaDB        | 10.2         | 10.6+         | Yerel geliştirme |
+| PostgreSQL     | 12           | 16+           | Portable testler (16) |
+| SQLite         | 3.24         | 3.35+         | Portable testler |
+
+### Veritabanı Başına Özellik Desteği (v1.11.1)
+
+`DB_DRIVER=mysql|pgsql|sqlite`. "Portable" testler (`tests/Portable`, `composer test:portable`) CI'da üç veritabanında koşar.
+
+| Özellik | MySQL / MariaDB | PostgreSQL | SQLite |
+|---------|-----------------|------------|--------|
+| CRUD, `insert_id()`, `batch_insert` / `batch_update` | ✅ | ✅ | ✅ |
+| Query Builder (where/join/group/having/subquery/paginate, insert/update/delete) | ✅ | ✅ | ✅ |
+| `upsert()` | ✅ `ON DUPLICATE KEY` | ✅ `ON CONFLICT` (`$unique_by` zorunlu) | ✅ `ON CONFLICT` (`$unique_by` zorunlu) |
+| Transaction, savepoint, `transaction(callable)` | ✅ | ✅ | ✅ |
+| Deadlock retry (`TRANSACTION_RETRY_ATTEMPTS`) | ✅ 1213/1205 | ✅ 40P01/40001 | — (tek yazıcı) |
+| `get_yield()` unbuffered akış | ✅ | Buffered (sürücü sınırı) | Buffered |
+| `chunk_by_id()` | ✅ | ✅ | ✅ |
+| Query cache (process içi / Redis / Memcached) | ✅ | ✅ | ✅ |
+| Migration manager | ✅ | ✅ | ✅ |
+| `rate_limiter` | ✅ `FOR UPDATE` | ✅ `FOR UPDATE` | ✅ (veritabanı kilidi) |
+| Okuma/yazma ayrımı (replica) | ✅ | ✅ | — |
+| `get_row()` otomatik `LIMIT 1` | ✅ | ✅ | ✅ |
+
+Notlar:
+- Testlerde MySQL'e özel DDL (`ENGINE=InnoDB`, `AUTO_INCREMENT`, `ENUM`, `SHOW TABLES`) yalnızca `tests/Integration` altında kullanılır; bu testler yalnızca MySQL/MariaDB'de koşar.
+- SQLite için `:memory:` yerine dosya yolu kullanın: bağlantı havuzundaki her bağlantı ayrı bir bellek veritabanı açar.
+- PostgreSQL'de hatalı bir sorgudan sonra açık transaction iptal durumuna geçer; `rollback()` gerekir.
 
 ---
 
@@ -1690,6 +1721,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.11.1 (2026-10-05)
+  - CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`), sürücüden bağımsız migration manager ve rate limiter, veritabanı başına özellik tablosu (#53).
 
 - v1.11.0 (2026-10-05)
   - İsimlendirilmiş çoklu bağlantı (`nsql::connection()`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`) (#51).
