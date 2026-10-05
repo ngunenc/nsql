@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.0.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.1.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -104,6 +104,8 @@
 >
 > **v2.0.0**: Major sürüm: sınıf adları PascalCase (eski adlar 2.x boyunca çalışır), THROW_ON_ERROR / YIELD_UNBUFFERED / inflector varsayılan, 1.x takma adları kaldırıldı. Geçiş: [UPGRADE.md](UPGRADE.md)
 >
+> **v2.1.0**: Şema doğrulama MVP: PHP ile tanımlanan tablo/kolon yapısı canlı veritabanıyla karşılaştırılır; `nsql schema:check` CLI komutu (#54).
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -152,6 +154,7 @@
 - PHPStan static analysis desteği
 - PHP CS Fixer kod formatlama
 - Composer script'leri ile otomatik test
+- Şema doğrulama: PHP ile tanımlanan şemayı canlı DB ile karşılaştırma (`nsql schema:check`, v2.1.0+)
 
 
 ## 📋 Kurulum
@@ -168,7 +171,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.0.0 --prefer-dist
+composer require ngunenc/nsql:^2.1.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -188,13 +191,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.0.0"
+        "ngunenc/nsql": "^2.1.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.0.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.1.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -689,6 +692,8 @@ $db->safe_execute(function() use ($db) {
 Gerçek projelerde veritabanı şemasını güncellemek için migration modülünü kullanabilirsiniz:
 
 Migration dosyaları uygulamanızda durur; varsayılan dizin `<proje kökü>/database/migrations` (seed: `database/seeds`). `.env` içinde `MIGRATIONS_PATH` / `SEEDS_PATH` ile veya constructor parametreleriyle değiştirilebilir.
+
+Migration sonrası tabloların beklenen yapıda olduğunu doğrulamak için `vendor/bin/nsql schema:check [--schema=yol] [--strict] [--json]` kullanılabilir; şema tanımı ve sürücü kapsamı için [API referansı](docs/api-reference.md#-şema-doğrulama-v210).
 
 ```bash
 vendor/bin/nsql migrate:create create_posts_table   # database/migrations/2026_10_04_120000_create_posts_table.php
@@ -1729,6 +1734,9 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v2.1.0 (2026-10-05)
+  - Şema doğrulama MVP (#54): `Schema` / `TableDefinition` / `ColumnDefinition` ile tip, nullable, default, uzunluk ve precision tanımı; `SchemaValidator` canlı DB (MySQL/MariaDB `information_schema`, PostgreSQL `information_schema`, SQLite `PRAGMA table_info`) ile farkları raporlar; `vendor/bin/nsql schema:check [--schema] [--strict] [--json]`.
+
 - v2.0.0 (2026-10-05)
   - Major sürüm (bkz. UPGRADE.md): sınıf/interface/trait adları PascalCase (#24, eski snake_case adlar `legacy_autoload` ile 2.x boyunca çalışır); `THROW_ON_ERROR=true`, `YIELD_UNBUFFERED=true`, `ORM_TABLE_NAMING=inflector` varsayılan (#47, #45, #9); `nsql\database\security\*` ve `model_not_found_exception` takma adları kaldırıldı (#25).
 
@@ -1949,6 +1957,9 @@ vendor/bin/nsql migrate
 
 # Seed verilerini yükle
 vendor/bin/nsql seed
+
+# Canlı şemayı database/schema.php (SCHEMA_PATH) ile karşılaştır
+vendor/bin/nsql schema:check
 ```
 
 ## 📄 Lisans
