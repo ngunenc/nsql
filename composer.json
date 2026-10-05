@@ -1,7 +1,7 @@
 {
 	"name": "ngunenc/nsql",
-	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.5.25",
-	"version": "1.5.25",
+	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.5.26",
+	"version": "1.5.26",
 	"type": "library",
 	"license": "MIT",
 	"authors": [
@@ -79,7 +79,8 @@
 			"/PROJE_GUNCEL_ANALIZ_RAPORU.md",
 			"/PROJE_TEST_RAPORU.md",
 			"/PACKAGIST_YAYINLAMA_REHBERI.md",
-			"/index.php",
+			"/examples",
+			"/.cursor",
 			"/env.example",
 			"/.env.example",
 			"/.env.testing",
@@ -88,7 +89,6 @@
 			"/docker-compose.dev.yml",
 			"/docker",
 			"/scripts",
-			"/public",
 			"/storage"
 		]
 	},

@@ -13,6 +13,7 @@
 /.php-cs-fixer.php export-ignore
 /.php-cs-fixer.cache export-ignore
 /phpstan.neon export-ignore
+/phpstan-baseline.neon export-ignore
 
 # Dokümantasyon
 /docs export-ignore
@@ -28,7 +29,7 @@
 
 # Geliştirme dosyaları
 /.github export-ignore
-/index.php export-ignore
+/.cursor export-ignore
 /env.example export-ignore
 /.env.example export-ignore
 /.env.testing export-ignore
@@ -42,11 +43,10 @@
 # Scripts (production'da gerekli değil)
 /scripts export-ignore
 
-# Public endpoints (production'da gerekli değil)
-/public export-ignore
+# Örnekler (demo ve monitoring endpoint örnekleri)
+/examples export-ignore
 
-# Bin dosyaları (CLI tools - production'da gerekli değil)
-/bin export-ignore
+# Not: bin/ dahil edilir; composer.json "bin" kaydı vendor/bin/nsql oluşturur
 
 # Storage (production'da gerekli değil - kullanıcı kendi storage'ını oluşturur)
 /storage export-ignore

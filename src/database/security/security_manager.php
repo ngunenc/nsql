@@ -187,7 +187,12 @@ class security_manager
             ! empty($masked_context) ? json_encode($masked_context, JSON_UNESCAPED_UNICODE) : ''
         );
 
-        file_put_contents($log_file, $log_entry, FILE_APPEND);
+        $path = config::resolve_log_path($log_file);
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        file_put_contents($path, $log_entry, FILE_APPEND | LOCK_EX);
     }
 
     /**

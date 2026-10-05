@@ -258,6 +258,34 @@ class config
     }
 
     /**
+     * Log dosyası yolunu çözer: mutlak yol olduğu gibi döner; göreli yol
+     * `LOG_DIR` (varsayılan `<proje kökü>/storage/logs`) altına yerleştirilir.
+     */
+    public static function resolve_log_path(string $file): string
+    {
+        if (preg_match('/^[A-Za-z]:[\\\\\/]|^[\\\\\/]/', $file)) {
+            return $file;
+        }
+
+        $default_log_dir = self::get_project_root()
+            . DIRECTORY_SEPARATOR . 'storage'
+            . DIRECTORY_SEPARATOR . 'logs';
+        $log_dir = self::get('log_dir', $default_log_dir);
+        if (! is_string($log_dir) || $log_dir === '') {
+            $log_dir = $default_log_dir;
+        } elseif (! preg_match('/^[A-Za-z]:[\\\\\/]|^[\\\\\/]/', $log_dir)) {
+            $log_dir = self::get_project_root() . DIRECTORY_SEPARATOR . $log_dir;
+        }
+        if (self::is_vendor_package_path($log_dir)) {
+            $log_dir = self::resolve_away_from_vendor($log_dir)
+                . DIRECTORY_SEPARATOR . 'storage'
+                . DIRECTORY_SEPARATOR . 'logs';
+        }
+
+        return rtrim($log_dir, '/\\') . DIRECTORY_SEPARATOR . $file;
+    }
+
+    /**
      * Composer vendor paket yolu mu? (…/vendor/vendorName/packageName)
      */
     public static function is_vendor_package_path(string $path): bool

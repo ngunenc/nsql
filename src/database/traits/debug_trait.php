@@ -14,7 +14,9 @@ trait debug_trait
     {
         $timestamp = date('Y-m-d H:i:s');
         $log_message = "[$timestamp] $message" . PHP_EOL;
-        file_put_contents($this->log_file, $log_message, FILE_APPEND);
+        $path = $this->resolve_log_path($this->log_file);
+        $this->ensure_log_directory(dirname($path));
+        file_put_contents($path, $log_message, FILE_APPEND | LOCK_EX);
     }
 
     /**

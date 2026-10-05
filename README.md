@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.25
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.26
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -53,6 +53,8 @@
 > **v1.5.24**: PHPStan seviyesi tek kaynakta: `phpstan.neon` level 8 + baseline; `composer stan` ve CI aynı config'i kullanıyor (#21). `bin/nsql` çalıştırılabilir (#12).
 >
 > **v1.5.25**: Boş `src/database/schema/` stub'ı ve şema validasyonu vaatleri kaldırıldı; MVP ayrı roadmap issue'sunda (#8, #54).
+>
+> **v1.5.26**: Kökteki demo `examples/basic.php`'ye, monitoring örnekleri `examples/monitoring/`'e taşındı; tek storage kökü; `debug()` log'u artık CWD'ye değil `storage/logs`'a yazıyor; `bin/` dist pakete dahil (#22).
 
 ## 🌟 Özellikler
 
@@ -105,7 +107,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.25 --prefer-dist
+composer require ngunenc/nsql:^1.5.26 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -125,13 +127,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.25"
+        "ngunenc/nsql": "^1.5.26"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.25 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.26 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -376,9 +378,13 @@ nsql/
 │           ├── query_parameter_trait.php # Sorgu parametreleri
 │           ├── statement_cache_trait.php # Statement önbellekleme
 │           └── transaction_trait.php # Transaction yönetimi
+├── bin/nsql                    # CLI (vendor/bin/nsql)
+├── examples/                   # Örnekler (pakete dahil değil)
+│   ├── basic.php               # Temel kullanım demosu
+│   └── monitoring/             # health.php / metrics.php endpoint örnekleri
 ├── tests/                      # Test dosyaları
 ├── .github/workflows/          # GitHub Actions CI
-├── storage/logs/              # Log dosyaları
+├── storage/                   # Tek storage kökü: logs/ (LOG_DIR), keys/
 ├── composer.json             # Composer yapılandırması
 ├── phpunit.xml               # PHPUnit yapılandırması
 ├── phpstan.neon              # PHPStan yapılandırması
@@ -754,7 +760,7 @@ $enc = new encryption($key, key_manager::get_archived_keys());
 
 #### Monitoring (health / metrics)
 
-`public/health.php` ve `public/metrics.php` **token zorunludur**:
+Örnek endpoint'ler `examples/monitoring/health.php` ve `examples/monitoring/metrics.php` içindedir (pakete dahil değildir; kendi `public/` dizininize kopyalayın). **Token zorunludur**:
 
 ```env
 NSQL_MONITORING_TOKEN=uzun-rastgele-secret
@@ -1584,6 +1590,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.26 (2026-10-05)
+  - Klasör düzeni: examples/, tek storage kökü, log yolu düzeltmesi, bin/ dist'e dahil (#22)
 
 - v1.5.25 (2026-10-05)
   - Şema validasyonu stub'ı ve doküman vaatleri kaldırıldı (#8)

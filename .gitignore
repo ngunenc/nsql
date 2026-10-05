@@ -41,6 +41,4 @@ storage/keys/archive/
 # Logs
 storage/logs/*
 !storage/logs/.gitkeep
-src/storage/logs/*
-!src/storage/logs/.gitkeep
 *.log
