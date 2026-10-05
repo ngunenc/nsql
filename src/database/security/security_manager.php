@@ -24,28 +24,13 @@ class security_manager
     }
 
     /**
-     * Güvenli oturum başlatma ve cookie ayarları
+     * Güvenli oturum başlatma.
+     *
+     * @deprecated 1.5.30 `nsql::secure_session_start()` / `session_manager` kullanın; bu metot ona delege eder.
      */
-    public static function secure_session_start(): void
+    public static function secure_session_start(array $config = []): void
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            // HTTPS kontrolü (proxy/load balancer desteği ile)
-            $secure = self::is_https();
-            session_set_cookie_params([
-                'lifetime' => 0,
-                'path' => '/',
-                'domain' => '',
-                'secure' => $secure,
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]);
-            session_start();
-            // Session fixation önlemi: yeni oturumda ID yenile
-            if (! isset($_SESSION['initiated'])) {
-                session_regenerate_id(true);
-                $_SESSION['initiated'] = true;
-            }
-        }
+        nsql::secure_session_start($config);
     }
 
     /**
@@ -93,11 +78,8 @@ class security_manager
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
-        if (empty($_SESSION['csrf_token'])) {
-            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-        }
 
-        return $_SESSION['csrf_token'];
+        return session_manager::get_csrf_token();
     }
 
     /**
@@ -109,7 +91,7 @@ class security_manager
             session_start();
         }
 
-        return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], (string)$token);
+        return session_manager::validate_csrf_token($token);
     }
 
     /**

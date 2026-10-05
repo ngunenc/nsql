@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.29
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.30
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -61,6 +61,8 @@
 > **v1.5.28**: Monitoring token'ı `?token=` URL parametresiyle varsayılan olarak kabul edilmiyor; yalnızca başlık. Gerekirse `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true` (#41).
 >
 > **v1.5.29**: Hassas veri maskeleme tek kaynakta (`sensitive_data_filter`, `SENSITIVE_KEYS`); debug log/çıktı, logger context ve audit log maskeli; `interpolate_query` `:id`/`:id2` çakışması yok; bağlantı hatası mesajında kullanıcı adı/host yok (#42).
+>
+> **v1.5.30**: session_manager aktif oturumu yok etmiyor; `secure` HTTPS'e göre otomatik, HSTS yalnızca HTTPS + opt-in, `X-XSS-Protection` kaldırıldı, fingerprint'te IP yok, CSRF token süreli; tek session API'si (#43).
 
 ## 🌟 Özellikler
 
@@ -113,7 +115,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.29 --prefer-dist
+composer require ngunenc/nsql:^1.5.30 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -133,13 +135,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.29"
+        "ngunenc/nsql": "^1.5.30"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.29 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.30 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1404,16 +1406,25 @@ Oturum başlatırken ve cookie ayarlarında güvenlik için aşağıdaki fonksiy
 nsql::secure_session_start();
 ```
 
-Bu fonksiyon;
-- Oturum çerezini `HttpOnly`, `Secure` ve `SameSite=Lax` olarak ayarlar.
-- HTTPS kullanıyorsanız otomatik olarak `secure` flag'ini aktif eder.
-- Session fixation saldırılarına karşı ilk oturumda session ID'yi yeniler.
-
-Oturum ID'sini manuel olarak yenilemek için:
+Bu fonksiyon (`session_manager`);
+- Oturum çerezini `HttpOnly` ve `SameSite=Strict` olarak ayarlar; `secure` verilmezse isteğin HTTPS olup olmadığına göre belirlenir (yerel HTTP geliştirmede çerez çalışır).
+- Uygulama oturumu zaten başlattıysa oturumu **yok etmez**; mevcut oturumu kullanır.
+- `X-Frame-Options` ve `X-Content-Type-Options` gönderir. HSTS yalnızca HTTPS'te ve `hsts` açıkça verilirse gönderilir; artık önerilmeyen `X-XSS-Protection` gönderilmez.
+- Parmak izi varsayılan olarak IP içermez (mobil kullanıcılar atılmaz). İsteğe bağlı: `'fingerprint_ip' => 'prefix'` (IPv4 /24, IPv6 /64) veya `'full'`.
+- `validate()` session ID'yi `regenerate_interval` saniyede bir yeniler.
 
 ```php
-nsql::regenerateSessionId();
+nsql::secure_session_start([
+    'hsts' => true,               // veya 'max-age=31536000; includeSubDomains; preload'
+    'fingerprint_ip' => 'prefix',
+]);
+nsql::session()->validate();      // her istekte
+nsql::session()->regenerate_id(); // login sonrası
 ```
+
+CSRF token'ın süresi `CSRF_TOKEN_TTL` (varsayılan 7200 sn, `0` = süresiz) sonunda dolar ve yenilenir; login gibi yetki değişikliklerinden sonra `session_manager::rotate_csrf_token()` çağırın.
+
+> v1.5.30+: `security_manager::secure_session_start()` kullanımdan kaldırıldı (deprecated) ve `nsql::secure_session_start()`'a delege ediyor; tek session API'si `session_manager`.
 
 ---
 
@@ -1605,6 +1616,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.30 (2026-10-05)
+  - session_manager: aktif oturum korunuyor, otomatik secure, HSTS opt-in, IP'siz fingerprint, süreli CSRF token (#43)
 
 - v1.5.29 (2026-10-05)
   - Tek maskeleme yolu ve SENSITIVE_KEYS, maskeli debug/log, tam eşleşmeli interpolasyon, kimlik bilgisiz bağlantı hataları (#42)
