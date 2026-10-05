@@ -3,8 +3,8 @@
 ## 📑 İçindekiler
 
 - [Ana Sınıflar](#-ana-sınıflar)
-- [config Sınıfı](#-config-sınıfı)
-- [nsql Sınıfı](#-nsql-sınıfı)
+- [config Sınıfı](#config-sınıfı)
+- [nsql Sınıfı](#nsql-sınıfı)
 - [Query Builder](#-query-builder)
 - [Security Sınıfları](#-security-sınıfları)
 - [Migration Manager](#-migration-manager)
