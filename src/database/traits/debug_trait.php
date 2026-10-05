@@ -9,18 +9,6 @@ use Throwable;
 trait debug_trait
 {
     /**
-     * Hata loglar
-     */
-    private function log_error(string $message): void
-    {
-        $timestamp = date('Y-m-d H:i:s');
-        $log_message = "[$timestamp] $message" . PHP_EOL;
-        $path = $this->resolve_log_path($this->log_file);
-        $this->ensure_log_directory(dirname($path));
-        file_put_contents($path, $log_message, FILE_APPEND | LOCK_EX);
-    }
-
-    /**
      * Debug çıktısı için kullanıcının çağırdığı public metodu kaydeder.
      * debug_backtrace maliyetli olduğundan yalnızca debug modunda çalışır.
      */

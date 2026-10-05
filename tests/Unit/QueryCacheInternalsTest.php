@@ -26,9 +26,6 @@ class QueryCacheInternalsTest extends TestCase
         return new class ($limit, $timeout) {
             use cache_trait;
 
-            private int $query_cache_timeout;
-            private int $query_cache_size_limit;
-
             public function __construct(int $limit, int $timeout)
             {
                 $this->query_cache_enabled = true;
