@@ -827,6 +827,14 @@ class nsql
      * @return string Quoted identifier
      */
     /**
+     * Aktif sürücü adı: `mysql`, `pgsql` veya `sqlite`.
+     */
+    public function get_driver_name(): string
+    {
+        return $this->driver?->get_driver_name() ?? 'mysql';
+    }
+
+    /**
      * Tablo/kolon adını doğrular ve driver'a göre quote eder (`tablo` veya `şema.tablo`).
      *
      * @throws InvalidArgumentException Ad yalnızca harf, rakam ve alt çizgiden oluşmuyorsa

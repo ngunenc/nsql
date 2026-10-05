@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.30
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.31
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -63,6 +63,8 @@
 > **v1.5.29**: Hassas veri maskeleme tek kaynakta (`sensitive_data_filter`, `SENSITIVE_KEYS`); debug log/çıktı, logger context ve audit log maskeli; `interpolate_query` `:id`/`:id2` çakışması yok; bağlantı hatası mesajında kullanıcı adı/host yok (#42).
 >
 > **v1.5.30**: session_manager aktif oturumu yok etmiyor; `secure` HTTPS'e göre otomatik, HSTS yalnızca HTTPS + opt-in, `X-XSS-Protection` kaldırıldı, fingerprint'te IP yok, CSRF token süreli; tek session API'si (#43).
+>
+> **v1.5.31**: Query builder: `where_in` / `where_not_in` ve `where(..., 'IN', [...])` (boş dizi güvenli), `where_null` / `where_not_null`, `IS` / `= null` doğru SQL, LIMIT'siz `offset()`, boş string yapılandırılabilir (#48).
 
 ## 🌟 Özellikler
 
@@ -115,7 +117,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.30 --prefer-dist
+composer require ngunenc/nsql:^1.5.31 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -135,13 +137,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.30"
+        "ngunenc/nsql": "^1.5.31"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.30 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.31 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1616,6 +1618,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.31 (2026-10-05)
+  - Query builder where_in/where_null, IS NULL, LIMIT'siz offset, boş string ayarı (#48)
 
 - v1.5.30 (2026-10-05)
   - session_manager: aktif oturum korunuyor, otomatik secure, HSTS opt-in, IP'siz fingerprint, süreli CSRF token (#43)
