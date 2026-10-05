@@ -528,6 +528,7 @@ class Config
             // Migration (göreli yollar proje köküne göre çözülür)
             'MIGRATIONS_PATH' => 'database/migrations',
             'SEEDS_PATH' => 'database/seeds',
+            'SCHEMA_PATH' => 'database/schema.php',
         ];
     }
 

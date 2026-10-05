@@ -4,6 +4,20 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.1.0] - 2026-10-05
+
+### Added
+- Şema doğrulama MVP (#54), `nsql\database\schema` namespace'i:
+  - `Schema`, `TableDefinition`, `ColumnDefinition`: tablo/kolon tanımı (`integer`, `string`, `text`, `boolean`, `decimal`, `float`, `date`, `datetime`, `time`, `json`, `binary`), `nullable()`, `default()`; kolonlar varsayılan NOT NULL. `Schema::from_file()` bir `Schema` veya `function (Schema $s)` döndüren dosyayı yükler.
+  - `SchemaInspector`: canlı kolon bilgisi (MySQL/MariaDB ve PostgreSQL `information_schema`, SQLite `PRAGMA table_info`); query cache ve read replica atlanır.
+  - `SchemaValidator` + `SchemaReport` + `SchemaDifference`: eksik tablo/kolon, tip ailesi, nullable, default, uzunluk ve precision/scale farkları hata; şemada olmayan kolonlar uyarı (`strict: true` ile hata). `format()` ve `to_array()` çıktıları.
+- CLI: `vendor/bin/nsql schema:check [--schema=yol] [--strict] [--json]`; geçersiz şemada çıkış kodu 1. Yol önceliği: `--schema`, `SCHEMA_PATH`, `database/schema.php`.
+- `SCHEMA_PATH` yapılandırma anahtarı (varsayılan `database/schema.php`).
+- Testler: `SchemaDefinitionTest` (unit), `SchemaPortableTest` (MySQL/MariaDB, PostgreSQL, SQLite).
+
+### Notes
+- Kapsam dışı: index, foreign key, unique, auto-increment, charset/collation, enum değerleri. Doküman: [API referansı](docs/api-reference.md#-şema-doğrulama-v210).
+
 ## [2.0.0] - 2026-10-05
 
 Geçiş rehberi: [UPGRADE.md](UPGRADE.md#1x--200). Üç bayrak `.env`'de `false`/`legacy` yapılarak 1.x davranışı geri alınabilir.

@@ -204,6 +204,31 @@ $manager->migrate();
 $manager->rollback();
 ```
 
+### Şema Doğrulama (v2.1.0+)
+
+Migration sonrası canlı tabloların beklenen yapıyla uyumunu kontrol etmek için `database/schema.php` (veya `SCHEMA_PATH`) dosyası oluşturun:
+
+```php
+<?php
+use nsql\database\schema\Schema;
+use nsql\database\schema\TableDefinition;
+
+return function (Schema $schema) {
+    $schema->table('users', function (TableDefinition $t) {
+        $t->integer('id');
+        $t->string('email', 100);
+        $t->string('status', 20)->default('draft');
+        $t->datetime('created_at')->nullable();
+    });
+};
+```
+
+```bash
+vendor/bin/nsql migrate && vendor/bin/nsql schema:check
+```
+
+Fark varsa komut `[HATA]` satırlarını yazar ve 1 ile çıkar; CI'da migration adımının arkasına eklenebilir. Ayrıntılar ve sürücü kapsamı: [API referansı](api-reference.md#-şema-doğrulama-v210).
+
 ## 🛡️ Güvenlik
 
 ### Prepared Statements 

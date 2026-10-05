@@ -24,14 +24,20 @@
     exit(1);
 })();
 
+use nsql\database\Config;
 use nsql\database\Nsql;
 use nsql\database\MigrationManager;
+use nsql\database\schema\Schema;
+use nsql\database\schema\SchemaValidator;
 
 class nsql_cli
 {
     private ?MigrationManager $migration_manager = null;
     private ?string $migrations_path = null;
     private ?string $seeds_path = null;
+    private ?string $schema_path = null;
+    private bool $strict = false;
+    private bool $json = false;
 
     private function manager(): MigrationManager
     {
@@ -46,6 +52,12 @@ class nsql_cli
                 $this->migrations_path = substr($arg, strlen('--path='));
             } elseif (str_starts_with($arg, '--seeds-path=')) {
                 $this->seeds_path = substr($arg, strlen('--seeds-path='));
+            } elseif (str_starts_with($arg, '--schema=')) {
+                $this->schema_path = substr($arg, strlen('--schema='));
+            } elseif ($arg === '--strict') {
+                $this->strict = true;
+            } elseif ($arg === '--json') {
+                $this->json = true;
             } else {
                 $args[] = $arg;
             }
@@ -66,6 +78,7 @@ class nsql_cli
             'seed' => $this->seed($args[2] ?? null),
             'seed:create' => $this->seed_create($args[2] ?? null),
             'db:status' => $this->db_status(),
+            'schema:check' => $this->schema_check(),
             'help', '--help', '-h' => $this->show_help(),
             default => $this->error("Bilinmeyen komut: {$command}"),
         };
@@ -196,6 +209,33 @@ class nsql_cli
         }
     }
 
+    private function schema_check(): void
+    {
+        $path = $this->schema_path;
+        if ($path === null || trim($path) === '') {
+            $configured = Config::get('schema_path');
+            $path = is_string($configured) && trim($configured) !== '' ? $configured : 'database/schema.php';
+        }
+        if (! preg_match('/^([A-Za-z]:)?[\/\\\\]/', $path)) {
+            $path = rtrim(Config::get_project_root(), '/\\') . DIRECTORY_SEPARATOR . $path;
+        }
+
+        try {
+            $report = (new SchemaValidator(new Nsql(), $this->strict))->validate(Schema::from_file($path));
+        } catch (\Throwable $e) {
+            $this->error("Şema kontrolü hatası: " . $e->getMessage());
+            return;
+        }
+
+        echo $this->json
+            ? json_encode($report->to_array(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n"
+            : $report->format() . "\n";
+
+        if (! $report->is_valid()) {
+            exit(1);
+        }
+    }
+
     private function format_bytes(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB'];
@@ -219,10 +259,14 @@ class nsql_cli
         echo "  seed [class]         Seed verilerini yükle\n";
         echo "  seed:create <ad>     Yeni seeder oluştur\n";
         echo "  db:status            Veritabanı durumunu göster\n";
+        echo "  schema:check         Şema tanımını canlı veritabanıyla karşılaştır (fark varsa çıkış kodu 1)\n";
         echo "  help                 Bu yardım mesajını göster\n\n";
         echo "Seçenekler:\n";
         echo "  --path=<dizin>        Migration dizini (varsayılan: MIGRATIONS_PATH veya database/migrations)\n";
         echo "  --seeds-path=<dizin>  Seed dizini (varsayılan: SEEDS_PATH veya database/seeds)\n";
+        echo "  --schema=<dosya>      Şema dosyası (varsayılan: SCHEMA_PATH veya database/schema.php)\n";
+        echo "  --strict              schema:check: şemada olmayan kolonlar da hata sayılır\n";
+        echo "  --json                schema:check: raporu JSON olarak yaz\n";
     }
 
     private function error(string $message): void

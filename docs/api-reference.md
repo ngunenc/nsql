@@ -417,6 +417,53 @@ $manager->create_migration(string $name): string
 $manager->create_seeder(string $name): string
 ```
 
+## 🧾 Şema Doğrulama (v2.1.0+)
+
+Beklenen tablo/kolon yapısını PHP ile tanımlayıp canlı veritabanıyla karşılaştırır. Şema oluşturmaz veya değiştirmez; yalnızca farkları raporlar.
+
+```php
+use nsql\database\schema\Schema;
+use nsql\database\schema\SchemaValidator;
+use nsql\database\schema\TableDefinition;
+
+$schema = new Schema();
+$schema->table('users', function (TableDefinition $t) {
+    $t->integer('id');
+    $t->string('email', 100);                  // NOT NULL (varsayılan)
+    $t->string('nickname', 50)->nullable();
+    $t->string('status', 20)->default('draft');
+    $t->decimal('balance', 10, 2)->nullable();
+    $t->boolean('active')->default(true);
+    $t->datetime('created_at')->nullable();
+});
+
+$report = (new SchemaValidator($db, strict: false))->validate($schema);
+$report->is_valid();     // hata yoksa true
+$report->errors();       // SchemaDifference[]
+$report->warnings();     // SchemaDifference[] (strict=false iken fazla kolonlar)
+echo $report->format();  // insan okunur özet
+$report->to_array();     // JSON için
+```
+
+Tipler: `integer`, `string`, `text`, `boolean`, `decimal`, `float`, `date`, `datetime`, `time`, `json`, `binary`. Karşılaştırılanlar: tablo/kolon varlığı, tip ailesi, nullable, default (yalnızca `default()` çağrıldıysa), uzunluk (iki tarafta da varsa) ve decimal precision/scale. Şemada olmayan kolonlar varsayılan olarak uyarı, `strict: true` ile hatadır.
+
+CLI (migration sonrası kontrol; geçersizse çıkış kodu 1):
+
+```bash
+vendor/bin/nsql schema:check                       # SCHEMA_PATH veya database/schema.php
+vendor/bin/nsql schema:check --schema=db/schema.php --strict --json
+```
+
+Şema dosyası bir `Schema` örneği veya `function (Schema $schema) { ... }` döndürmelidir.
+
+| Sürücü | Kaynak | Not |
+|--------|--------|-----|
+| MySQL / MariaDB | `information_schema.COLUMNS` | `tinyint(1)` → boolean; MariaDB JSON → `json` veya `text` kabul edilir |
+| PostgreSQL | `information_schema.columns` (`current_schema()`) | `::tip` cast'leri default'tan temizlenir |
+| SQLite | `PRAGMA table_info` | Tip ailesi bildirilen tipten çıkarılır |
+
+Kapsam dışı: index, foreign key, unique, auto-increment, charset/collation, enum değerleri.
+
 ## 🧩 Traits
 
 ### Cache Trait
