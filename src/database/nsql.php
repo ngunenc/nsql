@@ -16,6 +16,7 @@ use nsql\database\traits\{
     query_events_trait,
     query_execution_trait,
     query_parameter_trait,
+    read_write_split_trait,
     session_facade_trait,
     statement_cache_trait,
     streaming_trait,
@@ -58,6 +59,7 @@ class nsql
     use write_operations_trait;
     use streaming_trait;
     use session_facade_trait;
+    use read_write_split_trait;
 
     // Debug özellikleri
     protected ?string $last_error = null;
@@ -73,6 +75,8 @@ class nsql
     private ?string $user = null;
     private ?string $pass = null;
     private ?driver_interface $driver = null;
+    /** @var array{host: string, db: string, user: string, pass: string, charset: string, driver: string, port: int} */
+    private array $connection_args;
 
     // Sorgu sonuçları
     private array $last_results = [];
@@ -97,7 +101,8 @@ class nsql
         ?string $pass = null,
         ?string $charset = null,
         ?bool $debug = null,
-        ?string $driver = null
+        ?string $driver = null,
+        ?int $port = null
     ) {
         // Driver belirle (varsayılan: mysql)
         $driver_name = $driver ?? config::get('db_driver', 'mysql');
@@ -109,6 +114,16 @@ class nsql
         $user = $user ?? config::get('db_user', 'root');
         $pass = $pass ?? config::get('db_pass', '');
         $charset = $charset ?? config::get('db_charset', $this->get_default_charset($driver_name));
+        $port = $port ?? (int) config::get('db_port', $this->get_default_port($driver_name));
+        $this->connection_args = [
+            'host' => (string) $host,
+            'db' => (string) $db,
+            'user' => (string) $user,
+            'pass' => (string) $pass,
+            'charset' => (string) $charset,
+            'driver' => (string) $driver_name,
+            'port' => $port,
+        ];
 
         // Driver'a göre DSN oluştur
         $config = [
@@ -122,7 +137,7 @@ class nsql
             $config['path'] = $db;
             unset($config['host'], $config['charset']);
         } else {
-            $config['port'] = config::get('db_port', $this->get_default_port($driver_name));
+            $config['port'] = $port;
         }
 
         $this->dsn = $this->driver->build_dsn($config);
@@ -186,6 +201,16 @@ class nsql
         };
     }
 
+    /**
+     * İsimlendirilmiş bağlantıyı döndürür (aynı süreçte tekil, ilk kullanımda açılır).
+     *
+     * @see connection_manager
+     */
+    public static function connection(string $name = connection_manager::DEFAULT): self
+    {
+        return connection_manager::get($name);
+    }
+
     public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static
     {
         // DSN'den driver oluştur
@@ -199,7 +224,8 @@ class nsql
             user: $username,
             pass: $password,
             charset: $parsed['charset'] ?? null,
-            driver: $parsed['driver']
+            driver: $parsed['driver'],
+            port: isset($parsed['port']) ? (int) $parsed['port'] : null
         );
 
         // Özel options varsa uygula

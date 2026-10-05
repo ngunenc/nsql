@@ -25,6 +25,10 @@ trait query_execution_trait
             );
         }
 
+        if ($this->should_use_reader($sql)) {
+            return $this->execute_on_reader($sql, $params, $fetch_mode, ...$fetch_mode_args);
+        }
+
         $this->ensure_connection();
 
         // PDO bağlantısı kontrolü
@@ -42,6 +46,9 @@ trait query_execution_trait
         $stmt = $this->run_with_reconnect($sql, $params, $fetch_mode, ...$fetch_mode_args);
         if ($stmt === false && $this->throw_on_error()) {
             throw $this->make_query_exception($sql, $params);
+        }
+        if ($stmt !== false) {
+            $this->note_primary_query($sql);
         }
 
         return $stmt;
