@@ -456,7 +456,6 @@ $backup->restoreToPoint('2025-05-27 12:00:00');
 - Async query execution
 
 ### v1.3.0 (Planlanan)
-- Schema validation
 - Database proxy
 - Query optimization engine
 - Advanced security features

@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.24
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.25
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -51,6 +51,8 @@
 > **v1.5.23**: Şifreleme v2: ham 32 byte anahtar, 12 byte IV, key_id ile rotation sonrası çözme; v1 verisi okunmaya devam ediyor (#39).
 >
 > **v1.5.24**: PHPStan seviyesi tek kaynakta: `phpstan.neon` level 8 + baseline; `composer stan` ve CI aynı config'i kullanıyor (#21). `bin/nsql` çalıştırılabilir (#12).
+>
+> **v1.5.25**: Boş `src/database/schema/` stub'ı ve şema validasyonu vaatleri kaldırıldı; MVP ayrı roadmap issue'sunda (#8, #54).
 
 ## 🌟 Özellikler
 
@@ -103,7 +105,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.24 --prefer-dist
+composer require ngunenc/nsql:^1.5.25 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -123,13 +125,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.24"
+        "ngunenc/nsql": "^1.5.25"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.24 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.25 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -359,7 +361,6 @@ nsql/
 │       ├── migration_manager.php   # Migration yönetimi
 │       ├── nsql.php               # Ana PDO wrapper sınıfı
 │       ├── query_builder.php      # SQL sorgu oluşturucu
-│       ├── schema/               # Şema validasyonu (v1.3.0)
 │       ├── security/             # Güvenlik bileşenleri
 │       │   ├── audit_logger.php   # Güvenlik log sistemi
 │       │   ├── encryption.php     # Şifreleme işlemleri
@@ -1584,6 +1585,9 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v1.5.25 (2026-10-05)
+  - Şema validasyonu stub'ı ve doküman vaatleri kaldırıldı (#8)
+
 - v1.5.24 (2026-10-05)
   - PHPStan seviye tutarlılığı ve baseline (#21); bin/nsql çalıştırma biti (#12)
 
@@ -1768,7 +1772,7 @@ Son Güncelleme: 27 Ocak 2025
 ### v1.3.0 - Q4 2025
 - Redis önbellek entegrasyonu
 - Migration sistemi
-- Şema validasyonu
+- Şema validasyonu (henüz yok; [#54](https://github.com/ngunenc/nsql/issues/54))
 
 ### v1.4.0 - Q1 2026
 - Otomatik backup sistemi

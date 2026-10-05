@@ -391,17 +391,12 @@ $result = await($promise);
 
 ### v1.3.0 (Planlanan)
 **Yeni Özellikler:**
-- Schema validation
 - Query optimization
 - Cloud entegrasyonları
 - Advanced security
 
 **Örnek Kullanım:**
 ```php
-// Schema validation
-$db->enableSchemaValidation();
-$db->validateTable('users');
-
 // Query optimization
 $db->enableQueryOptimizer();
 $plan = $db->explainQuery($query);

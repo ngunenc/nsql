@@ -4,6 +4,15 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.25] - 2026-10-05
+
+### Temizlik (#8)
+- `src/database/schema/` yalnızca "v1.3.0'da eklenecek" diyen bir README içeriyordu; kodda karşılığı yoktu. Klasör kaldırıldı.
+- README proje yapısı, `docs/kullanim-klavuzu.md` (`enableSchemaValidation()` / `validateTable()` örneği) ve `docs/teknik-detay.md` içindeki şema validasyonu vaatleri silindi. README'deki planlanan özellikler listesi henüz olmadığını belirtiyor.
+- Şema validasyonu MVP'si ayrı bir roadmap issue'su olarak takip ediliyor: [#54](https://github.com/ngunenc/nsql/issues/54).
+
+Kod davranışı değişmedi; public API etkilenmedi.
+
 ## [1.5.24] - 2026-10-05
 
 ### Düzeltmeler (#21)
