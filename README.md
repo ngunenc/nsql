@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.6.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.7.0
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -71,6 +71,8 @@
 > **v1.5.33**: Her sorgudan önce atılan `SELECT 1` ping kaldırıldı (yalnızca 30+ sn boşta kalma sonrası), `debug_backtrace` yalnızca debug modunda (#44).
 >
 > **v1.6.0**: Gerçek streaming `get_yield()` (MySQL unbuffered, `YIELD_UNBUFFERED`), keyset tabanlı `chunk_by_id()`, `memory_limit`'e oranlanan ve `.env` ile ayarlanabilen bellek eşikleri (#45).
+>
+> **v1.7.0**: Tek hata modeli: `THROW_ON_ERROR=true` ile tüm sorgu metotları `QueryException` fırlatır, `update()`/`delete()` etkilenen satır sayısı döndürür; `safe_execute` sözleşmesi netleşti, geçiş rehberi `UPGRADE.md` (#47).
 
 ## 🌟 Özellikler
 
@@ -123,7 +125,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.6.0 --prefer-dist
+composer require ngunenc/nsql:^1.7.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -143,13 +145,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.6.0"
+        "ngunenc/nsql": "^1.7.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.6.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.7.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1644,6 +1646,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.7.0 (2026-10-05)
+  - THROW_ON_ERROR hata modeli, update/delete int dönüşü, UPGRADE.md (#47)
 
 - v1.6.0 (2026-10-05)
   - Unbuffered get_yield, chunk_by_id, memory_limit oranlı bellek eşikleri (#45)
