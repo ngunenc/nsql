@@ -4,6 +4,19 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.9.0] - 2026-10-05
+
+### Yeni (#49)
+- **Yazma işlemleri**: `insert(array)` (eklenen ID), `insert_many(array)` (satır sayısı; placeholder sınırını aşan veri parçalanıp tek transaction'da eklenir), `update(array)` ve `delete()` (etkilenen satır sayısı), `upsert($rows, $update_columns, $unique_by)` (MySQL `ON DUPLICATE KEY UPDATE`, PostgreSQL/SQLite `ON CONFLICT … DO UPDATE`). Hata durumunda `THROW_ON_ERROR`'dan bağımsız olarak `QueryException`.
+- **Güvenlik**: WHERE koşulu olmadan `update()` / `delete()` `LogicException` verir; tüm tablo için `update($data, true)` / `delete(true)`. Yazma işlemleri JOIN, UNION, GROUP BY, HAVING, ORDER BY, LIMIT ve OFFSET ile birlikte reddedilir (sessizce yok sayılmaz).
+- **Yardımcılar**: `count($column = '*')` (GROUP BY / UNION / LIMIT varsa alt sorgu üzerinden), `exists()`, `pluck($column, $key = null)`, `value($column)`, `paginate($per_page, $page)` → `{data, total, per_page, current_page, last_page}`.
+- **Koşullar**: `or_where()`, `or_where_in()`, `or_where_null()`, `where(callable)` / `or_where(callable)` ile parantezli gruplar, `where_between()`, `where_not_between()`, `or_where_between()`, `when($condition, $callback, $default)`.
+- **`query_builder::raw($sql, $bindings)`**: where değeri, insert/update/upsert değeri ve select kolonu olarak kullanılabilen açık raw ifade (`nsql\database\raw_expression`). Değerler isimli binding ile bağlanır.
+- **`nsql::statement($sql, $params): int`**: yazma sorgusunu çalıştırır, etkilenen satır sayısını döndürür, hata durumunda her zaman `QueryException`.
+
+### Testler
+- `QueryBuilderWriteIntegrationTest`: her yeni metot için entegrasyon testi (insert, insert_many, update + raw, koşulsuz yazma koruması, delete, upsert ekleme/güncelleme, hata exception'ı, count varyantları, exists, pluck, value, paginate, or_where ve gruplar, between, when, raw select/where). `docs/api-reference.md` güncellendi.
+
 ## [1.8.0] - 2026-10-05
 
 ### Yeni (#50)

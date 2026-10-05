@@ -241,13 +241,26 @@ select(string ...$columns): self
 from(string $table): self
 
 // WHERE clause
-where(string $column, string $operator, mixed $value): self
+where(string|callable $column, ?string $operator = null, mixed $value = null): self
 // 'IN' / 'NOT IN' + dizi, '=' / 'IS' + null => IS NULL, '!=' / '<>' / 'IS NOT' + null => IS NOT NULL
+// callable => parantezli grup: ->where(fn ($q) => $q->where('a', '=', 1)->or_where('b', '=', 2))
+or_where(string|callable $column, ?string $operator = null, mixed $value = null): self
 where_in(string $column, array $values): self       // boş dizi => hiçbir satır
 where_not_in(string $column, array $values): self   // boş dizi => tüm satırlar
+or_where_in(string $column, array $values): self
 where_null(string $column): self
 where_not_null(string $column): self
+or_where_null(string $column): self
+where_between(string $column, mixed $min, mixed $max): self
+where_not_between(string $column, mixed $min, mixed $max): self
+or_where_between(string $column, mixed $min, mixed $max): self
+when(mixed $condition, callable $callback, ?callable $default = null): self   // callback($builder, $condition)
 allow_empty_strings(bool $allow = true): self       // varsayılan: QUERY_BUILDER_ALLOW_EMPTY_STRING (true)
+
+// Açık raw ifade (v1.9.0+): where() değeri, insert/update/upsert değeri veya select() kolonu
+query_builder::raw(string $sql, array $bindings = []): raw_expression
+// ->update(['qty' => query_builder::raw('qty + :inc', ['inc' => 1])])
+// Raw SQL doğrulanmaz; kullanıcı girdisi yalnızca $bindings ile verilmelidir.
 
 // ORDER BY clause
 order_by(string $column, string $direction = 'ASC'): self
@@ -265,9 +278,29 @@ get(): array
 // İlk sonucu alma
 first(): ?object
 
+// Yardımcılar (v1.9.0+)
+count(string $column = '*'): int          // GROUP BY / UNION / LIMIT varsa alt sorgu üzerinden sayar
+exists(): bool
+pluck(string $column, ?string $key = null): array
+value(string $column): mixed              // ilk satırın değeri, yoksa null
+paginate(int $per_page = 15, int $page = 1): array  // {data, total, per_page, current_page, last_page}
+
+// Yazma işlemleri (v1.9.0+) — table() ile düz tablo gerekir; JOIN/UNION/GROUP/ORDER/LIMIT desteklenmez.
+// Hata durumunda THROW_ON_ERROR'dan bağımsız olarak QueryException fırlatılır.
+insert(array $data): int|string           // eklenen ID
+insert_many(array $rows): int             // eklenen satır sayısı (büyük veri parçalanır, tek transaction)
+update(array $data, bool $allow_without_where = false): int   // etkilenen satır
+delete(bool $allow_without_where = false): int                // silinen satır
+// WHERE olmadan update()/delete() LogicException verir; tüm tablo için ikinci parametre true olmalı.
+upsert(array $rows, array $update_columns, array $unique_by = []): int
+// MySQL: ON DUPLICATE KEY UPDATE; PostgreSQL/SQLite: ON CONFLICT ($unique_by) DO UPDATE ($unique_by zorunlu)
+// $update_columns: ['name', 'qty'] (yeni değer) veya ['qty' => query_builder::raw('qty + 1')]
+
 // SQL sorgusunu alma (test için)
 get_query(): string
 ```
+
+`nsql::statement(string $sql, array $params = []): int` — yazma sorgusunu çalıştırıp etkilenen satır sayısını döndürür; hata durumunda her zaman `QueryException` (v1.9.0+).
 
 ### Örnek Kullanım
 

@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.8.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.9.0
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -75,6 +75,8 @@
 > **v1.7.0**: Tek hata modeli: `THROW_ON_ERROR=true` ile tüm sorgu metotları `QueryException` fırlatır, `update()`/`delete()` etkilenen satır sayısı döndürür; `safe_execute` sözleşmesi netleşti, geçiş rehberi `UPGRADE.md` (#47).
 >
 > **v1.8.0**: `transaction(callable, attempts)`: otomatik commit/rollback, iç içe çağrıda savepoint, deadlock/lock wait'te yeniden deneme; DDL implicit commit sonrası `commit()` artık hata vermiyor (#50).
+>
+> **v1.9.0**: Query builder yazma işlemleri (`insert`, `insert_many`, `update`, `delete`, `upsert`), yardımcılar (`count`, `exists`, `pluck`, `value`, `paginate`), `or_where` / gruplama / `where_between` / `when` ve açık `query_builder::raw()` (#49).
 
 ## 🌟 Özellikler
 
@@ -127,7 +129,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.8.0 --prefer-dist
+composer require ngunenc/nsql:^1.9.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -147,13 +149,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.8.0"
+        "ngunenc/nsql": "^1.9.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.8.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.9.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1648,6 +1650,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.9.0 (2026-10-05)
+  - QB insert/update/delete/upsert, count/exists/pluck/value/paginate, or_where, raw() (#49)
 
 - v1.8.0 (2026-10-05)
   - transaction(callable), savepoint, deadlock retry, inTransaction kontrolü (#50)

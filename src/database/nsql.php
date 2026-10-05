@@ -1074,6 +1074,25 @@ class nsql
     }
 
     /**
+     * Yazma sorgusu (INSERT/UPDATE/DELETE/DDL) çalıştırır ve etkilenen satır sayısını döndürür.
+     * THROW_ON_ERROR ayarından bağımsız olarak hata durumunda QueryException fırlatır.
+     */
+    public function statement(string $sql, array $params = []): int
+    {
+        $this->set_last_called_method();
+        $this->last_results = [];
+
+        $stmt = $this->execute_query($sql, $params);
+        if ($stmt === false) {
+            throw $this->make_query_exception($sql, $params);
+        }
+
+        $this->invalidate_cache_for_write($sql);
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * UPDATE çalıştırır.
      *
      * @return int|bool THROW_ON_ERROR=true: etkilenen satır sayısı (hata → QueryException).
