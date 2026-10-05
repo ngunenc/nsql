@@ -63,8 +63,6 @@ class nsql
     private ?driver_interface $driver = null;
 
     // Cache özellikleri
-    private array $query_cache = [];
-    private array $query_cache_usage = [];
     private bool $query_cache_enabled = false;
     private int $query_cache_timeout = 3600;
     private int $query_cache_size_limit = 100;
