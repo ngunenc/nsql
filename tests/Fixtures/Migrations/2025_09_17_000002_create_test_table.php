@@ -11,6 +11,7 @@ class create_test_table extends base_migration
         $this->db()->query("CREATE TABLE IF NOT EXISTS test_table (
             id INT AUTO_INCREMENT PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
+            value TEXT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     }
