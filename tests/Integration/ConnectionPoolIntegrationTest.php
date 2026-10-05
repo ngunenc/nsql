@@ -2,10 +2,10 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
-use nsql\database\connection_pool;
+use nsql\database\Config;
+use nsql\database\ConnectionPool;
 use nsql\database\exceptions\ConnectionException;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 use PDO;
 use Tests\Support\DatabaseTestCase;
 
@@ -19,18 +19,18 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
     private function credentials(): array
     {
         return [
-            'host' => (string) config::get('db_host', 'localhost'),
-            'db' => (string) config::get('db_name', 'nsql_test_db'),
-            'user' => (string) config::get('db_user', 'root'),
-            'pass' => (string) config::get('db_pass', ''),
+            'host' => (string) Config::get('db_host', 'localhost'),
+            'db' => (string) Config::get('db_name', 'nsql_test_db'),
+            'user' => (string) Config::get('db_user', 'root'),
+            'pass' => (string) Config::get('db_pass', ''),
         ];
     }
 
-    private function new_db(?string $db = null): nsql
+    private function new_db(?string $db = null): Nsql
     {
         $c = $this->credentials();
 
-        return new nsql(host: $c['host'], db: $db ?? $c['db'], user: $c['user'], pass: $c['pass']);
+        return new Nsql(host: $c['host'], db: $db ?? $c['db'], user: $c['user'], pass: $c['pass']);
     }
 
     /**
@@ -39,14 +39,14 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
     private function admin_pdo(): PDO
     {
         $c = $this->credentials();
-        $port = (int) config::get('db_port', 3306);
+        $port = (int) Config::get('db_port', 3306);
 
         return new PDO("mysql:host={$c['host']};port={$port}", $c['user'], $c['pass'], [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         ]);
     }
 
-    private function connection_id(nsql $db): int
+    private function connection_id(Nsql $db): int
     {
         return (int) $db->get_row('SELECT CONNECTION_ID() AS id')->id;
     }
@@ -59,7 +59,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
 
     public function testInstanceUsesSingleConnectionAndReleasedOneIsReused(): void
     {
-        $created_before = connection_pool::get_stats()['created_connections'];
+        $created_before = ConnectionPool::get_stats()['created_connections'];
         $active_before = $this->db->get_instance_pool_stats()['active_connections'];
 
         $a = $this->new_db();
@@ -67,7 +67,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
         $a->get_results('SELECT 2 AS x');
         $this->assertSame($active_before + 1, $a->get_instance_pool_stats()['active_connections']);
 
-        $created_after_a = connection_pool::get_stats()['created_connections'];
+        $created_after_a = ConnectionPool::get_stats()['created_connections'];
         $this->assertLessThanOrEqual($created_before + 1, $created_after_a, 'Bir nsql örneği en fazla bir fiziksel bağlantı açmalı');
 
         // Xdebug develop modunda unset() yıkıcıyı hemen tetiklemeyebilir.
@@ -76,7 +76,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
 
         $b = $this->new_db();
         $b->get_results('SELECT 1 AS x');
-        $this->assertSame($created_after_a, connection_pool::get_stats()['created_connections'], 'Bırakılan bağlantı yeniden kullanılmalı');
+        $this->assertSame($created_after_a, ConnectionPool::get_stats()['created_connections'], 'Bırakılan bağlantı yeniden kullanılmalı');
     }
 
     public function testDifferentDatabasesUseSeparatePools(): void
@@ -96,7 +96,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
             $main_pool = $this->db->get_instance_pool_stats()['pools'];
             $alt_pool = $alt->get_instance_pool_stats()['pools'];
             $this->assertNotSame(array_keys($main_pool), array_keys($alt_pool));
-            $this->assertGreaterThanOrEqual(2, connection_pool::get_stats()['pool_count']);
+            $this->assertGreaterThanOrEqual(2, ConnectionPool::get_stats()['pool_count']);
 
             unset($alt);
         } finally {
@@ -132,7 +132,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
         $this->assertNotSame($old_id, $this->connection_id($this->db));
     }
 
-    private function questions(nsql $db): int
+    private function questions(Nsql $db): int
     {
         return (int) $db->get_row("SHOW SESSION STATUS LIKE 'Questions'")->Value;
     }
@@ -151,7 +151,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
 
     public function testIdlePingThresholdIsConfigurable(): void
     {
-        config::set('connection_ping_idle_seconds', 0);
+        Config::set('connection_ping_idle_seconds', 0);
         try {
             $before = $this->questions($this->db);
             $this->db->get_row('SELECT 1 AS x');
@@ -160,7 +160,7 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
             // SELECT 1 ping + SELECT + ping + SHOW
             $this->assertSame(4, $after - $before);
         } finally {
-            config::set('connection_ping_idle_seconds', 30);
+            Config::set('connection_ping_idle_seconds', 30);
         }
     }
 

@@ -3,7 +3,7 @@
 namespace nsql\database\exceptions;
 
 use Exception;
-use nsql\database\exceptions\error_codes;
+use nsql\database\exceptions\ErrorCodes;
 
 /**
  * Connection Exception
@@ -21,12 +21,12 @@ class ConnectionException extends DatabaseException
         ?string $dsn = null,
         ?string $host = null,
         ?string $database = null,
-        int $code = error_codes::CONNECTION_FAILED,
+        int $code = ErrorCodes::CONNECTION_FAILED,
         ?Exception $previous = null
     ) {
         // Eğer mesaj boşsa, hata kodundan mesaj al
         if (empty($message)) {
-            $message = error_codes::get_message($code);
+            $message = ErrorCodes::get_message($code);
         }
 
         parent::__construct($message, $code, $previous);

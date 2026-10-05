@@ -2,25 +2,25 @@
 
 namespace Tests\Support;
 
-use nsql\database\cache\cache_adapter_interface;
-use nsql\database\cache\safe_serializer;
+use nsql\database\cache\CacheAdapterInterface;
+use nsql\database\cache\SafeSerializer;
 
 /**
  * redis_adapter gibi değerleri JSON (safe_serializer) ile saklayan paylaşılan adaptör taklidi.
  */
-final class JsonCacheAdapter implements cache_adapter_interface
+final class JsonCacheAdapter implements CacheAdapterInterface
 {
     /** @var array<string, string> */
     public array $items = [];
 
     public function get(string $key): mixed
     {
-        return isset($this->items[$key]) ? safe_serializer::decode($this->items[$key]) : null;
+        return isset($this->items[$key]) ? SafeSerializer::decode($this->items[$key]) : null;
     }
 
     public function set(string $key, mixed $value, ?int $ttl = null, array $tags = []): bool
     {
-        $this->items[$key] = safe_serializer::encode($value);
+        $this->items[$key] = SafeSerializer::encode($value);
 
         return true;
     }

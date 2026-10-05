@@ -3,10 +3,10 @@
 namespace Tests\Integration;
 
 use nsql\database\exceptions\QueryException;
-use nsql\database\orm\model;
+use nsql\database\orm\Model;
 use Tests\Support\DatabaseTestCase;
 
-class HiddenNameModel extends model
+class HiddenNameModel extends Model
 {
     protected string $table = 'test_table';
     protected array $fillable = ['name'];
@@ -14,13 +14,13 @@ class HiddenNameModel extends model
     protected bool $timestamps = false;
 }
 
-class NoFillableModel extends model
+class NoFillableModel extends Model
 {
     protected string $table = 'test_table';
     protected bool $timestamps = false;
 }
 
-class BadTableModel extends model
+class BadTableModel extends Model
 {
     protected string $table = 'test_table; DROP TABLE test_table';
     protected array $fillable = ['name'];

@@ -4,35 +4,35 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use nsql\database\config;
-use nsql\database\nsql;
+use nsql\database\Config;
+use nsql\database\Nsql;
 
-config::set_project_root(dirname(__DIR__));
+Config::set_project_root(dirname(__DIR__));
 
 /**
  * Ortak bağlantıları hazırlar ve yardımcı fonksiyonlar sağlar
  */
 
 // Ortam
-config::set_environment(getenv('ENV') ?: 'development');
+Config::set_environment(getenv('ENV') ?: 'development');
 
 // Bağlantı bilgileri (.env veya varsayılanlar)
-$db_host = config::get('db_host', 'localhost');
-$db_name = config::get('db_name', 'nsql');
-$db_user = config::get('db_user', 'root');
-$db_pass = config::get('db_pass', '');
-$db_charset = config::get('db_charset', 'utf8mb4');
+$db_host = Config::get('db_host', 'localhost');
+$db_name = Config::get('db_name', 'nsql');
+$db_user = Config::get('db_user', 'root');
+$db_pass = Config::get('db_pass', '');
+$db_charset = Config::get('db_charset', 'utf8mb4');
 
 // DSN
 $dsn = "mysql:host={$db_host};dbname={$db_name};charset={$db_charset}";
 
 // Benchmark için cache'i etkinleştir (nsql constructor öncesi)
-config::set('query_cache_enabled', true);
-config::set('query_cache_timeout', 1800);
-config::set('query_cache_size_limit', 200);
+Config::set('query_cache_enabled', true);
+Config::set('query_cache_timeout', 1800);
+Config::set('query_cache_size_limit', 200);
 
 // nsql bağlantısı
-$nsql = new nsql();
+$nsql = new Nsql();
 
 // PDO bağlantısı (karşılaştırma için)
 $pdo = new PDO($dsn, (string)$db_user, (string)$db_pass, [

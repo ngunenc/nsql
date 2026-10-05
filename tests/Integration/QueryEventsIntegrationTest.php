@@ -2,9 +2,9 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
-use nsql\database\events\query_event;
-use nsql\database\nsql;
+use nsql\database\Config;
+use nsql\database\events\QueryEvent;
+use nsql\database\Nsql;
 use Psr\Log\LogLevel;
 use Tests\Support\ArrayLogger;
 use Tests\Support\ArrayPsr16Cache;
@@ -17,7 +17,7 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
 {
     private static bool $schema_ready = false;
 
-    /** @var list<nsql> */
+    /** @var list<Nsql> */
     private array $extra = [];
 
     protected function setUp(): void
@@ -43,20 +43,20 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
             (fn () => $this->disconnect())->call($db);
         }
         $this->extra = [];
-        config::set('slow_query_threshold_ms', 0);
-        config::set('query_cache_enabled', self::query_cache_suite());
+        Config::set('slow_query_threshold_ms', 0);
+        Config::set('query_cache_enabled', self::query_cache_suite());
 
         parent::tearDown();
     }
 
-    private function cached_connection(ArrayPsr16Cache $store): nsql
+    private function cached_connection(ArrayPsr16Cache $store): Nsql
     {
-        config::set('query_cache_enabled', true);
-        $db = new nsql(
-            host: config::get('db_host', 'localhost'),
-            db: config::get('db_name', 'nsql_test_db'),
-            user: config::get('db_user', 'root'),
-            pass: config::get('db_pass', '')
+        Config::set('query_cache_enabled', true);
+        $db = new Nsql(
+            host: Config::get('db_host', 'localhost'),
+            db: Config::get('db_name', 'nsql_test_db'),
+            user: Config::get('db_user', 'root'),
+            pass: Config::get('db_pass', '')
         );
         $db->set_query_cache_store($store);
         $this->extra[] = $db;
@@ -65,12 +65,12 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
     }
 
     /**
-     * @return \ArrayObject<int, query_event>
+     * @return \ArrayObject<int, QueryEvent>
      */
-    private function record(nsql $db): \ArrayObject
+    private function record(Nsql $db): \ArrayObject
     {
         $events = new \ArrayObject();
-        $db->on_query(function (query_event $e) use ($events): void {
+        $db->on_query(function (QueryEvent $e) use ($events): void {
             $events[] = $e;
         });
 
@@ -131,7 +131,7 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
     {
         $logger = new ArrayLogger();
         $this->db->set_logger($logger);
-        config::set('slow_query_threshold_ms', 0.000001);
+        Config::set('slow_query_threshold_ms', 0.000001);
 
         $this->db->get_row('SELECT * FROM ev_items WHERE name = :token', ['token' => 'abc123']);
 
@@ -260,12 +260,12 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
             }
         };
 
-        config::set('query_cache_enabled', true);
-        $db = new nsql(
-            host: config::get('db_host', 'localhost'),
-            db: config::get('db_name', 'nsql_test_db'),
-            user: config::get('db_user', 'root'),
-            pass: config::get('db_pass', '')
+        Config::set('query_cache_enabled', true);
+        $db = new Nsql(
+            host: Config::get('db_host', 'localhost'),
+            db: Config::get('db_name', 'nsql_test_db'),
+            user: Config::get('db_user', 'root'),
+            pass: Config::get('db_pass', '')
         );
         $this->extra[] = $db;
         $db->set_query_cache_store($store);

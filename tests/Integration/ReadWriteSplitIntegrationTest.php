@@ -2,10 +2,10 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
-use nsql\database\connection_manager;
+use nsql\database\Config;
+use nsql\database\ConnectionManager;
 use nsql\database\exceptions\QueryException;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -18,7 +18,7 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
 {
     private static bool $schema_ready = false;
 
-    /** @var list<nsql> */
+    /** @var list<Nsql> */
     private array $extra = [];
 
     protected function setUp(): void
@@ -35,7 +35,7 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
         }
 
         $this->db->query('TRUNCATE TABLE rw_items');
-        config::set('query_cache_enabled', false);
+        Config::set('query_cache_enabled', false);
     }
 
     protected function tearDown(): void
@@ -44,13 +44,13 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
             (fn () => $this->disconnect())->call($db);
         }
         $this->extra = [];
-        foreach (connection_manager::names() as $name) {
-            (fn () => $this->disconnect())->call(connection_manager::get($name));
+        foreach (ConnectionManager::names() as $name) {
+            (fn () => $this->disconnect())->call(ConnectionManager::get($name));
         }
-        connection_manager::reset();
-        config::set('query_cache_enabled', self::query_cache_suite());
-        config::set('read_write_split', false);
-        config::set('read_write_sticky', true);
+        ConnectionManager::reset();
+        Config::set('query_cache_enabled', self::query_cache_suite());
+        Config::set('read_write_split', false);
+        Config::set('read_write_sticky', true);
 
         parent::tearDown();
     }
@@ -61,29 +61,29 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
     private static function credentials(): array
     {
         return [
-            'host' => (string) config::get('db_host', 'localhost'),
-            'db' => (string) config::get('db_name', 'nsql_test_db'),
-            'user' => (string) config::get('db_user', 'root'),
-            'pass' => (string) config::get('db_pass', ''),
+            'host' => (string) Config::get('db_host', 'localhost'),
+            'db' => (string) Config::get('db_name', 'nsql_test_db'),
+            'user' => (string) Config::get('db_user', 'root'),
+            'pass' => (string) Config::get('db_pass', ''),
         ];
     }
 
-    private function split_connection(): nsql
+    private function split_connection(): Nsql
     {
         $c = self::credentials();
-        $db = new nsql(host: $c['host'], db: $c['db'], user: $c['user'], pass: $c['pass']);
+        $db = new Nsql(host: $c['host'], db: $c['db'], user: $c['user'], pass: $c['pass']);
         $db->set_read_replica(['host' => $c['host']]);
         $this->extra[] = $db;
 
         return $db;
     }
 
-    private static function primary_id(nsql $db): int
+    private static function primary_id(Nsql $db): int
     {
         return (int) $db->get_pdo()->query('SELECT CONNECTION_ID()')->fetchColumn();
     }
 
-    private static function routed_id(nsql $db, string $suffix = ''): int
+    private static function routed_id(Nsql $db, string $suffix = ''): int
     {
         return (int) $db->get_row('SELECT CONNECTION_ID() AS id' . $suffix)->id;
     }
@@ -125,7 +125,7 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
 
     public function test_sticky_can_be_disabled(): void
     {
-        config::set('read_write_sticky', false);
+        Config::set('read_write_sticky', false);
         $db = $this->split_connection();
         $primary = self::primary_id($db);
 
@@ -163,7 +163,7 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
     public function test_unreachable_replica_falls_back_to_primary(): void
     {
         $c = self::credentials();
-        $db = new nsql(host: $c['host'], db: $c['db'], user: $c['user'], pass: $c['pass']);
+        $db = new Nsql(host: $c['host'], db: $c['db'], user: $c['user'], pass: $c['pass']);
         $this->extra[] = $db;
         $db->set_read_replica(['host' => $c['host'], 'user' => 'nsql_no_such_user', 'pass' => 'x']);
         $primary = self::primary_id($db);
@@ -175,30 +175,30 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
     public function test_env_configuration_enables_split(): void
     {
         $c = self::credentials();
-        config::set('read_write_split', true);
-        config::set('db_read_host', $c['host'] . ', ' . $c['host']);
+        Config::set('read_write_split', true);
+        Config::set('db_read_host', $c['host'] . ', ' . $c['host']);
 
         try {
-            $db = new nsql(host: $c['host'], db: $c['db'], user: $c['user'], pass: $c['pass']);
+            $db = new Nsql(host: $c['host'], db: $c['db'], user: $c['user'], pass: $c['pass']);
             $this->extra[] = $db;
 
             $this->assertTrue($db->uses_read_replica());
             $this->assertNotSame(self::primary_id($db), self::routed_id($db));
         } finally {
-            config::set('db_read_host', '');
+            Config::set('db_read_host', '');
         }
     }
 
     public function test_named_connections_are_independent(): void
     {
         $c = self::credentials();
-        connection_manager::add('reporting', $c);
+        ConnectionManager::add('reporting', $c);
 
-        $main = nsql::connection();
-        $reporting = nsql::connection('reporting');
+        $main = Nsql::connection();
+        $reporting = Nsql::connection('reporting');
 
-        $this->assertSame($main, nsql::connection('default'));
-        $this->assertSame($reporting, nsql::connection('REPORTING'));
+        $this->assertSame($main, Nsql::connection('default'));
+        $this->assertSame($reporting, Nsql::connection('REPORTING'));
         $this->assertNotSame($main, $reporting);
         $this->assertNotSame(self::primary_id($main), self::primary_id($reporting));
 
@@ -218,23 +218,23 @@ class ReadWriteSplitIntegrationTest extends DatabaseTestCase
     public function test_named_connection_from_env(): void
     {
         $c = self::credentials();
-        config::set('db_analytics_host', $c['host']);
-        config::set('db_analytics_name', $c['db']);
+        Config::set('db_analytics_host', $c['host']);
+        Config::set('db_analytics_name', $c['db']);
 
-        $this->assertTrue(connection_manager::has('analytics'));
-        $db = nsql::connection('analytics');
+        $this->assertTrue(ConnectionManager::has('analytics'));
+        $db = Nsql::connection('analytics');
         $this->assertSame(1, (int) $db->get_row('SELECT 1 AS one')->one);
     }
 
     public function test_unknown_named_connection_throws(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        nsql::connection('nsql_unknown_conn');
+        Nsql::connection('nsql_unknown_conn');
     }
 
     public function test_add_rejects_unknown_keys(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        connection_manager::add('bad', ['hostname' => 'x']);
+        ConnectionManager::add('bad', ['hostname' => 'x']);
     }
 }

@@ -2,8 +2,8 @@
 
 namespace Tests\Support;
 
-use nsql\database\config;
-use nsql\database\nsql;
+use nsql\database\Config;
+use nsql\database\Nsql;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -14,14 +14,14 @@ use PHPUnit\Framework\TestCase;
  */
 abstract class PortableTestCase extends TestCase
 {
-    protected nsql $db;
+    protected Nsql $db;
 
-    /** @var list<nsql> */
+    /** @var list<Nsql> */
     private array $connections = [];
 
     public static function driver(): string
     {
-        $driver = strtolower((string) config::get('db_driver', 'mysql'));
+        $driver = strtolower((string) Config::get('db_driver', 'mysql'));
 
         return match ($driver) {
             'postgresql', 'postgres' => 'pgsql',
@@ -32,9 +32,9 @@ abstract class PortableTestCase extends TestCase
 
     protected function setUp(): void
     {
-        config::set_environment('testing');
-        config::set_project_root(dirname(__DIR__, 2));
-        config::set('query_cache_enabled', DatabaseTestCase::query_cache_suite());
+        Config::set_environment('testing');
+        Config::set_project_root(dirname(__DIR__, 2));
+        Config::set('query_cache_enabled', DatabaseTestCase::query_cache_suite());
 
         $this->db = $this->connect();
     }
@@ -47,16 +47,16 @@ abstract class PortableTestCase extends TestCase
         $this->connections = [];
     }
 
-    protected function connect(): nsql
+    protected function connect(): Nsql
     {
         $driver = self::driver();
         $db = $driver === 'sqlite'
-            ? new nsql(db: self::sqlite_path(), driver: 'sqlite')
-            : new nsql(
-                host: (string) config::get('db_host', 'localhost'),
-                db: (string) config::get('db_name', 'nsql_test_db'),
-                user: (string) config::get('db_user', 'root'),
-                pass: (string) config::get('db_pass', ''),
+            ? new Nsql(db: self::sqlite_path(), driver: 'sqlite')
+            : new Nsql(
+                host: (string) Config::get('db_host', 'localhost'),
+                db: (string) Config::get('db_name', 'nsql_test_db'),
+                user: (string) Config::get('db_user', 'root'),
+                pass: (string) Config::get('db_pass', ''),
                 charset: $driver === 'pgsql' ? 'UTF8' : null,
                 driver: $driver
             );

@@ -24,18 +24,18 @@
     exit(1);
 })();
 
-use nsql\database\nsql;
-use nsql\database\migration_manager;
+use nsql\database\Nsql;
+use nsql\database\MigrationManager;
 
 class nsql_cli
 {
-    private ?migration_manager $migration_manager = null;
+    private ?MigrationManager $migration_manager = null;
     private ?string $migrations_path = null;
     private ?string $seeds_path = null;
 
-    private function manager(): migration_manager
+    private function manager(): MigrationManager
     {
-        return $this->migration_manager ??= new migration_manager(new nsql(), $this->migrations_path, $this->seeds_path);
+        return $this->migration_manager ??= new MigrationManager(new Nsql(), $this->migrations_path, $this->seeds_path);
     }
 
     public function run(array $argv): void
@@ -173,7 +173,7 @@ class nsql_cli
     {
         echo "Veritabanı durumu:\n\n";
         try {
-            $db = new nsql();
+            $db = new Nsql();
             $stats = $db->get_all_stats();
             
             echo "Cache:\n";

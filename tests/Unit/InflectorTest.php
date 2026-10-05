@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use nsql\database\orm\inflector;
+use nsql\database\orm\Inflector;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -42,22 +42,22 @@ class InflectorTest extends TestCase
     #[DataProvider('plurals')]
     public function test_plural(string $singular, string $plural): void
     {
-        $this->assertSame($plural, inflector::plural($singular));
+        $this->assertSame($plural, Inflector::plural($singular));
     }
 
     public function test_snake(): void
     {
-        $this->assertSame('user', inflector::snake('User'));
-        $this->assertSame('blog_post', inflector::snake('BlogPost'));
-        $this->assertSame('http_request', inflector::snake('HTTPRequest'));
-        $this->assertSame('user_id2', inflector::snake('UserId2'));
+        $this->assertSame('user', Inflector::snake('User'));
+        $this->assertSame('blog_post', Inflector::snake('BlogPost'));
+        $this->assertSame('http_request', Inflector::snake('HTTPRequest'));
+        $this->assertSame('user_id2', Inflector::snake('UserId2'));
     }
 
     public function test_table_for_class(): void
     {
-        $this->assertSame('blog_posts', inflector::table_for_class('App\\Models\\BlogPost'));
-        $this->assertSame('categories', inflector::table_for_class('Category'));
-        $this->assertSame('people', inflector::table_for_class('App\\Person'));
-        $this->assertSame('order_statuses', inflector::table_for_class('OrderStatus'));
+        $this->assertSame('blog_posts', Inflector::table_for_class('App\\Models\\BlogPost'));
+        $this->assertSame('categories', Inflector::table_for_class('Category'));
+        $this->assertSame('people', Inflector::table_for_class('App\\Person'));
+        $this->assertSame('order_statuses', Inflector::table_for_class('OrderStatus'));
     }
 }

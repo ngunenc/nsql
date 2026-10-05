@@ -2,8 +2,8 @@
 
 namespace Tests\Integration;
 
-use nsql\database\config;
-use nsql\database\migration_manager;
+use nsql\database\Config;
+use nsql\database\MigrationManager;
 use Tests\Support\DatabaseTestCase;
 
 class MigrationManagerTest extends DatabaseTestCase
@@ -31,13 +31,13 @@ class MigrationManagerTest extends DatabaseTestCase
             $this->db->query("DROP TABLE IF EXISTS {$table}");
         }
         $this->remove_dir($this->dir);
-        config::set('MIGRATIONS_PATH', 'database/migrations');
+        Config::set('MIGRATIONS_PATH', 'database/migrations');
         parent::tearDown();
     }
 
-    private function manager(): migration_manager
+    private function manager(): MigrationManager
     {
-        $manager = new migration_manager($this->db, $this->dir . '/migrations', $this->dir . '/seeds');
+        $manager = new MigrationManager($this->db, $this->dir . '/migrations', $this->dir . '/seeds');
         $manager->set_migrations_table($this->log_table);
 
         return $manager;
@@ -58,7 +58,7 @@ class MigrationManagerTest extends DatabaseTestCase
         file_put_contents($this->dir . '/migrations/' . $file, <<<PHP
 <?php
 
-return new class extends \\nsql\\database\\base_migration {
+return new class extends \\nsql\\database\\BaseMigration {
     public function up(): void { {$up} }
     public function down(): void { \$this->db()->query('DROP TABLE IF EXISTS {$table}'); }
     public function get_dependencies(): array { return {$deps_code}; }
@@ -90,14 +90,14 @@ PHP);
 
     public function test_default_paths_resolve_under_project_root(): void
     {
-        $manager = new migration_manager($this->db);
-        $root = rtrim(config::get_project_root(), '/\\');
+        $manager = new MigrationManager($this->db);
+        $root = rtrim(Config::get_project_root(), '/\\');
 
         $this->assertSame($root . DIRECTORY_SEPARATOR . 'database/migrations', $manager->get_migrations_path());
         $this->assertSame($root . DIRECTORY_SEPARATOR . 'database/seeds', $manager->get_seeds_path());
 
-        config::set('MIGRATIONS_PATH', 'db/schema');
-        $this->assertSame($root . DIRECTORY_SEPARATOR . 'db/schema', (new migration_manager($this->db))->get_migrations_path());
+        Config::set('MIGRATIONS_PATH', 'db/schema');
+        $this->assertSame($root . DIRECTORY_SEPARATOR . 'db/schema', (new MigrationManager($this->db))->get_migrations_path());
     }
 
     public function test_created_template_is_loadable_and_receives_connection(): void
@@ -142,7 +142,7 @@ PHP);
 
 namespace {$namespace};
 
-class create_cls_table extends \\nsql\\database\\base_migration
+class create_cls_table extends \\nsql\\database\\BaseMigration
 {
     public function up(): void { \$this->db()->query('CREATE TABLE {$table} (id INT)'); }
     public function down(): void { \$this->db()->query('DROP TABLE IF EXISTS {$table}'); }
@@ -212,7 +212,7 @@ PHP);
         file_put_contents($path, <<<'PHP'
 <?php
 
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 return new class {
     public function run(nsql $db): void

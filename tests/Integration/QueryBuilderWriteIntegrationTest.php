@@ -3,7 +3,7 @@
 namespace Tests\Integration;
 
 use nsql\database\exceptions\QueryException;
-use nsql\database\query_builder;
+use nsql\database\QueryBuilder;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -32,9 +32,9 @@ class QueryBuilderWriteIntegrationTest extends DatabaseTestCase
         $this->db->query('TRUNCATE TABLE qb_items');
     }
 
-    private function items(): query_builder
+    private function items(): QueryBuilder
     {
-        return (new query_builder($this->db))->table('qb_items');
+        return (new QueryBuilder($this->db))->table('qb_items');
     }
 
     private function seed(): void
@@ -85,7 +85,7 @@ class QueryBuilderWriteIntegrationTest extends DatabaseTestCase
     {
         $this->seed();
 
-        $this->items()->where('sku', '=', 'A1')->update(['qty' => query_builder::raw('qty + :inc', ['inc' => 10])]);
+        $this->items()->where('sku', '=', 'A1')->update(['qty' => QueryBuilder::raw('qty + :inc', ['inc' => 10])]);
 
         $this->assertSame(15, (int) $this->items()->where('sku', '=', 'A1')->value('qty'));
     }
@@ -134,7 +134,7 @@ class QueryBuilderWriteIntegrationTest extends DatabaseTestCase
         $this->assertSame('apple2', $this->items()->where('sku', '=', 'A1')->value('name'));
         $this->assertSame(6, (int) $this->items()->where('sku', '=', 'E1')->value('qty'));
 
-        $this->items()->upsert(['sku' => 'E1', 'name' => 'egg', 'qty' => 1], ['qty' => query_builder::raw('qty + 100')]);
+        $this->items()->upsert(['sku' => 'E1', 'name' => 'egg', 'qty' => 1], ['qty' => QueryBuilder::raw('qty + 100')]);
         $this->assertSame(106, (int) $this->items()->where('sku', '=', 'E1')->value('qty'));
     }
 
@@ -202,12 +202,12 @@ class QueryBuilderWriteIntegrationTest extends DatabaseTestCase
 
         $grouped = $this->items()
             ->where('qty', '>', 1)
-            ->where(fn (query_builder $q) => $q->where('category', '=', 'fruit')->or_where_null('category'))
+            ->where(fn (QueryBuilder $q) => $q->where('category', '=', 'fruit')->or_where_null('category'))
             ->order_by('id')
             ->pluck('name');
         $this->assertSame(['apple', 'donut'], $grouped);
         $this->assertStringContainsString('AND (', $this->items()->where('qty', '>', 1)
-            ->where(fn (query_builder $q) => $q->where('a', '=', 1)->or_where('b', '=', 2))->get_query());
+            ->where(fn (QueryBuilder $q) => $q->where('a', '=', 1)->or_where('b', '=', 2))->get_query());
     }
 
     public function test_where_between_and_when(): void
@@ -228,8 +228,8 @@ class QueryBuilderWriteIntegrationTest extends DatabaseTestCase
         $this->seed();
 
         $row = $this->items()
-            ->select('sku', query_builder::raw('qty * :m AS doubled', ['m' => 2]))
-            ->where('qty', '>', query_builder::raw('(SELECT MIN(qty) FROM qb_items WHERE qty > :min)', ['min' => 3]))
+            ->select('sku', QueryBuilder::raw('qty * :m AS doubled', ['m' => 2]))
+            ->where('qty', '>', QueryBuilder::raw('(SELECT MIN(qty) FROM qb_items WHERE qty > :min)', ['min' => 3]))
             ->order_by('id')
             ->first();
 

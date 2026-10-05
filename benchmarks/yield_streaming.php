@@ -4,7 +4,7 @@
 // Satır sayısı: BENCH_ROWS ortam değişkeni (varsayılan 200000; 1M için BENCH_ROWS=1000000).
 
 $ctx = require __DIR__ . '/bootstrap.php';
-/** @var \nsql\database\nsql $nsql */
+/** @var \nsql\database\Nsql $nsql */
 /** @var PDO $pdo */
 $nsql = $ctx['nsql'];
 $pdo = $ctx['pdo'];

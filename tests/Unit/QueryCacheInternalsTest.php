@@ -2,8 +2,8 @@
 
 namespace Tests\Unit;
 
-use nsql\database\config;
-use nsql\database\traits\cache_trait;
+use nsql\database\Config;
+use nsql\database\traits\CacheTrait;
 use PHPUnit\Framework\TestCase;
 
 class QueryCacheInternalsTest extends TestCase
@@ -12,19 +12,19 @@ class QueryCacheInternalsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->cleanup_probability = config::get('cache_cleanup_probability', 10);
-        config::set('cache_cleanup_probability', 0);
+        $this->cleanup_probability = Config::get('cache_cleanup_probability', 10);
+        Config::set('cache_cleanup_probability', 0);
     }
 
     protected function tearDown(): void
     {
-        config::set('cache_cleanup_probability', $this->cleanup_probability);
+        Config::set('cache_cleanup_probability', $this->cleanup_probability);
     }
 
     private function cache(int $limit = 100, int $timeout = 3600): object
     {
         return new class ($limit, $timeout) {
-            use cache_trait;
+            use CacheTrait;
 
             public function __construct(int $limit, int $timeout)
             {

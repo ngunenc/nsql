@@ -2,7 +2,7 @@
 
 namespace Tests\Portable;
 
-use nsql\database\migration_manager;
+use nsql\database\MigrationManager;
 use Tests\Support\PortableTestCase;
 
 class MigrationPortableTest extends PortableTestCase
@@ -34,9 +34,9 @@ class MigrationPortableTest extends PortableTestCase
         parent::tearDown();
     }
 
-    private function manager(): migration_manager
+    private function manager(): MigrationManager
     {
-        $manager = new migration_manager($this->db, $this->dir . '/migrations', $this->dir . '/seeds');
+        $manager = new MigrationManager($this->db, $this->dir . '/migrations', $this->dir . '/seeds');
         $manager->set_migrations_table($this->log_table);
 
         return $manager;
@@ -47,7 +47,7 @@ class MigrationPortableTest extends PortableTestCase
         file_put_contents($this->dir . '/migrations/' . $file, <<<PHP
 <?php
 
-return new class extends \\nsql\\database\\base_migration {
+return new class extends \\nsql\\database\\BaseMigration {
     public function up(): void { \$this->db()->query('CREATE TABLE {$table} (id INT PRIMARY KEY)'); }
     public function down(): void { \$this->db()->query('DROP TABLE IF EXISTS {$table}'); }
 };

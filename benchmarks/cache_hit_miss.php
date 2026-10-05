@@ -1,7 +1,7 @@
 <?php
 
 $ctx = require __DIR__ . '/bootstrap.php';
-/** @var \nsql\database\nsql $nsql */
+/** @var \nsql\database\Nsql $nsql */
 $nsql = $ctx['nsql'];
 
 $query = "SELECT * FROM bench_users WHERE active = 1 LIMIT 1000";

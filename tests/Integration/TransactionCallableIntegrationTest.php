@@ -3,7 +3,7 @@
 namespace Tests\Integration;
 
 use nsql\database\exceptions\QueryException;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -21,7 +21,7 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
 
     public function test_commits_and_returns_value(): void
     {
-        $result = $this->db->transaction(function (nsql $db) {
+        $result = $this->db->transaction(function (Nsql $db) {
             $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'a']);
 
             return 42;
@@ -35,7 +35,7 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
     public function test_exception_rolls_back_and_rethrows(): void
     {
         try {
-            $this->db->transaction(function (nsql $db) {
+            $this->db->transaction(function (Nsql $db) {
                 $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'a']);
 
                 throw new \DomainException('iptal');
@@ -51,11 +51,11 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
 
     public function test_nested_transaction_uses_savepoint(): void
     {
-        $this->db->transaction(function (nsql $db) {
+        $this->db->transaction(function (Nsql $db) {
             $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'outer']);
 
             try {
-                $db->transaction(function (nsql $db) {
+                $db->transaction(function (Nsql $db) {
                     $this->assertSame(2, $db->get_transaction_level());
                     $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'inner']);
 
@@ -64,7 +64,7 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
             } catch (\RuntimeException $e) {
             }
 
-            $db->transaction(fn (nsql $db) => $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'inner2']));
+            $db->transaction(fn (Nsql $db) => $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'inner2']));
         });
 
         $this->assertSame(['outer', 'inner2'], $this->names());
@@ -75,7 +75,7 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
         $this->assertFalse($this->db->throw_on_error());
 
         try {
-            $this->db->transaction(function (nsql $db) {
+            $this->db->transaction(function (Nsql $db) {
                 $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => 'a']);
                 $db->update('UPDATE no_such_table SET x = 1');
             });
@@ -90,7 +90,7 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
     public function test_retries_on_deadlock(): void
     {
         $calls = 0;
-        $result = $this->db->transaction(function (nsql $db) use (&$calls) {
+        $result = $this->db->transaction(function (Nsql $db) use (&$calls) {
             $calls++;
             $db->insert('INSERT INTO test_table (name) VALUES (:n)', ['n' => "try{$calls}"]);
             if ($calls === 1) {

@@ -5,8 +5,8 @@ namespace Tests\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
- * #24 isimlendirme politikası (CONTRIBUTING.md): exception sınıfları PascalCase ve `Exception` son ekli;
- * dosya adı sınıf adıyla aynı (PSR-4).
+ * #24 isimlendirme politikası (CONTRIBUTING.md): 2.0'dan itibaren tüm sınıf/interface/trait adları PascalCase,
+ * exception'lar `Exception` son ekli; dosya adı sınıf adıyla aynı (PSR-4).
  */
 class NamingPolicyTest extends TestCase
 {
@@ -39,6 +39,21 @@ class NamingPolicyTest extends TestCase
                         $violations[] = "{$path}: {$class}";
                     }
                 }
+            }
+        }
+
+        $this->assertSame([], $violations);
+    }
+
+    public function test_all_classes_interfaces_and_traits_are_pascal_case(): void
+    {
+        $violations = [];
+        foreach (self::sources() as $path => $code) {
+            if (! preg_match('/^\s*(?:final\s+|abstract\s+)?(?:class|interface|trait|enum)\s+(\w+)/m', $code, $m)) {
+                continue;
+            }
+            if (! preg_match('/^[A-Z][A-Za-z0-9]*$/', $m[1])) {
+                $violations[] = "{$path}: {$m[1]}";
             }
         }
 

@@ -3,7 +3,7 @@
 namespace Tests\Integration;
 
 use Tests\Support\DatabaseTestCase;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 class CrudIntegrationTest extends DatabaseTestCase
 {

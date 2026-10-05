@@ -2,8 +2,8 @@
 
 namespace Tests\Integration;
 
-use nsql\security\rate_limiter;
-use nsql\security\security_manager;
+use nsql\security\RateLimiter;
+use nsql\security\SecurityManager;
 use Tests\Support\DatabaseTestCase;
 
 class RateLimiterTest extends DatabaseTestCase
@@ -23,9 +23,9 @@ class RateLimiterTest extends DatabaseTestCase
         parent::tearDown();
     }
 
-    private function limiter(int $max_requests, int $window, int $burst = 1000): rate_limiter
+    private function limiter(int $max_requests, int $window, int $burst = 1000): RateLimiter
     {
-        return new rate_limiter(
+        return new RateLimiter(
             $this->db,
             fn (): int => $this->now,
             ['table' => $this->table, 'max_requests' => $max_requests, 'window' => $window, 'burst' => $burst]
@@ -35,7 +35,7 @@ class RateLimiterTest extends DatabaseTestCase
     /**
      * @return array<bool>
      */
-    private function hit(rate_limiter $limiter, int $times, string $id = 'client'): array
+    private function hit(RateLimiter $limiter, int $times, string $id = 'client'): array
     {
         $results = [];
         for ($i = 0; $i < $times; $i++) {
@@ -118,13 +118,13 @@ class RateLimiterTest extends DatabaseTestCase
     {
         $this->hit($this->limiter(2, 60), 1);
 
-        $other_db = new \nsql\database\nsql(
-            host: \nsql\database\config::get('db_host', 'localhost'),
-            db: \nsql\database\config::get('db_name', 'nsql_test_db'),
-            user: \nsql\database\config::get('db_user', 'root'),
-            pass: \nsql\database\config::get('db_pass', '')
+        $other_db = new \nsql\database\Nsql(
+            host: \nsql\database\Config::get('db_host', 'localhost'),
+            db: \nsql\database\Config::get('db_name', 'nsql_test_db'),
+            user: \nsql\database\Config::get('db_user', 'root'),
+            pass: \nsql\database\Config::get('db_pass', '')
         );
-        $other = new rate_limiter($other_db, fn (): int => $this->now, ['table' => $this->table, 'max_requests' => 2, 'window' => 60]);
+        $other = new RateLimiter($other_db, fn (): int => $this->now, ['table' => $this->table, 'max_requests' => 2, 'window' => 60]);
 
         $this->assertSame([true, false], $this->hit($other, 2));
     }
@@ -134,14 +134,14 @@ class RateLimiterTest extends DatabaseTestCase
         $limiter = $this->limiter(5, 60);
         $limiter->check_rate_limit('locked');
 
-        $other_db = new \nsql\database\nsql(
-            host: \nsql\database\config::get('db_host', 'localhost'),
-            db: \nsql\database\config::get('db_name', 'nsql_test_db'),
-            user: \nsql\database\config::get('db_user', 'root'),
-            pass: \nsql\database\config::get('db_pass', '')
+        $other_db = new \nsql\database\Nsql(
+            host: \nsql\database\Config::get('db_host', 'localhost'),
+            db: \nsql\database\Config::get('db_name', 'nsql_test_db'),
+            user: \nsql\database\Config::get('db_user', 'root'),
+            pass: \nsql\database\Config::get('db_pass', '')
         );
         $other_db->query('SET SESSION innodb_lock_wait_timeout = 1');
-        $other = new rate_limiter($other_db, fn (): int => $this->now, ['table' => $this->table, 'max_requests' => 5, 'window' => 60]);
+        $other = new RateLimiter($other_db, fn (): int => $this->now, ['table' => $this->table, 'max_requests' => 5, 'window' => 60]);
 
         $this->db->begin();
         $this->db->get_row("SELECT tokens FROM {$this->table} WHERE identifier = 'locked' FOR UPDATE");
@@ -177,13 +177,13 @@ class RateLimiterTest extends DatabaseTestCase
     public function test_requires_database(): void
     {
         $this->expectException(\RuntimeException::class);
-        (new rate_limiter())->check_rate_limit('x');
+        (new RateLimiter())->check_rate_limit('x');
     }
 
     public function test_invalid_table_name_is_rejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new rate_limiter($this->db, null, ['table' => 'x; DROP TABLE users']);
+        new RateLimiter($this->db, null, ['table' => 'x; DROP TABLE users']);
     }
 
     public function test_security_manager_passes_connection(): void
@@ -191,7 +191,7 @@ class RateLimiterTest extends DatabaseTestCase
         $existed = $this->db->get_results("SHOW TABLES LIKE 'rate_limits'") !== [];
 
         try {
-            $manager = new security_manager($this->db);
+            $manager = new SecurityManager($this->db);
             $this->assertTrue($manager->check_rate_limit('nsql-sm-test', 'api'));
         } finally {
             if ($existed) {

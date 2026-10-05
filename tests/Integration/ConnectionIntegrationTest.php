@@ -3,13 +3,13 @@
 namespace Tests\Integration;
 
 use Tests\Support\DatabaseTestCase;
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 class ConnectionIntegrationTest extends DatabaseTestCase
 {
     public function testConnection()
     {
-        $this->assertInstanceOf(nsql::class, $this->db);
+        $this->assertInstanceOf(Nsql::class, $this->db);
     }
 
     /**
@@ -22,7 +22,7 @@ class ConnectionIntegrationTest extends DatabaseTestCase
         $this->assertInstanceOf(\PDO::class, $pdo);
         $this->assertSame($pdo, $this->db->get_pdo());
 
-        $stats = nsql::get_pool_stats();
+        $stats = Nsql::get_pool_stats();
         $this->assertGreaterThanOrEqual(1, $stats['total_connections']);
         $this->assertGreaterThanOrEqual(1, $stats['active_connections'] + $stats['idle_connections']);
     }
@@ -36,14 +36,14 @@ class ConnectionIntegrationTest extends DatabaseTestCase
 
     public function testConnectionPool()
     {
-        $stats = nsql::get_pool_stats();
+        $stats = Nsql::get_pool_stats();
         $this->assertArrayHasKey('active_connections', $stats);
         $this->assertArrayHasKey('idle_connections', $stats);
     }
 
     public function testConnectionPoolStats()
     {
-        $stats = nsql::get_pool_stats();
+        $stats = Nsql::get_pool_stats();
         $this->assertIsArray($stats);
         $this->assertArrayHasKey('active_connections', $stats);
         $this->assertArrayHasKey('idle_connections', $stats);

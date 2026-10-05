@@ -2,12 +2,12 @@
 
 namespace Tests\Portable;
 
-use nsql\database\config;
-use nsql\database\orm\model;
+use nsql\database\Config;
+use nsql\database\orm\Model;
 use nsql\database\orm\ModelNotFoundException;
 use Tests\Support\PortableTestCase;
 
-class Author extends model
+class Author extends Model
 {
     protected string $table = 'p_authors';
     protected array $fillable = ['name', 'settings', 'is_active', 'score', 'rating', 'born_at', 'joined_on'];
@@ -32,7 +32,7 @@ class Author extends model
     }
 }
 
-class Post extends model
+class Post extends Model
 {
     protected string $table = 'p_posts';
     protected array $fillable = ['author_id', 'title'];
@@ -45,14 +45,14 @@ class Post extends model
     }
 }
 
-class Profile extends model
+class Profile extends Model
 {
     protected string $table = 'p_profiles';
     protected array $guarded = ['id'];
     protected bool $timestamps = false;
 }
 
-class BlogCategory extends model
+class BlogCategory extends Model
 {
 }
 
@@ -80,11 +80,11 @@ class OrmPortableTest extends PortableTestCase
 
     protected function tearDown(): void
     {
-        config::set('orm_table_naming', config::orm_table_naming);
+        Config::set('orm_table_naming', Config::orm_table_naming);
         parent::tearDown();
     }
 
-    private function author(string $name = 'AyÅŸe'): Author
+    private function author(string $name = 'Ayşe'): Author
     {
         $author = new Author($this->db, [
             'name' => $name,
@@ -139,7 +139,7 @@ class OrmPortableTest extends PortableTestCase
         foreach (['ilk', 'ikinci'] as $title) {
             (new Post($this->db, ['author_id' => $author->get_key(), 'title' => $title]))->save();
         }
-        (new Post($this->db, ['author_id' => $other->get_key(), 'title' => 'baÅŸka']))->save();
+        (new Post($this->db, ['author_id' => $other->get_key(), 'title' => 'başka']))->save();
         (new Profile($this->db, ['author_id' => $author->get_key(), 'bio' => 'yazar']))->save();
 
         $posts = $author->posts;
@@ -150,7 +150,7 @@ class OrmPortableTest extends PortableTestCase
 
         $owner = $posts[0]->author;
         $this->assertInstanceOf(Author::class, $owner);
-        $this->assertSame('AyÅŸe', $owner->name);
+        $this->assertSame('Ayşe', $owner->name);
 
         $this->assertSame('yazar', $author->profile->bio);
         $this->assertNull($other->profile);
@@ -229,7 +229,7 @@ class OrmPortableTest extends PortableTestCase
     {
         $this->assertSame('blogcategorys', (new BlogCategory($this->db))->get_table());
 
-        config::set('orm_table_naming', 'inflector');
+        Config::set('orm_table_naming', 'inflector');
         $this->assertSame('blog_categories', (new BlogCategory($this->db))->get_table());
     }
 }

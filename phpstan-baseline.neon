@@ -1,251 +1,251 @@
 parameters:
 	ignoreErrors:
 		-
-			message: "#^Method nsql\\\\database\\\\cache\\\\cache_manager\\:\\:invalidate_by_tag\\(\\) has parameter \\$tags with no type specified\\.$#"
+			message: "#^Method nsql\\\\database\\\\cache\\\\CacheManager\\:\\:invalidate_by_tag\\(\\) has parameter \\$tags with no type specified\\.$#"
 			count: 1
-			path: src/database/cache/cache_manager.php
+			path: src/database/cache/CacheManager.php
 
 		-
 			message: "#^Right side of && is always true\\.$#"
 			count: 2
-			path: src/database/cache/cache_manager.php
+			path: src/database/cache/CacheManager.php
 
 		-
-			message: "#^Parameter \\#1 \\$key of method nsql\\\\database\\\\cache\\\\in_memory_adapter\\:\\:delete\\(\\) expects string, int\\|string given\\.$#"
+			message: "#^Parameter \\#1 \\$key of method nsql\\\\database\\\\cache\\\\InMemoryAdapter\\:\\:delete\\(\\) expects string, int\\|string given\\.$#"
 			count: 1
-			path: src/database/cache/in_memory_adapter.php
+			path: src/database/cache/InMemoryAdapter.php
 
 		-
 			message: "#^Cannot call method delete\\(\\) on Memcached\\|null\\.$#"
 			count: 3
-			path: src/database/cache/memcached_adapter.php
+			path: src/database/cache/MemcachedAdapter.php
 
 		-
 			message: "#^Cannot call method flush\\(\\) on Memcached\\|null\\.$#"
 			count: 1
-			path: src/database/cache/memcached_adapter.php
+			path: src/database/cache/MemcachedAdapter.php
 
 		-
 			message: "#^Cannot call method get\\(\\) on Memcached\\|null\\.$#"
 			count: 4
-			path: src/database/cache/memcached_adapter.php
+			path: src/database/cache/MemcachedAdapter.php
 
 		-
 			message: "#^Cannot call method getResultCode\\(\\) on Memcached\\|null\\.$#"
 			count: 2
-			path: src/database/cache/memcached_adapter.php
+			path: src/database/cache/MemcachedAdapter.php
 
 		-
 			message: "#^Cannot call method set\\(\\) on Memcached\\|null\\.$#"
 			count: 2
-			path: src/database/cache/memcached_adapter.php
+			path: src/database/cache/MemcachedAdapter.php
 
 		-
 			message: "#^Cannot call method del\\(\\) on Redis\\|null\\.$#"
 			count: 3
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method exists\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method expire\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method flushDB\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method get\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method sAdd\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method sMembers\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method setex\\(\\) on Redis\\|null\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Comparison operation \"\\>\" between \\(bool\\|int\\|Redis\\) and 0 results in an error\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Comparison operation \"\\>\" between \\(int\\|Redis\\|false\\) and 0 results in an error\\.$#"
 			count: 1
-			path: src/database/cache/redis_adapter.php
+			path: src/database/cache/RedisAdapter.php
 
 		-
 			message: "#^Cannot call method fetchColumn\\(\\) on PDOStatement\\|false\\.$#"
 			count: 1
-			path: src/database/drivers/pgsql_driver.php
+			path: src/database/drivers/PgsqlDriver.php
 
 		-
-			message: "#^Method nsql\\\\database\\\\drivers\\\\pgsql_driver\\:\\:get_last_insert_id\\(\\) should return int\\|string but returns int\\|string\\|false\\|null\\.$#"
+			message: "#^Method nsql\\\\database\\\\drivers\\\\PgsqlDriver\\:\\:get_last_insert_id\\(\\) should return int\\|string but returns int\\|string\\|false\\|null\\.$#"
 			count: 1
-			path: src/database/drivers/pgsql_driver.php
+			path: src/database/drivers/PgsqlDriver.php
 
 		-
-			message: "#^Method nsql\\\\database\\\\drivers\\\\pgsql_driver\\:\\:get_last_insert_id\\(\\) should return int\\|string but returns string\\|false\\.$#"
+			message: "#^Method nsql\\\\database\\\\drivers\\\\PgsqlDriver\\:\\:get_last_insert_id\\(\\) should return int\\|string but returns string\\|false\\.$#"
 			count: 1
-			path: src/database/drivers/pgsql_driver.php
+			path: src/database/drivers/PgsqlDriver.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$batch\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$duration\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$error_message\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$executed_at\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$migration_name\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$rollback_batch\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$rolled_back_at\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$rolled_back_by\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Access to an undefined property object\\:\\:\\$status\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
-			message: "#^Method nsql\\\\database\\\\migration_manager\\:\\:remove_migration\\(\\) is unused\\.$#"
+			message: "#^Method nsql\\\\database\\\\MigrationManager\\:\\:remove_migration\\(\\) is unused\\.$#"
 			count: 1
-			path: src/database/migration_manager.php
+			path: src/database/MigrationManager.php
 
 		-
 			message: "#^Strict comparison using \\=\\=\\= between mixed and null will always evaluate to false\\.$#"
 			count: 1
-			path: src/database/monitoring/endpoint_guard.php
+			path: src/database/monitoring/EndpointGuard.php
 
 		-
 			message: "#^Call to an undefined method nsql\\\\database\\\\exceptions\\\\DatabaseException\\:\\:get_details\\(\\)\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Cannot call method closeCursor\\(\\) on PDOStatement\\|false\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Cannot call method prepare\\(\\) on PDO\\|null\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Negated boolean expression is always false\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Parameter \\#1 \\$filename of function fopen expects string, string\\|null given\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
-			message: "#^Parameter \\#1 \\$key of method nsql\\\\database\\\\nsql\\:\\:remove_from_statement_access_order\\(\\) expects string, int\\|string given\\.$#"
+			message: "#^Parameter \\#1 \\$key of method nsql\\\\database\\\\Nsql\\:\\:remove_from_statement_access_order\\(\\) expects string, int\\|string given\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Parameter \\#1 \\$string of function htmlspecialchars expects string, string\\|false given\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Parameter \\#2 \\$offset of function array_splice expects int, int\\|string given\\.$#"
 			count: 2
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
-			message: "#^Property nsql\\\\database\\\\nsql\\:\\:\\$last_insert_id \\(int\\) does not accept int\\|string\\.$#"
+			message: "#^Property nsql\\\\database\\\\Nsql\\:\\:\\$last_insert_id \\(int\\) does not accept int\\|string\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Strict comparison using \\=\\=\\= between PDO and null will always evaluate to false\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Unsafe usage of new static\\(\\)\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
 			message: "#^Variable \\$tables in empty\\(\\) always exists and is not falsy\\.$#"
 			count: 1
-			path: src/database/nsql.php
+			path: src/database/Nsql.php
 
 		-
-			message: "#^Method nsql\\\\database\\\\optimization\\\\query_optimizer\\:\\:add_index_hints\\(\\) should return string but returns string\\|null\\.$#"
+			message: "#^Method nsql\\\\database\\\\optimization\\\\QueryOptimizer\\:\\:add_index_hints\\(\\) should return string but returns string\\|null\\.$#"
 			count: 1
-			path: src/database/optimization/query_optimizer.php
+			path: src/database/optimization/QueryOptimizer.php
 
 		-
 			message: "#^Parameter \\#1 \\$string of function trim expects string, string\\|null given\\.$#"
 			count: 1
-			path: src/database/optimization/query_optimizer.php
+			path: src/database/optimization/QueryOptimizer.php
 
 		-
 			message: "#^Parameter \\#2 \\$subject of function preg_match expects string, string\\|null given\\.$#"
 			count: 2
-			path: src/database/optimization/query_optimizer.php
+			path: src/database/optimization/QueryOptimizer.php
 
 		-
 			message: "#^Parameter \\#3 \\$subject of function preg_replace expects array\\|string, string\\|null given\\.$#"
 			count: 5
-			path: src/database/optimization/query_optimizer.php
+			path: src/database/optimization/QueryOptimizer.php
 
 		-
 			message: "#^Call to an undefined method object\\:\\:query\\(\\)\\.$#"
 			count: 1
-			path: src/database/orm/model.php
+			path: src/database/orm/Model.php
 
 		-
 			message: "#^Call to an undefined static method object\\:\\:find\\(\\)\\.$#"
 			count: 1
-			path: src/database/orm/model.php
+			path: src/database/orm/Model.php
