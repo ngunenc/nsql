@@ -61,6 +61,8 @@ class config
     public const query_cache_size_limit = 200; // 100 → 200 (daha büyük cache)
     public const statement_cache_limit = 150; // 100 → 150 (daha büyük statement cache)
     public const cache_cleanup_probability = 10; // %10 olasılıkla temizlik
+    public const query_cache_driver = 'memory'; // memory | redis (production önerisi) | memcached
+    public const query_cache_prefix = 'nsql_qc_';
 
     // Rate Limiting sabitleri
     public const rate_limit_decay = 1;
@@ -86,6 +88,8 @@ class config
         'MAX_RETRY_ATTEMPTS' => ['DB_MAX_RETRY_ATTEMPTS'],
         'CLEANUP_PROBABILITY' => ['DB_CLEANUP_PROBABILITY'],
         'MAX_FAILED_CONNECTIONS' => ['DB_MAX_FAILED_CONNECTIONS'],
+        'QUERY_CACHE_DRIVER' => ['CACHE_DRIVER'],
+        'REDIS_DATABASE' => ['REDIS_DB'],
     ];
 
     /**
@@ -479,6 +483,15 @@ class config
             'QUERY_CACHE_TIMEOUT' => self::query_cache_timeout,
             'QUERY_CACHE_SIZE_LIMIT' => self::query_cache_size_limit,
             'CACHE_CLEANUP_PROBABILITY' => self::cache_cleanup_probability,
+            'QUERY_CACHE_DRIVER' => self::query_cache_driver,
+            'QUERY_CACHE_PREFIX' => self::query_cache_prefix,
+            'REDIS_HOST' => '127.0.0.1',
+            'REDIS_PORT' => 6379,
+            'REDIS_PASSWORD' => null,
+            'REDIS_DATABASE' => 0,
+            'REDIS_TIMEOUT' => 2,
+            'MEMCACHED_HOST' => '127.0.0.1',
+            'MEMCACHED_PORT' => 11211,
 
             // Performans
             'LARGE_RESULT_WARNING' => self::large_result_warning,

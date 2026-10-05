@@ -4,6 +4,23 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.10.1] - 2026-10-05
+
+### Yeni (#18)
+- **`QUERY_CACHE_DRIVER`** (`memory` varsayılan | `redis` | `memcached`; `CACHE_DRIVER` takma adı): `QUERY_CACHE_ENABLED=true` iken mevcut `redis_adapter` / `memcached_adapter` paylaşılan query cache store olarak bağlanır. Bağlantı ayarları: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DATABASE` (`REDIS_DB`), `REDIS_TIMEOUT`, `MEMCACHED_HOST`, `MEMCACHED_PORT`, anahtar öneki `QUERY_CACHE_PREFIX`.
+- Store süreç başına bir kez kurulur. Sunucuya ulaşılamazsa, PHP eklentisi yoksa veya sürücü adı geçersizse WARNING loglanır ve process içi cache ile devam edilir.
+- `nsql\database\cache\adapter_simple_cache`: herhangi bir `cache_adapter_interface` (veya `cache_manager` ile sarılmış adaptör) için PSR-16 köprüsü; `set_query_cache_store(new adapter_simple_cache($adapter))`.
+- `get_cache_stats()['store']` adaptör köprüsünde sürücü adını (`redis`, `memcached`) döndürür.
+
+### Düzeltme
+- Paylaşılan store kayıtları artık string olarak serileştiriliyor (yalnızca `stdClass` örneklenir): JSON tabanlı `redis_adapter` üzerinden okunan satırlar dizi yerine yine nesne olarak döner. v1.10.0 formatındaki store kayıtları miss sayılır.
+
+### Dokümantasyon
+- README: production için Redis önerisi, `memory` sürücüsünün tek süreç sınırları, sürücü matrisi ve örnek `.env`. `.env.example` ve `docker-compose.yml` (`app` servisi → `redis`) güncellendi.
+
+### Testler
+- `AdapterSimpleCacheTest` (köprü, TTL, fabrika uyarıları, `CACHE_DRIVER` takma adı) ve `SharedQueryCacheIntegrationTest` (JSON arka uçtan nesne olarak dönen satırlar, örnekler arası geçersiz kılma, ulaşılamayan Redis'te process içi cache'e düşme).
+
 ## [1.10.0] - 2026-10-05
 
 ### Yeni (#52)

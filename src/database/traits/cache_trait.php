@@ -2,11 +2,14 @@
 
 namespace nsql\database\traits;
 
+use nsql\database\cache\adapter_simple_cache;
 use nsql\database\cache\query_cache_store;
+use nsql\database\cache\query_cache_store_factory;
 use Psr\SimpleCache\CacheInterface;
 
 /**
- * Process içi query cache.
+ * Query cache: process içi LRU (birinci seviye) + opsiyonel paylaşılan PSR-16 store
+ * (QUERY_CACHE_DRIVER=redis|memcached veya set_query_cache_store()).
  *
  * $query_cache dizisinin ekleme sırası LRU sırasıdır: erişilen kayıt unset edilip
  * sona yeniden eklenir, en eski kayıt array_key_first() ile bulunur (O(1)).
@@ -179,6 +182,20 @@ trait cache_trait
     }
 
     /**
+     * Paylaşılan store adı: adaptör köprüsünde sürücü adı (redis, memcached), aksi halde sınıf adı.
+     */
+    private function query_cache_store_name(): ?string
+    {
+        if ($this->query_cache_store === null) {
+            return null;
+        }
+
+        $cache = $this->query_cache_store->cache();
+
+        return $cache instanceof adapter_simple_cache ? $cache->adapter()->get_name() : get_class($cache);
+    }
+
+    /**
      * Query cache için paylaşılan PSR-16 arka ucu (Redis, Memcached, framework cache'i).
      * Process içi LRU birinci seviye olarak kalır; null = yalnızca process içi cache.
      */
@@ -257,6 +274,15 @@ trait cache_trait
         $this->query_cache_enabled = (bool)\nsql\database\config::get('query_cache_enabled', false);
         $this->query_cache_timeout = (int)\nsql\database\config::get('query_cache_timeout', 3600);
         $this->query_cache_size_limit = (int)\nsql\database\config::get('query_cache_size_limit', 100);
+
+        if ($this->query_cache_enabled) {
+            $store = query_cache_store_factory::from_config(
+                fn (string $message) => $this->log_error($message, [], \nsql\database\logging\logger::WARNING)
+            );
+            if ($store !== null) {
+                $this->set_query_cache_store($store, (string)\nsql\database\config::get('query_cache_prefix', 'nsql_qc_'));
+            }
+        }
     }
 
     /**
@@ -428,7 +454,7 @@ trait cache_trait
             'warm_queries_count' => count($this->warm_queries),
             'tracked_tables' => count($this->table_to_keys),
             'tracked_tags' => count($this->tag_to_keys),
-            'store' => $this->query_cache_store !== null ? get_class($this->query_cache_store->cache()) : null,
+            'store' => $this->query_cache_store_name(),
         ];
     }
 

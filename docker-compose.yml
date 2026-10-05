@@ -9,6 +9,12 @@ services:
     container_name: nsql_app
     volumes:
       - .:/var/www/html
+    environment:
+      QUERY_CACHE_ENABLED: "true"
+      QUERY_CACHE_DRIVER: redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      MEMCACHED_HOST: memcached
     networks:
       - nsql_network
     depends_on:
