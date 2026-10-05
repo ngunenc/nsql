@@ -49,6 +49,7 @@ class config
     public const memory_critical_ratio = 0.9;
     public const yield_unbuffered = false; // v2.0.0'da true olacak
     public const throw_on_error = false; // v2.0.0'da true olacak
+    public const transaction_retry_attempts = 1; // transaction(): deadlock/lock wait'te toplam deneme
     public const auto_adjust_chunk_size = true;
     public const min_chunk_size = 200; // 100 → 200 (daha büyük minimum chunk)
     public const max_chunk_size = 15000; // 10000 → 15000 (daha büyük maximum chunk)
@@ -486,6 +487,7 @@ class config
             'MEMORY_CRITICAL_RATIO' => self::memory_critical_ratio,
             'YIELD_UNBUFFERED' => self::yield_unbuffered,
             'THROW_ON_ERROR' => self::throw_on_error,
+            'TRANSACTION_RETRY_ATTEMPTS' => self::transaction_retry_attempts,
             'AUTO_ADJUST_CHUNK_SIZE' => self::auto_adjust_chunk_size,
             'MIN_CHUNK_SIZE' => self::min_chunk_size,
             'MAX_CHUNK_SIZE' => self::max_chunk_size,

@@ -4,6 +4,19 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.8.0] - 2026-10-05
+
+### Yeni (#50)
+- **`$db->transaction(callable $fn, ?int $attempts = null): mixed`**: callable başarıyla biterse commit edilir ve dönüş değeri döner; exception'da rollback yapılıp exception yeniden fırlatılır. İç içe çağrılar SAVEPOINT kullanır (iç hata yalnızca kendi savepoint'ine döner). Callable `nsql` örneğini parametre olarak alır.
+- Callable içinde sorgu hataları her zaman `QueryException` (THROW_ON_ERROR geçici olarak açılır, sonra eski haline döner). Böylece sessiz `false` dönüşü ile yarım işlemin commit edilmesi önlenir.
+- **Deadlock yeniden deneme**: 1213 (deadlock), 1205 (lock wait timeout) ve SQLSTATE 40001'de en dış seviyede işlem baştan tekrarlanır (artan bekleme: 50 ms, 100 ms, …, en fazla 1 sn). Deneme sayısı `attempts` parametresi veya `TRANSACTION_RETRY_ATTEMPTS` (varsayılan `1` = tekrar yok).
+
+### Düzeltmeler
+- DDL (CREATE/ALTER/DROP) MySQL'de implicit commit yaptığından sonraki `commit()` "There is no active transaction" `PDOException`'ı fırlatıyordu. `commit()` / `rollback()` artık `PDO::inTransaction()` kontrol ediyor; açık transaction yoksa sayaç sıfırlanıyor (`commit()` → `true`, `rollback()` → `false`).
+
+### Testler
+- `TransactionCallableIntegrationTest`: commit ve dönüş değeri, exception'da rollback, iç içe savepoint, transaction içinde sessiz hata, deadlock yeniden deneme, kalıcı hatada tekrar olmaması, DDL sonrası commit.
+
 ## [1.7.0] - 2026-10-05
 
 ### Yeni (#47)

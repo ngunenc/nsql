@@ -138,6 +138,20 @@ commit_transaction(): bool  // Alias
 // Transaction rollback
 rollback(): bool
 rollback_transaction(): bool  // Alias
+// commit()/rollback() sunucuda açık transaction yoksa (DDL implicit commit) exception fırlatmaz.
+
+// Callable ile transaction (v1.8.0+): başarıda commit, exception'da rollback + yeniden fırlatma
+transaction(callable $fn, ?int $attempts = null): mixed
+// - İç içe çağrılar SAVEPOINT kullanır.
+// - Callable içinde sorgu hataları her zaman QueryException (THROW_ON_ERROR geçici olarak açık).
+// - 1213 (deadlock) / 1205 (lock wait timeout) / SQLSTATE 40001: en dış seviyede baştan tekrar
+//   (attempts ?? TRANSACTION_RETRY_ATTEMPTS, varsayılan 1). Callable tekrar çalışabilir.
+// Örnek:
+// $order_id = $db->transaction(function (nsql $db) use ($data) {
+//     $id = $db->insert('INSERT INTO orders (user_id) VALUES (?)', [$data['user_id']]);
+//     $db->update('UPDATE stock SET qty = qty - 1 WHERE product_id = ?', [$data['product_id']]);
+//     return $id;
+// }, attempts: 3);
 
 // Örnek:
 $db->begin();
@@ -542,6 +556,7 @@ Pool anahtarları: `DB_MIN_CONNECTIONS` ile `MIN_CONNECTIONS` (ve benzer `DB_*` 
 | `MAX_CONNECTIONS` / `DB_MAX_CONNECTIONS` | `15` |
 | `HEALTH_CHECK_INTERVAL` | `60` |
 | `CONNECTION_IDLE_TIMEOUT` | `600` |
+| `TRANSACTION_RETRY_ATTEMPTS` | `1` (`transaction()` için deadlock/lock wait'te toplam deneme) |
 | `THROW_ON_ERROR` | `false` (`true`: tüm sorgu metotları hata durumunda `QueryException`; v2.0.0'da varsayılan `true`, bkz. `UPGRADE.md`) |
 | `YIELD_UNBUFFERED` | `false` (`true`: `get_yield()` streaming; v2.0.0'da varsayılan `true`) |
 | `MEMORY_WARNING_RATIO` / `MEMORY_CRITICAL_RATIO` | `0.75` / `0.9` (`memory_limit` oranı) |

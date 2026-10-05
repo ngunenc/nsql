@@ -57,6 +57,13 @@ trait transaction_trait
             return false;
         }
 
+        // DDL (CREATE/ALTER/DROP …) MySQL'de implicit commit yapar; sunucuda açık transaction kalmaz
+        if (! $pdo->inTransaction()) {
+            $this->transaction_level = 0;
+
+            return true;
+        }
+
         $this->transaction_level--;
 
         if ($this->transaction_level === 0) {
@@ -79,6 +86,12 @@ trait transaction_trait
             return false;
         }
 
+        if (! $pdo->inTransaction()) {
+            $this->transaction_level = 0;
+
+            return false;
+        }
+
         $this->transaction_level--;
 
         if ($this->transaction_level === 0) {
@@ -86,6 +99,78 @@ trait transaction_trait
         }
 
         return $pdo->exec("ROLLBACK TO SAVEPOINT trans{$this->transaction_level}") !== false;
+    }
+
+    /**
+     * Callable'ı transaction içinde çalıştırır: başarıda commit, exception'da rollback + yeniden fırlatma.
+     *
+     * - İç içe çağrılar SAVEPOINT kullanır; iç hata yalnızca kendi savepoint'ine geri döner.
+     * - Callable içinde sorgu hataları her zaman exception'dır (THROW_ON_ERROR geçici olarak açılır);
+     *   sessiz `false` dönüşüyle yarım işlemin commit edilmesi önlenir.
+     * - Deadlock (1213), lock wait timeout (1205) ve SQLSTATE 40001'de en dış seviyede işlem baştan
+     *   tekrarlanır. Deneme sayısı: $attempts ?? TRANSACTION_RETRY_ATTEMPTS (varsayılan 1 = tekrar yok).
+     *   Callable tekrar çalışabileceği için yan etkisiz (idempotent) olmalıdır.
+     *
+     * @template T
+     * @param callable(static): T $fn
+     * @return T
+     */
+    public function transaction(callable $fn, ?int $attempts = null): mixed
+    {
+        $attempts = max(1, $attempts ?? (int) \nsql\database\config::get('transaction_retry_attempts', \nsql\database\config::transaction_retry_attempts));
+        $outer_level = $this->transaction_level;
+        $previous_mode = $this->throw_on_error;
+        $this->throw_on_error = true;
+
+        try {
+            for ($attempt = 1; ; $attempt++) {
+                $this->begin();
+
+                try {
+                    $result = $fn($this);
+                    if ($this->transaction_level > $outer_level) {
+                        $this->commit();
+                    }
+
+                    return $result;
+                } catch (\Throwable $e) {
+                    if ($this->transaction_level > $outer_level) {
+                        try {
+                            $this->rollback();
+                        } catch (\Throwable) {
+                            // Deadlock sunucuda transaction'ı zaten geri almış olabilir (savepoint yok)
+                            $this->transaction_level = $outer_level;
+                        }
+                    }
+
+                    if ($outer_level > 0 || $attempt >= $attempts || ! self::is_retryable_transaction_error($e)) {
+                        throw $e;
+                    }
+
+                    usleep(min(1000000, 50000 * (2 ** ($attempt - 1))));
+                }
+            }
+        } finally {
+            $this->throw_on_error = $previous_mode;
+        }
+    }
+
+    /**
+     * Deadlock / lock wait timeout / serialization failure mı? (exception zincirine bakılır)
+     */
+    private static function is_retryable_transaction_error(\Throwable $e): bool
+    {
+        for ($current = $e; $current !== null; $current = $current->getPrevious()) {
+            if ($current instanceof \PDOException) {
+                $driver_code = (int) ($current->errorInfo[1] ?? 0);
+                $sql_state = (string) ($current->errorInfo[0] ?? $current->getCode());
+                if (in_array($driver_code, [1213, 1205], true) || $sql_state === '40001') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
