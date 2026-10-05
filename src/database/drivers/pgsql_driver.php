@@ -33,17 +33,39 @@ class pgsql_driver implements driver_interface
 
     public function parse_dsn(string $dsn): array
     {
-        $pattern = '/pgsql:host=([^;:]+)(?::(\d+))?(?:;dbname=([^;]+))?(?:;options=\'--client_encoding=([^\']+)\')?/';
-        if (! preg_match($pattern, $dsn, $matches)) {
+        if (! str_starts_with($dsn, 'pgsql:')) {
             throw new \InvalidArgumentException('Geçersiz PostgreSQL DSN formatı');
+        }
+
+        $parts = [];
+        foreach (explode(';', substr($dsn, 6)) as $pair) {
+            [$key, $value] = array_pad(explode('=', $pair, 2), 2, '');
+            if (trim($key) !== '') {
+                $parts[strtolower(trim($key))] = trim($value);
+            }
+        }
+
+        $host = $parts['host'] ?? '';
+        $port = $parts['port'] ?? '';
+        // Eski host:port yazımı
+        if ($port === '' && preg_match('/^([^:]+):(\d+)$/', $host, $m)) {
+            [$host, $port] = [$m[1], $m[2]];
+        }
+        if ($host === '') {
+            throw new \InvalidArgumentException('Geçersiz PostgreSQL DSN formatı');
+        }
+
+        $charset = 'UTF8';
+        if (preg_match('/--client_encoding=([^\'"\s]+)/', $parts['options'] ?? '', $m)) {
+            $charset = $m[1];
         }
 
         return [
             'driver' => 'pgsql',
-            'host' => $matches[1],
-            'port' => isset($matches[2]) ? (int)$matches[2] : 5432,
-            'dbname' => $matches[3] ?? null,
-            'charset' => $matches[4] ?? 'UTF8',
+            'host' => $host,
+            'port' => ctype_digit($port) ? (int) $port : 5432,
+            'dbname' => ($parts['dbname'] ?? '') !== '' ? $parts['dbname'] : null,
+            'charset' => $charset,
         ];
     }
 

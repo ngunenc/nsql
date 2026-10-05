@@ -31,17 +31,34 @@ class mysql_driver implements driver_interface
 
     public function parse_dsn(string $dsn): array
     {
-        $pattern = '/mysql:host=([^;:]+)(?::(\d+))?(?:;dbname=([^;]+))?(?:;charset=([^;]+))?/';
-        if (! preg_match($pattern, $dsn, $matches)) {
+        if (! str_starts_with($dsn, 'mysql:')) {
+            throw new \InvalidArgumentException('Geçersiz MySQL DSN formatı');
+        }
+
+        $parts = [];
+        foreach (explode(';', substr($dsn, 6)) as $pair) {
+            [$key, $value] = array_pad(explode('=', $pair, 2), 2, '');
+            if (trim($key) !== '') {
+                $parts[strtolower(trim($key))] = trim($value);
+            }
+        }
+
+        $host = $parts['host'] ?? '';
+        $port = $parts['port'] ?? '';
+        // Eski host:port yazımı
+        if ($port === '' && preg_match('/^([^:]+):(\d+)$/', $host, $m)) {
+            [$host, $port] = [$m[1], $m[2]];
+        }
+        if ($host === '') {
             throw new \InvalidArgumentException('Geçersiz MySQL DSN formatı');
         }
 
         return [
             'driver' => 'mysql',
-            'host' => $matches[1],
-            'port' => isset($matches[2]) ? (int)$matches[2] : 3306,
-            'dbname' => $matches[3] ?? null,
-            'charset' => $matches[4] ?? 'utf8mb4',
+            'host' => $host,
+            'port' => ctype_digit($port) ? (int) $port : 3306,
+            'dbname' => ($parts['dbname'] ?? '') !== '' ? $parts['dbname'] : null,
+            'charset' => ($parts['charset'] ?? '') !== '' ? $parts['charset'] : 'utf8mb4',
         ];
     }
 

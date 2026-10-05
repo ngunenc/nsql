@@ -1,7 +1,7 @@
 {
 	"name": "ngunenc/nsql",
-	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.13.1",
-	"version": "1.13.1",
+	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.13.2",
+	"version": "1.13.2",
 	"type": "library",
 	"license": "MIT",
 	"authors": [
@@ -45,6 +45,7 @@
 			"@putenv NSQL_TEST_QUERY_CACHE=1",
 			"@php vendor/bin/phpunit -c phpunit.xml --testsuite integration,portable"
 		],
+		"test:coverage-check": "@php tests/coverage_check.php coverage/clover.xml 50 --lowest=10",
 		"test:portable": "@php vendor/bin/phpunit -c phpunit.xml --testsuite portable",
 		"test:coverage": [
 			"@putenv XDEBUG_MODE=coverage",
