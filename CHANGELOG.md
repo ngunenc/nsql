@@ -4,6 +4,16 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.24] - 2026-10-05
+
+### Düzeltmeler (#21)
+- **PHPStan seviye tutarsızlığı**: `phpstan.neon` level 8 tanımlarken `composer stan` `--level=max` geçiyordu; yerel ve CI sonuçları komuta göre değişiyordu. Seviye artık yalnızca `phpstan.neon` içinde; `composer stan` `-c phpstan.neon` ile çalışıyor ve komut satırında seviye vermiyor.
+- Mevcut level 8 bulguları `phpstan-baseline.neon` içine alındı; yeni kodda hata çıkarsa CI kırmızı olur. Baseline'ı yenilemek için `composer stan:baseline`.
+- `phpstan.neon` içindeki geçersiz `memoryLimitFile` anahtarı kaldırıldı (bellek limiti `--memory-limit=1G` ile veriliyor).
+
+### Düzeltmeler (#12)
+- `bin/nsql` git'te çalıştırma bitiyle (`100755`) saklanıyor. `composer.json` `bin` kaydı 1.5.20'de eklenmişti; kurulumda `vendor/bin/nsql` oluşuyor.
+
 ## [1.5.23] - 2026-10-04
 
 ### Güvenlik (#39)

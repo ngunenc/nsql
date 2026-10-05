@@ -1,3 +1,8 @@
+includes:
+    - phpstan-baseline.neon
+
+# Tek kaynak: seviye yalnızca burada tanımlanır. `composer stan` ve CI bu dosyayı kullanır;
+# komut satırında --level verilmez.
 parameters:
     level: 8
     paths:
@@ -12,11 +17,6 @@ parameters:
         - identifier: missingType.generics
     reportUnmatchedIgnoredErrors: false
     treatPhpDocTypesAsCertain: false
-    # Memory limit artırıldı (512M → 1G) - HATA-012 çözümü
-    memoryLimitFile: 1G
-    # Parallel processing optimize edildi (memory kullanımını azaltmak için)
     parallel:
-        # Job size küçültüldü (10 → 5) - daha küçük parçalar halinde işleme
         jobSize: 5
-        # Process sayısı azaltıldı (2 → 1) - memory kullanımını minimize etmek için
         maximumNumberOfProcesses: 1
