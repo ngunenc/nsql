@@ -64,6 +64,7 @@ trait connection_trait
      */
     private function disconnect(): void
     {
+        $this->drop_reader();
         if ($this->pdo !== null) {
             connection_pool::release_connection($this->pdo);
             $this->pdo = null;

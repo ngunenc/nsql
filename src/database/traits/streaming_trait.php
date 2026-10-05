@@ -145,6 +145,19 @@ trait streaming_trait
             throw new \RuntimeException('Bu bağlantıda zaten aktif bir get_yield() akışı var.');
         }
 
+        if ($this->should_use_reader($query)) {
+            $reader = $this->reader();
+            assert($reader !== null);
+            $this->sync_reader($reader);
+            try {
+                yield from $reader->stream_query($query, $params);
+            } finally {
+                $this->last_error = $reader->last_error;
+            }
+
+            return;
+        }
+
         $this->ensure_connection();
         $pdo = $this->pdo;
         if ($pdo === null) {

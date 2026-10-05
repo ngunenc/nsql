@@ -4,6 +4,17 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.11.0] - 2026-10-05
+
+### Added
+- **İsimlendirilmiş bağlantılar** (#51): `connection_manager::add/get/set/purge/reset` ve `nsql::connection(string $name = 'default')`. Her isim süreçte tek örnek; ayar `add()` ile veya `DB_{NAME}_HOST/NAME/USER/PASS/PORT/DRIVER/CHARSET` ortam değişkenleriyle verilir.
+- **Okuma/yazma ayrımı** (#51): `READ_WRITE_SPLIT=true` + `DB_READ_HOST` (virgülle çoklu replica), `DB_READ_PORT/USER/PASS/NAME`; örnek bazında `set_read_replica()`. SELECT/WITH/SHOW/DESCRIBE/EXPLAIN ve `get_yield()` replica'ya; yazma, transaction ve kilitli okumalar (FOR UPDATE/FOR SHARE) primary'ye gider.
+- `READ_WRITE_STICKY` (varsayılan true): yazmadan sonra aynı örnekte okumalar primary'de kalır; `stick_to_primary()` ile elle yönetilir. Replica'ya bağlanılamazsa warning loglanıp primary kullanılır; `uses_read_replica()`.
+- `nsql::__construct` yeni `port:` parametresi; `nsql::connect()` DSN'deki portu iletir.
+
+### Changed
+- Daha önce tanımlı ama kullanılmayan `READ_WRITE_SPLIT` (`DB_READ_WRITE_SPLIT` alias) artık işlevsel; `.env.example` güncellendi.
+
 ## [1.10.1] - 2026-10-05
 
 ### Yeni (#18)

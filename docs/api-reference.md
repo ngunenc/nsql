@@ -10,6 +10,7 @@
 - [Migration Manager](#-migration-manager)
 - [Traits](#-traits)
 - [Loglama, Sorgu Olayları ve Paylaşılan Cache](#-loglama-sorgu-olayları-ve-paylaşılan-cache-v1100)
+- [Çoklu Bağlantı ve Okuma/Yazma Ayrımı](#-çoklu-bağlantı-ve-okumayazma-ayrımı-v1110)
 - [Yeni İstatistik API'leri (v1.4)](#-yeni-istatistik-apileri-v14)
 
 ## 🏗 Ana Sınıflar
@@ -711,6 +712,58 @@ $db->set_query_cache_store($psr16Cache, prefix: 'myapp_qc_');
 ```
 
 `QUERY_CACHE_ENABLED=true` gerekir. Process içi LRU cache birinci seviye olarak kalır; ıskalamada paylaşılan store'a bakılır. Yazma sonrası tablo/tag/global geçersiz kılma tüm süreçlere yansır (store'da tutulan sürüm token'larıyla). Transaction içindeki yazmalar commit sonrası tekrar geçersiz kılınır. Store hataları sorguyu bozmaz (okuma = miss, yazma = yok sayılır).
+
+## 🔀 Çoklu Bağlantı ve Okuma/Yazma Ayrımı (v1.11.0+)
+
+### İsimlendirilmiş bağlantılar
+
+```php
+use nsql\database\connection_manager;
+use nsql\database\nsql;
+
+connection_manager::add('reporting', [
+    'host' => 'report-db', 'db' => 'reports', 'user' => 'ro', 'pass' => '...',
+    // 'port', 'driver', 'charset', 'debug', 'read' (replica ayarı) da verilebilir
+]);
+
+$main = nsql::connection();            // 'default' → DB_* değerleri
+$reports = nsql::connection('reporting');
+```
+
+- Her isim için süreçte tek örnek tutulur (ilk kullanımda açılır); transaction, hata durumu ve statement cache bağlantılar arasında paylaşılmaz.
+- `add()` yapılmamış isimler ortamdan okunur: `DB_REPORTING_HOST`, `DB_REPORTING_NAME`, `DB_REPORTING_USER`, `DB_REPORTING_PASS`, `DB_REPORTING_PORT`, `DB_REPORTING_DRIVER`, `DB_REPORTING_CHARSET`. Tanımlı olmayan alanlar `DB_*` değerlerinden gelir; hiçbiri yoksa `InvalidArgumentException`.
+- `connection_manager::set($name, $nsql)` hazır örneği kaydeder, `purge($name)` bağlantıyı bırakır, `reset()` her şeyi sıfırlar.
+- `new nsql(...)` artık `port:` parametresi de alır.
+
+### Okuma/yazma ayrımı
+
+```env
+READ_WRITE_SPLIT=true
+DB_READ_HOST=replica1,replica2   # birden fazlaysa rastgele seçilir
+# DB_READ_PORT / DB_READ_USER / DB_READ_PASS / DB_READ_NAME (verilmezse DB_* kullanılır)
+READ_WRITE_STICKY=true
+```
+
+veya örnek bazında:
+
+```php
+$db->set_read_replica(['host' => ['replica1', 'replica2'], 'user' => 'ro', 'pass' => '...']);
+$db->set_read_replica(null);   // ayrımı kapat
+```
+
+Yönlendirme kuralları:
+
+| Sorgu | Hedef |
+|-------|-------|
+| `SELECT`, `WITH` (DML içermeyen), `SHOW`, `DESCRIBE`, `EXPLAIN`; `get_yield()` dahil | replica |
+| `INSERT` / `UPDATE` / `DELETE` / DDL | primary |
+| Transaction içindeki her sorgu | primary |
+| `FOR UPDATE`, `FOR SHARE`, `LOCK IN SHARE MODE` | primary |
+| Bu örnekte yazma yapıldıktan sonraki okumalar (`READ_WRITE_STICKY=true`) | primary |
+
+- `stick_to_primary(true|false)` sticky durumunu elle yönetir (ör. istek başında `false`).
+- Query cache, `on_query()` dinleyicileri, PSR-3 logger ve `THROW_ON_ERROR` primary'de kalır; replica'daki hata `get_last_error()` / `QueryException` olarak primary üzerinden görünür.
+- Replica'ya bağlanılamazsa `warning` loglanır ve sorgular primary'de çalışır (`uses_read_replica()` false döner).
 
 ## 📊 Yeni İstatistik API'leri (v1.4)
 

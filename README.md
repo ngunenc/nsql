@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.10.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.11.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -87,6 +87,10 @@
 > **v1.10.0**: PSR-3 logger (`set_logger`), PSR-16 paylaşılan query cache store (`set_query_cache_store`), `on_query()` sorgu dinleyicileri ve `SLOW_QUERY_THRESHOLD_MS` yavaş sorgu logu (#52).
 >
 > **v1.10.1**: Redis/Memcached adaptörleri query cache'e bağlandı: `QUERY_CACHE_DRIVER=redis|memcached` ile süreçler arası paylaşılan cache; production için Redis önerisi ve process içi cache sınırları dokümante edildi (#18).
+>
+> **v1.11.0**: İsimlendirilmiş çoklu bağlantı ve okuma/yazma ayrımı (#51)
+>
+> **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 
 ## 🌟 Özellikler
 
@@ -95,6 +99,7 @@
 - Akıcı (fluent) sorgu arayüzü
 - Otomatik bağlantı yönetimi 
 - Transaction desteği
+- İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`) ve okuma/yazma ayrımı (replica)
 - Migration sistemi
 
 ### Güvenlik
@@ -139,7 +144,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.10.1 --prefer-dist
+composer require ngunenc/nsql:^1.11.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -159,13 +164,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.10.1"
+        "ngunenc/nsql": "^1.11.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.10.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.11.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -920,29 +925,29 @@ foreach ($db->get_yield("SELECT * FROM big_table", []) as $row) {
 Query Cache özelliği, sık kullanılan sorguların sonuçlarını önbellekte tutarak performansı artırır:
 
 > **v1.5.14+**: Query cache varsayılan olarak kapalıdır; `.env` içinde `QUERY_CACHE_ENABLED=true` ile açılır. Cache yalnızca `nsql` instance'ının belleğinde tutulur (worker'lar arası paylaşılmaz). Yazma işlemleri (`insert`, `update`, `delete`, `batch_*`, yazma yapan `query()`) ilgili tabloların cache'ini temizler; transaction içinde cache kullanılmaz. Tablosu tespit edilemeyen sorgular cache'lenmez.
-
-> **v1.10.1+ — Production için Redis önerilir.** Varsayılan `QUERY_CACHE_DRIVER=memory` cache'i yalnızca o PHP sürecinin belleğinde tutar: PHP-FPM worker'ları arasında paylaşılmaz, istek bitince silinir ve bir worker'daki yazma diğer worker'ların cache'ini temizlemez. Birden fazla worker/sunucu varsa paylaşılan store kullanın:
->
-> | Sürücü | Kapsam | Ne zaman |
-> |---|---|---|
-> | `memory` (varsayılan) | Tek süreç | CLI, worker'lar, testler, tek istekte tekrarlanan sorgular |
-> | `redis` | Süreçler ve sunucular arası | **Production önerisi** (`ext-redis`) |
-> | `memcached` | Süreçler ve sunucular arası | Mevcut Memcached altyapısı varsa (`ext-memcached`) |
->
-> Paylaşılan store'da process içi LRU birinci seviye olarak kalır; tablo/tag geçersiz kılma tüm süreçlere yansır. Sunucuya ulaşılamazsa veya sürücü adı geçersizse WARNING loglanır ve process içi cache ile devam edilir. Kendi PSR-16 cache'inizi `$db->set_query_cache_store($psr16)` ile bağlayabilirsiniz.
-
-```ini
-QUERY_CACHE_ENABLED=true
-QUERY_CACHE_DRIVER=redis        # memory | redis | memcached (CACHE_DRIVER da kabul edilir)
-QUERY_CACHE_PREFIX=nsql_qc_
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DATABASE=0
-REDIS_TIMEOUT=2
-# MEMCACHED_HOST=127.0.0.1
-# MEMCACHED_PORT=11211
-```
+
+> **v1.10.1+ — Production için Redis önerilir.** Varsayılan `QUERY_CACHE_DRIVER=memory` cache'i yalnızca o PHP sürecinin belleğinde tutar: PHP-FPM worker'ları arasında paylaşılmaz, istek bitince silinir ve bir worker'daki yazma diğer worker'ların cache'ini temizlemez. Birden fazla worker/sunucu varsa paylaşılan store kullanın:
+>
+> | Sürücü | Kapsam | Ne zaman |
+> |---|---|---|
+> | `memory` (varsayılan) | Tek süreç | CLI, worker'lar, testler, tek istekte tekrarlanan sorgular |
+> | `redis` | Süreçler ve sunucular arası | **Production önerisi** (`ext-redis`) |
+> | `memcached` | Süreçler ve sunucular arası | Mevcut Memcached altyapısı varsa (`ext-memcached`) |
+>
+> Paylaşılan store'da process içi LRU birinci seviye olarak kalır; tablo/tag geçersiz kılma tüm süreçlere yansır. Sunucuya ulaşılamazsa veya sürücü adı geçersizse WARNING loglanır ve process içi cache ile devam edilir. Kendi PSR-16 cache'inizi `$db->set_query_cache_store($psr16)` ile bağlayabilirsiniz.
+
+```ini
+QUERY_CACHE_ENABLED=true
+QUERY_CACHE_DRIVER=redis        # memory | redis | memcached (CACHE_DRIVER da kabul edilir)
+QUERY_CACHE_PREFIX=nsql_qc_
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DATABASE=0
+REDIS_TIMEOUT=2
+# MEMCACHED_HOST=127.0.0.1
+# MEMCACHED_PORT=11211
+```
 
 ```php
 // .env'de QUERY_CACHE_ENABLED=true ise aktiftir
@@ -1685,6 +1690,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.11.0 (2026-10-05)
+  - İsimlendirilmiş çoklu bağlantı (`nsql::connection()`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`) (#51).
 
 - v1.10.1 (2026-10-05)
   - QUERY_CACHE_DRIVER: redis/memcached paylaşılan query cache, adapter_simple_cache köprüsü (#18)
