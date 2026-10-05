@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.11.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.12.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -92,9 +92,13 @@
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite testleri; sürücüden bağımsız migration ve rate limiter (#53)
 >
+> **v1.12.0**: ORM ilişkileri, casting, guarded, soft delete ve inflector (#9)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
+>
+> **v1.12.0**: ORM: `has_one` / `has_many` / `belongs_to` lazy load (model örnekleri), `$casts` (int, float, bool, array/json, datetime, date), `$guarded`, opsiyonel soft delete, `inflector` ile tablo adı çözümü (`ORM_TABLE_NAMING=inflector`) (#9).
 
 ## 🌟 Özellikler
 
@@ -148,7 +152,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.11.1 --prefer-dist
+composer require ngunenc/nsql:^1.12.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -168,13 +172,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.11.1"
+        "ngunenc/nsql": "^1.12.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.11.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.12.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1591,9 +1595,47 @@ $user->force_fill(['is_admin' => 1]);        // güvenilir veri: fillable kontro
 $user->set_attribute('role', 'editor');
 ```
 
-- `$fillable` boşsa constructor, `fill()` ve `$model->alan = ...` hiçbir alanı atamaz.
+- `$fillable` boşsa constructor, `fill()` ve `$model->alan = ...` hiçbir alanı atamaz. Alternatif: `$fillable` boş bırakıp `protected array $guarded = ['id', 'is_admin'];` — guarded dışındaki her alan atanabilir (varsayılan `['*']`).
 - Tablo ve kolon adları yalnızca harf, rakam ve `_` içerebilir; aksi halde `InvalidArgumentException`. Aynı doğrulama `batch_insert()` / `batch_update()` için de geçerli (`$db->quote_identifier()`).
 - `hidden` yalnızca `to_array()` / `to_json()` çıktısını etkiler.
+- `$db` verilmezse `nsql::connection()` (varsayılan isimlendirilmiş bağlantı) kullanılır.
+
+#### İlişkiler, casting ve soft delete (v1.12.0+)
+
+```php
+class Author extends model
+{
+    protected array $fillable = ['name', 'settings', 'is_active', 'born_at'];
+    protected array $casts = [
+        'settings' => 'array',      // json metni ↔ PHP dizisi
+        'is_active' => 'bool',
+        'born_at' => 'datetime',    // DateTimeImmutable; to_array()'de 'Y-m-d H:i:s'
+    ];
+
+    public function posts(): array { return $this->has_many(Post::class, scope: fn ($q) => $q->order_by('id')); }
+    public function profile(): ?Profile { return $this->has_one(Profile::class); }
+}
+
+class Post extends model
+{
+    protected bool $soft_deletes = true;   // delete() → deleted_at; restore(), force_delete(), trashed()
+
+    public function author(): ?Author { return $this->belongs_to(Author::class); }
+}
+
+$author = Author::find_or_fail(1, $db);
+foreach ($author->posts as $post) {        // ilk erişimde yüklenir, sonra önbellekten
+    echo $post->title, ' — ', $post->author->name;
+}
+$author->load('posts');                    // yeniden yükle
+$active = Author::get(fn ($q) => $q->where('is_active', '=', true)->order_by('name'));
+echo json_encode($author);                 // cast'li alanlar + yüklenmiş ilişkiler
+```
+
+- İlişki metotları: `belongs_to($class, $foreign_key = '<ilişkili>_id', $owner_key = pk)`, `has_one` / `has_many($class, $foreign_key = '<bu_model>_id', $local_key = pk)`. Anahtar adları sınıfın snake_case adından türetilir (`BlogPost` → `blog_post_id`). İlişki metotları model örnekleri döndürür (v1.12.0 öncesi `has_many()` satır nesneleri döndürüyordu; özellik erişimi aynı çalışır).
+- Cast tipleri: `int`, `float`/`decimal`, `bool`, `string`, `array`/`json`, `object`, `datetime`, `date`. Ham değer: `get_raw_attribute()`.
+- Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find()`, `find_or_fail()` (`model_not_found_exception`), `hydrate($rows)`. `all()` geriye uyumluluk için satır nesneleri döndürmeye devam eder.
+- Tablo adı: `$table` verilmezse 1.x'te `strtolower(Sınıf) . 's'`. `ORM_TABLE_NAMING=inflector` ile `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people` (v2.0'da varsayılan olacak).
 
 ---
 
@@ -1721,6 +1763,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.12.0 (2026-10-05)
+  - ORM: `has_one` / `has_many` / `belongs_to` lazy load, `$casts`, `$guarded`, soft delete, `inflector` tablo adı çözümü (#9).
 
 - v1.11.1 (2026-10-05)
   - CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`), sürücüden bağımsız migration manager ve rate limiter, veritabanı başına özellik tablosu (#53).
