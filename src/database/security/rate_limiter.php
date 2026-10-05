@@ -49,26 +49,53 @@ class rate_limiter
     }
 
     /**
-     * Tabloyu oluşturan DDL (migration'da kullanmak için).
+     * Tabloyu oluşturan DDL (migration'da kullanmak için). MySQL dışındaki sürücülerde birden
+     * fazla ifade `;` ile ayrılır; tek tek çalıştırmak için schema_statements() kullanın.
      */
-    public static function schema_sql(string $table = 'rate_limits'): string
+    public static function schema_sql(string $table = 'rate_limits', string $driver = 'mysql'): string
     {
-        return "CREATE TABLE IF NOT EXISTS {$table} (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            identifier VARCHAR(255) NOT NULL,
+        return implode(";\n", self::schema_statements($table, $driver));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function schema_statements(string $table = 'rate_limits', string $driver = 'mysql'): array
+    {
+        $columns = "identifier VARCHAR(255) NOT NULL,
             request_type VARCHAR(50) NOT NULL DEFAULT 'default',
-            tokens DOUBLE NOT NULL DEFAULT 0,
+            tokens %s NOT NULL DEFAULT 0,
             last_update INT NOT NULL,
             burst_count INT NOT NULL DEFAULT 0,
             burst_start INT NOT NULL DEFAULT 0,
             window_start INT NOT NULL,
             total_requests INT NOT NULL DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
+
+        if ($driver === 'mysql') {
+            return ["CREATE TABLE IF NOT EXISTS {$table} (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            " . sprintf($columns, 'DOUBLE') . ",
             INDEX idx_identifier (identifier),
             INDEX idx_type (request_type),
             INDEX idx_window (window_start),
             UNIQUE KEY uk_identifier_type (identifier, request_type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"];
+        }
+
+        [$id, $float] = $driver === 'pgsql'
+            ? ['id SERIAL PRIMARY KEY', 'DOUBLE PRECISION']
+            : ['id INTEGER PRIMARY KEY AUTOINCREMENT', 'REAL'];
+
+        return [
+            "CREATE TABLE IF NOT EXISTS {$table} (
+            {$id},
+            " . sprintf($columns, $float) . ",
+            UNIQUE (identifier, request_type)
+        )",
+            "CREATE INDEX IF NOT EXISTS {$table}_idx_type ON {$table} (request_type)",
+            "CREATE INDEX IF NOT EXISTS {$table}_idx_window ON {$table} (window_start)",
+        ];
     }
 
     /**
@@ -77,8 +104,16 @@ class rate_limiter
      */
     public function install(): void
     {
-        $this->require_db()->query(self::schema_sql($this->table));
-        self::$installed_tables[$this->table] = true;
+        $db = $this->require_db();
+        foreach (self::schema_statements($this->table, $db->get_driver_name()) as $sql) {
+            $db->query($sql);
+        }
+        self::$installed_tables[$this->installed_key($db)] = true;
+    }
+
+    private function installed_key(nsql $db): string
+    {
+        return $db->get_driver_name() . ':' . $this->table;
     }
 
     /**
@@ -87,12 +122,18 @@ class rate_limiter
     public function check_rate_limit(string $identifier, string $request_type = 'default'): bool
     {
         $db = $this->require_db();
-        if (! isset(self::$installed_tables[$this->table])) {
+        if (! isset(self::$installed_tables[$this->installed_key($db)])) {
             $this->install();
         }
 
         $now = (int) ($this->clock)();
         $key = ['identifier' => $identifier, 'type' => $request_type];
+        $driver = $db->get_driver_name();
+        $on_conflict = $driver === 'mysql'
+            ? 'ON DUPLICATE KEY UPDATE identifier = identifier'
+            : 'ON CONFLICT (identifier, request_type) DO NOTHING';
+        // SQLite satır kilidi desteklemez; yazma kilidi tüm veritabanı için zaten tektir
+        $lock = $driver === 'sqlite' ? '' : 'FOR UPDATE';
 
         $db->begin();
 
@@ -103,14 +144,14 @@ class rate_limiter
             $pdo->prepare(
                 "INSERT INTO {$this->table} (identifier, request_type, tokens, last_update, burst_count, burst_start, window_start, total_requests)
                  VALUES (:identifier, :type, :tokens, :now, 0, 0, :now2, 0)
-                 ON DUPLICATE KEY UPDATE identifier = identifier"
+                 {$on_conflict}"
             )->execute($key + ['tokens' => $this->capacity, 'now' => $now, 'now2' => $now]);
 
             $select = $pdo->prepare(
                 "SELECT tokens, last_update, burst_count, burst_start, total_requests
                  FROM {$this->table}
                  WHERE identifier = :identifier AND request_type = :type
-                 FOR UPDATE"
+                 {$lock}"
             );
             $select->execute($key);
             $row = $select->fetch(\PDO::FETCH_ASSOC);

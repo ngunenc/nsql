@@ -92,13 +92,21 @@ class migration_manager
             return;
         }
 
+        $driver = $this->db->get_driver_name();
+        [$id, $status] = match ($driver) {
+            'pgsql' => ['id SERIAL PRIMARY KEY', "status VARCHAR(20) DEFAULT 'pending'"],
+            'sqlite' => ['id INTEGER PRIMARY KEY AUTOINCREMENT', "status VARCHAR(20) DEFAULT 'pending'"],
+            default => ['id INT AUTO_INCREMENT PRIMARY KEY', "status ENUM('pending', 'completed', 'failed', 'rolled_back') DEFAULT 'pending'"],
+        };
+        $duration = $driver === 'pgsql' ? 'DOUBLE PRECISION NULL' : 'FLOAT NULL';
+
         $sql = "CREATE TABLE IF NOT EXISTS {$this->migrations_table} (
-            id INT AUTO_INCREMENT PRIMARY KEY,
+            {$id},
             migration_name VARCHAR(255) NOT NULL,
             batch INT NOT NULL,
-            status ENUM('pending', 'completed', 'failed', 'rolled_back') DEFAULT 'pending',
+            {$status},
             error_message TEXT NULL,
-            duration FLOAT NULL,
+            duration {$duration},
             executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             rolled_back_at TIMESTAMP NULL,
             rolled_back_by VARCHAR(255) NULL,
@@ -115,20 +123,44 @@ class migration_manager
      */
     private function upgrade_migrations_table(): void
     {
-        $columns = [];
-        foreach ($this->db->get_results("SHOW COLUMNS FROM {$this->migrations_table}") as $column) {
-            $columns[strtolower((string) $column->Field)] = strtolower((string) $column->Type);
-        }
+        $columns = $this->migrations_table_columns();
 
         foreach (self::OPTIONAL_COLUMNS as $name => $definition) {
             if (! isset($columns[$name])) {
+                if ($name === 'duration' && $this->db->get_driver_name() === 'pgsql') {
+                    $definition = 'DOUBLE PRECISION NULL';
+                }
                 $this->db->query("ALTER TABLE {$this->migrations_table} ADD COLUMN {$name} {$definition}");
             }
         }
 
-        if (isset($columns['status']) && ! str_contains($columns['status'], 'rolled_back')) {
+        if ($this->db->get_driver_name() === 'mysql' && isset($columns['status']) && ! str_contains($columns['status'], 'rolled_back')) {
             $this->db->query("ALTER TABLE {$this->migrations_table} MODIFY COLUMN status ENUM('pending', 'completed', 'failed', 'rolled_back') DEFAULT 'pending'");
         }
+    }
+
+    /**
+     * @return array<string, string> kolon adı => tip (küçük harf)
+     */
+    private function migrations_table_columns(): array
+    {
+        [$sql, $params, $name_key, $type_key] = match ($this->db->get_driver_name()) {
+            'pgsql' => [
+                'SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = :table',
+                ['table' => $this->migrations_table],
+                'column_name',
+                'data_type',
+            ],
+            'sqlite' => ["PRAGMA table_info({$this->migrations_table})", [], 'name', 'type'],
+            default => ["SHOW COLUMNS FROM {$this->migrations_table}", [], 'Field', 'Type'],
+        };
+
+        $columns = [];
+        foreach ($this->db->get_results($sql, $params) as $column) {
+            $columns[strtolower((string) $column->{$name_key})] = strtolower((string) $column->{$type_key});
+        }
+
+        return $columns;
     }
 
     /**
@@ -468,7 +500,7 @@ class migration_manager
         $this->db->update(
             "UPDATE {$this->migrations_table} 
              SET status = 'rolled_back', 
-                 rolled_back_at = NOW(), 
+                 rolled_back_at = CURRENT_TIMESTAMP, 
                  rolled_back_by = :rolled_back_by,
                  rollback_batch = :rollback_batch
              WHERE migration_name = :name AND batch = :batch",

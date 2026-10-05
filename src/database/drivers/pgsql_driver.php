@@ -64,9 +64,15 @@ class pgsql_driver implements driver_interface
     public function get_last_insert_id(\PDO $pdo, ?string $sequence = null): int|string
     {
         if ($sequence === null) {
-            // PostgreSQL'de sequence belirtilmezse lastval() kullan
-            $stmt = $pdo->query("SELECT lastval()");
-            return $stmt->fetchColumn();
+            // lastval(): oturumda sequence kullanılmadıysa (SERIAL'sız tablo) hata verir → 0
+            try {
+                $stmt = $pdo->query('SELECT lastval()');
+                $id = $stmt === false ? false : $stmt->fetchColumn();
+            } catch (\PDOException) {
+                return 0;
+            }
+
+            return is_numeric($id) ? (int) $id : 0;
         }
         return $pdo->lastInsertId($sequence);
     }
