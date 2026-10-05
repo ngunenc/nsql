@@ -6,7 +6,7 @@ use nsql\database\nsql;
 
 /**
  * Health Check
- * 
+ *
  * Veritabanı ve sistem sağlık kontrolü
  */
 class health_check
@@ -93,7 +93,7 @@ class health_check
     {
         try {
             $cache_stats = $this->db->get_cache_stats();
-            
+
             return [
                 'status' => $cache_stats['enabled'] ? 'healthy' : 'disabled',
                 'enabled' => $cache_stats['enabled'],

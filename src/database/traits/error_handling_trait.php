@@ -13,7 +13,7 @@ use nsql\database\exceptions\{
 
 /**
  * Error Handling Trait
- * 
+ *
  * Özellikler:
  * - Try-catch wrapper
  * - Error recovery mekanizması
@@ -24,7 +24,7 @@ trait error_handling_trait
 {
     /**
      * Güvenli şekilde işlem yapar (try-catch wrapper)
-     * 
+     *
      * @param callable $operation Yapılacak işlem
      * @param mixed $default_value Hata durumunda döndürülecek varsayılan değer
      * @param bool $throw_exception Exception fırlatılsın mı?
@@ -50,7 +50,7 @@ trait error_handling_trait
 
     /**
      * Retry logic ile işlem yapar
-     * 
+     *
      * @param callable $operation Yapılacak işlem
      * @param int $max_retries Maksimum deneme sayısı
      * @param int $delay_ms Retry arası bekleme (milisaniye)
@@ -63,19 +63,19 @@ trait error_handling_trait
         int $delay_ms = 100
     ): mixed {
         $last_exception = null;
-        
+
         for ($attempt = 0; $attempt <= $max_retries; $attempt++) {
             try {
                 return $operation();
             } catch (PDOException $e) {
                 $last_exception = $e;
-                
+
                 // Connection hatası ise retry yap
                 if ($this->is_recoverable_error($e) && $attempt < $max_retries) {
                     usleep($delay_ms * 1000); // Mikrosaniye cinsinden bekleme
                     continue;
                 }
-                
+
                 // Retry edilemez hata veya maksimum deneme aşıldı
                 throw $this->convert_to_database_exception($e);
             } catch (Throwable $e) {
@@ -83,7 +83,7 @@ trait error_handling_trait
                 throw $e;
             }
         }
-        
+
         // Tüm denemeler başarısız
         throw $this->convert_to_database_exception($last_exception ?? new PDOException('Tüm denemeler başarısız'));
     }
@@ -94,7 +94,7 @@ trait error_handling_trait
     protected function is_recoverable_error(PDOException $e): bool
     {
         $error_code = $e->getCode();
-        
+
         // MySQL error codes
         $recoverable_codes = [
             2002, // Connection timeout
@@ -104,7 +104,7 @@ trait error_handling_trait
             1040, // Too many connections
             1205, // Lock wait timeout exceeded
         ];
-        
+
         return in_array($error_code, $recoverable_codes, true);
     }
 
@@ -127,11 +127,11 @@ trait error_handling_trait
                 \nsql\database\logging\logger::ERROR
             );
         }
-        
+
         if ($throw_exception) {
             throw $this->convert_to_database_exception($e);
         }
-        
+
         return $default_value;
     }
 
@@ -150,11 +150,11 @@ trait error_handling_trait
                 \nsql\database\logging\logger::ERROR
             );
         }
-        
+
         if ($throw_exception) {
             throw $e;
         }
-        
+
         return $default_value;
     }
 
@@ -177,11 +177,11 @@ trait error_handling_trait
                 \nsql\database\logging\logger::ERROR
             );
         }
-        
+
         if ($throw_exception) {
             throw $e;
         }
-        
+
         return $default_value;
     }
 
@@ -204,11 +204,11 @@ trait error_handling_trait
                 \nsql\database\logging\logger::CRITICAL
             );
         }
-        
+
         if ($throw_exception) {
             throw $e;
         }
-        
+
         return $default_value;
     }
 
@@ -221,7 +221,7 @@ trait error_handling_trait
         $sql_state = $error_info[0] ?? '';
         $error_code = $error_info[1] ?? $e->getCode();
         $error_message = $error_info[2] ?? $e->getMessage();
-        
+
         // Connection hatası mı?
         if (in_array($error_code, [1045, 2002, 2003, 2006, 2013, 1040], true)) {
             return new \nsql\database\exceptions\ConnectionException(
@@ -231,7 +231,7 @@ trait error_handling_trait
                     : \nsql\database\exceptions\error_codes::CONNECTION_FAILED
             );
         }
-        
+
         // Query hatası
         return new \nsql\database\exceptions\QueryException(
             $error_message,

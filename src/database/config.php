@@ -376,34 +376,36 @@ class config
         try {
             $line_number = 0;
             $max_lines = 10000; // Güvenlik: maksimum satır sayısı (dosya boyutu kontrolü)
-            
+
             while (($line = fgets($handle)) !== false && $line_number < $max_lines) {
                 $line_number++;
                 $line = trim($line);
-                
+
                 // Boş satır veya yorum satırı
                 if ($line === '' || str_starts_with($line, '#')) {
                     continue;
                 }
-                
+
                 // KEY=VALUE formatı
                 $pos = strpos($line, '=');
                 if ($pos === false) {
                     continue;
                 }
-                
+
                 $key = strtoupper(trim(substr($line, 0, $pos)));
                 $value = trim(substr($line, $pos + 1));
 
                 // Çift tırnak/tek tırnakları temizle
-                if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || 
-                    (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+                if (
+                    (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+                    (str_starts_with($value, "'") && str_ends_with($value, "'"))
+                ) {
                     $value = substr($value, 1, -1);
                 }
 
                 self::$config[$key] = self::cast_value($value);
             }
-            
+
             // Maksimum satır sayısı aşıldıysa uyar
             if ($line_number >= $max_lines) {
                 error_log("Config: .env dosyası çok büyük (max {$max_lines} satır), kalan satırlar okunmadı");

@@ -4,7 +4,7 @@ namespace nsql\database\drivers;
 
 /**
  * Database Driver Factory
- * 
+ *
  * Driver instance'ları oluşturur
  */
 class driver_factory
@@ -25,7 +25,7 @@ class driver_factory
         } elseif (str_starts_with($dsn, 'sqlite:')) {
             return new sqlite_driver();
         }
-        
+
         throw new \InvalidArgumentException("Desteklenmeyen database driver: {$dsn}");
     }
 

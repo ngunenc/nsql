@@ -10,7 +10,7 @@ class sqlite_driver implements driver_interface
     public function build_dsn(array $config): string
     {
         $path = $config['path'] ?? $config['dbname'] ?? ':memory:';
-        
+
         // Eğer path mutlak değilse, project root'a göre ayarla
         if ($path !== ':memory:' && ! str_starts_with($path, '/') && ! preg_match('/^[A-Z]:\\\\/', $path)) {
             $project_root = \nsql\database\config::get_project_root();
@@ -18,7 +18,7 @@ class sqlite_driver implements driver_interface
                 $path = $project_root . '/' . $path;
             }
         }
-        
+
         return "sqlite:{$path}";
     }
 
@@ -30,7 +30,7 @@ class sqlite_driver implements driver_interface
         }
 
         $path = $matches[1];
-        
+
         return [
             'driver' => 'sqlite',
             'path' => $path,

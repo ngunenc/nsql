@@ -848,8 +848,10 @@ class query_builder
             throw new \LogicException("{$operation}(): table() ile düz bir tablo adı belirtilmeli.");
         }
 
-        if ($this->joins !== [] || $this->unions !== [] || $this->group_by !== [] || $this->having !== []
-            || $this->order_by !== [] || $this->limit !== null || $this->offset > 0) {
+        if (
+            $this->joins !== [] || $this->unions !== [] || $this->group_by !== [] || $this->having !== []
+            || $this->order_by !== [] || $this->limit !== null || $this->offset > 0
+        ) {
             throw new \LogicException("{$operation}(): JOIN, UNION, GROUP BY, HAVING, ORDER BY, LIMIT ve OFFSET desteklenmez.");
         }
 

@@ -4,7 +4,7 @@ namespace nsql\database\cache;
 
 /**
  * Redis Cache Adapter
- * 
+ *
  * Redis kullanarak distributed cache sağlar
  */
 class redis_adapter implements cache_adapter_interface
@@ -50,7 +50,7 @@ class redis_adapter implements cache_adapter_interface
         try {
             $this->redis = new \Redis();
             $connected = $this->redis->connect($this->host, $this->port, $this->timeout);
-            
+
             if (! $connected) {
                 $this->redis = null;
                 return false;
@@ -161,7 +161,7 @@ class redis_adapter implements cache_adapter_interface
             foreach ($tags as $tag) {
                 $tag_key = "tag:{$tag}";
                 $keys = $this->redis->sMembers($tag_key);
-                
+
                 if ($keys !== false) {
                     $keys_to_delete = array_merge($keys_to_delete, $keys);
                     $this->redis->del($tag_key);

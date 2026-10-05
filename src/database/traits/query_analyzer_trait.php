@@ -48,7 +48,7 @@ trait query_analyzer_trait
         } else {
             $this->analysis_cache_misses++;
             $analysis = $this->query_analyzer->analyze_query($query);
-            
+
             // Cache'e ekle (maksimum 100 analiz sonucu)
             if (count($this->query_analysis_cache) < 100) {
                 $this->query_analysis_cache[$query_hash] = $analysis;

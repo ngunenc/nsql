@@ -4,7 +4,7 @@ namespace nsql\database\exceptions;
 
 /**
  * Error Code Constants
- * 
+ *
  * Tüm hata kodları için sabitler
  */
 class error_codes
@@ -168,7 +168,7 @@ class error_codes
     {
         $reflection = new \ReflectionClass(self::class);
         $constants = $reflection->getConstants();
-        
+
         $codes = [];
         foreach ($constants as $name => $value) {
             $codes[$name] = [
@@ -177,7 +177,7 @@ class error_codes
                 'category' => self::get_category($value),
             ];
         }
-        
+
         return $codes;
     }
 }

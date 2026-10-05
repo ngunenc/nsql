@@ -8,7 +8,7 @@ use nsql\database\traits\log_path_trait;
 class audit_logger
 {
     use log_path_trait;
-    
+
     private string $log_file;
 
     public function __construct(?string $log_file = null)

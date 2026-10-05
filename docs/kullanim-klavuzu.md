@@ -13,7 +13,7 @@
 ## 📥 Kurulum
 
 ### Sistem Gereksinimleri
-- PHP 8.0 veya üstü
+- PHP 8.1 veya üstü
 - PDO PHP Eklentisi
 - JSON PHP Eklentisi 
 - OpenSSL PHP Eklentisi (şifreleme için)

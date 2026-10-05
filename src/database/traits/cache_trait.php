@@ -455,8 +455,10 @@ trait cache_trait
     {
         $table = strtolower(trim($table));
 
-        if (! isset($this->cache_warming_strategies[$table]) ||
-            ! $this->cache_warming_strategies[$table]['enabled']) {
+        if (
+            ! isset($this->cache_warming_strategies[$table]) ||
+            ! $this->cache_warming_strategies[$table]['enabled']
+        ) {
             return [
                 'success' => false,
                 'message' => "Tablo için warming stratejisi bulunamadı veya devre dışı: {$table}",

@@ -51,7 +51,9 @@ class VendorRootDetectionTest extends TestCase
         config::refresh();
 
         $root = str_replace('\\', '/', config::get_project_root());
-        $expected = str_replace('\\', '/', $app);
+        // Windows'ta sys_get_temp_dir() 8.3 kısa adı (RUNNER~1) döndürebilir
+        $expected = str_replace('\\', '/', (string) realpath($app));
+        $root = str_replace('\\', '/', (string) (realpath($root) ?: $root));
         $this->assertSame($expected, $root);
 
         config::set_project_root(dirname(__DIR__, 2));

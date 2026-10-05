@@ -57,13 +57,13 @@ trait write_operations_trait
 
         $columns = array_keys($first_row);
         $columns_str = implode(', ', array_map(fn($col) => $this->quote_identifier($col), $columns));
-        
+
         // Placeholder'ları oluştur
         $placeholders = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
-        
+
         // Tüm satırlar için placeholder'ları birleştir
         $all_placeholders = implode(', ', array_fill(0, count($data), $placeholders));
-        
+
         // Tüm değerleri düzleştir
         $values = [];
         foreach ($data as $row) {
@@ -80,7 +80,7 @@ trait write_operations_trait
             }
 
             $stmt = $this->execute_query($sql, $values);
-            
+
             if ($stmt === false) {
                 if ($use_transaction) {
                     $this->rollback();
@@ -100,11 +100,11 @@ trait write_operations_trait
             if ($use_transaction) {
                 $this->rollback();
             }
-            
+
             if ($e instanceof QueryException) {
                 throw $e;
             }
-            
+
             throw new QueryException('Batch insert hatası: ' . $e->getMessage(), $sql, $values, 0, $e);
         }
     }
@@ -175,11 +175,11 @@ trait write_operations_trait
             if ($use_transaction) {
                 $this->rollback();
             }
-            
+
             if ($e instanceof QueryException) {
                 throw $e;
             }
-            
+
             throw new QueryException('Batch update hatası: ' . $e->getMessage(), '', [], 0, $e);
         }
     }

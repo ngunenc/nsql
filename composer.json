@@ -1,7 +1,7 @@
 {
 	"name": "ngunenc/nsql",
-	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.9.1",
-	"version": "1.9.1",
+	"description": "Modern PHP PDO veritabanı kütüphanesi (nsql) v1.9.2",
+	"version": "1.9.2",
 	"type": "library",
 	"license": "MIT",
 	"authors": [
@@ -10,7 +10,7 @@
 		}
 	],
 	"require": {
-		"php": ">=8.0"
+		"php": ">=8.1"
 	},
 	"autoload": {
 		"psr-4": {
@@ -54,13 +54,16 @@
 			"@test",
 			"@test:cleanup"
 		],
-		"lint": "phpcs --standard=PSR12 src tests",
+		"lint": "phpcs",
 		"stan": "phpstan analyse -c phpstan.neon --memory-limit=1G",
 		"stan:baseline": "phpstan analyse -c phpstan.neon --memory-limit=1G --generate-baseline phpstan-baseline.neon",
 		"fix": "php-cs-fixer fix --config=.php-cs-fixer.php"
 	},
 	"config": {
 		"optimize-autoloader": true,
+		"platform": {
+			"php": "8.1.0"
+		},
 		"sort-packages": true
 	},
 	"archive": {
@@ -73,6 +76,7 @@
 			"/.phpunit.cache",
 			"/phpstan.neon",
 			"/phpstan-baseline.neon",
+			"/phpcs.xml.dist",
 			"/.php-cs-fixer.php",
 			"/.php-cs-fixer.cache",
 			"/README.md",

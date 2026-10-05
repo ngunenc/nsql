@@ -102,7 +102,7 @@ class security_manager
     {
         return self::validate_sql_params($params);
     }
-    
+
     /**
      * Input validation için validator kullanır (GELISTIRME-007)
      */
@@ -110,7 +110,7 @@ class security_manager
     {
         return \nsql\database\validation\validator::validate($value, $rules);
     }
-    
+
     /**
      * Birden fazla input'u validate eder
      */

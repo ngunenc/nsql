@@ -7,12 +7,30 @@ use PHPUnit\Framework\TestCase;
 
 class ConfigEnvMappingTest extends TestCase
 {
+    private const ENV_KEYS = [
+        'DB_MIN_CONNECTIONS',
+        'MIN_CONNECTIONS',
+        'DB_MAX_CONNECTIONS',
+        'MAX_CONNECTIONS',
+        'DB_HEALTH_CHECK_INTERVAL',
+        'HEALTH_CHECK_INTERVAL',
+        'DB_CONNECTION_TIMEOUT',
+        'CONNECTION_TIMEOUT',
+        'DB_HOST',
+    ];
+
     private string $tempRoot;
+
+    /** @var array<string, string|false> */
+    private array $savedEnv = [];
 
     protected function setUp(): void
     {
         $this->tempRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_config_test_' . uniqid('', true);
         mkdir($this->tempRoot, 0700, true);
+        foreach (self::ENV_KEYS as $key) {
+            $this->savedEnv[$key] = getenv($key);
+        }
         $this->clear_pool_env();
         config::set_project_root($this->tempRoot);
         config::refresh();
@@ -21,6 +39,11 @@ class ConfigEnvMappingTest extends TestCase
     protected function tearDown(): void
     {
         $this->clear_pool_env();
+        foreach ($this->savedEnv as $key => $value) {
+            if ($value !== false) {
+                putenv($key . '=' . $value);
+            }
+        }
         config::set_project_root(dirname(__DIR__, 2));
         config::refresh();
 
@@ -35,17 +58,7 @@ class ConfigEnvMappingTest extends TestCase
 
     private function clear_pool_env(): void
     {
-        foreach ([
-            'DB_MIN_CONNECTIONS',
-            'MIN_CONNECTIONS',
-            'DB_MAX_CONNECTIONS',
-            'MAX_CONNECTIONS',
-            'DB_HEALTH_CHECK_INTERVAL',
-            'HEALTH_CHECK_INTERVAL',
-            'DB_CONNECTION_TIMEOUT',
-            'CONNECTION_TIMEOUT',
-            'DB_HOST',
-        ] as $key) {
+        foreach (self::ENV_KEYS as $key) {
             putenv($key);
             unset($_ENV[$key], $_SERVER[$key]);
         }

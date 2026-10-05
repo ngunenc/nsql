@@ -7,7 +7,7 @@ use nsql\database\exceptions\error_codes;
 
 /**
  * Migration Exception
- * 
+ *
  * Migration işlem hatalarını temsil eder
  */
 class MigrationException extends DatabaseException
@@ -28,7 +28,7 @@ class MigrationException extends DatabaseException
         if (empty($message)) {
             $message = error_codes::get_message($code);
         }
-        
+
         parent::__construct($message, $code, $previous);
         $this->migration_name = $migration_name;
         $this->migration_batch = $migration_batch;

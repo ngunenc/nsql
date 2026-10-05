@@ -1,6 +1,6 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.9.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.9.2
 
-**nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
+**nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
 > **🚀 v1.5.0 Yeni Özellikler**: Thread-safe connection pool, LFU cache algoritması, per-table TTL, cache warming, identifier quoting, güvenli IP/HTTPS tespiti, gelişmiş exception handling ve memory leak düzeltmeleri!
 >
@@ -79,6 +79,8 @@
 > **v1.9.0**: Query builder yazma işlemleri (`insert`, `insert_many`, `update`, `delete`, `upsert`), yardımcılar (`count`, `exists`, `pluck`, `value`, `paginate`), `or_where` / gruplama / `where_between` / `when` ve açık `query_builder::raw()` (#49).
 >
 > **v1.9.1**: İç mimari: `nsql` god object'i sorumluluklara göre parçalandı (1742 → ~490 satır); public API değişmedi (#16).
+>
+> **v1.9.2**: CI onarımı ve platform düzeltmesi: minimum PHP 8.1 olarak doğru bildirildi, entegrasyon testlerinin CI'da bağlanamamasına yol açan test sızıntısı giderildi, PSR-12 lint ruleset'i eklendi.
 
 ## 🌟 Özellikler
 
@@ -120,7 +122,7 @@
 ## 📋 Kurulum
 
 ### Sistem Gereksinimleri
-- **PHP**: 8.0 veya üstü
+- **PHP**: 8.1 veya üstü
 - **PDO**: PHP PDO eklentisi
 - **MySQL**: 5.7.8+ veya MariaDB 10.2+
 - **OpenSSL**: Şifreleme özellikleri için
@@ -131,7 +133,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.9.1 --prefer-dist
+composer require ngunenc/nsql:^1.9.2 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -151,13 +153,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.9.1"
+        "ngunenc/nsql": "^1.9.2"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.9.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.9.2 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -370,7 +372,7 @@ composer fix
 ### CI/CD
 
 Proje GitHub Actions ile otomatik test edilir:
-- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.0–8.4
+- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.4
 - PHP 8.3 job’da `coverage/clover.xml` üretilir ve Codecov’a yüklenir
 - Windows unit smoke isteğe bağlıdır (`continue-on-error`; MySQL service yok)
 
@@ -473,7 +475,7 @@ nsql/
 
 ### Sistem Gereksinimleri
 
-- PHP 8.0+
+- PHP 8.1+
 - PDO PHP Eklentisi
 - JSON PHP Eklentisi
 - OpenSSL PHP Eklentisi (şifreleme için)
@@ -1652,6 +1654,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.9.2 (2026-10-05)
+  - CI onarımı: PHP >=8.1, test env sızıntısı, phpcs ruleset, Windows yol düzeltmesi
 
 - v1.9.1 (2026-10-05)
   - nsql god object parçalama: memory_monitor sınıfı ve sorumluluk trait'leri, API değişmedi (#16)

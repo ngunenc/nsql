@@ -13,21 +13,21 @@ class pgsql_driver implements driver_interface
         $port = $config['port'] ?? 5432;
         $dbname = $config['dbname'] ?? '';
         $charset = $config['charset'] ?? 'UTF8';
-        
+
         $dsn = "pgsql:host={$host}";
-        
+
         if (isset($config['port'])) {
             $dsn .= ";port={$port}";
         }
-        
+
         if ($dbname) {
             $dsn .= ";dbname={$dbname}";
         }
-        
+
         if ($charset) {
             $dsn .= ";options='--client_encoding={$charset}'";
         }
-        
+
         return $dsn;
     }
 

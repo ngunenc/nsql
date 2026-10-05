@@ -27,10 +27,9 @@ try {
 
     // Test veritabanını sil
     $pdo->exec("DROP DATABASE IF EXISTS `$test_db`");
-    
+
     echo "✅ Test veritabanı '$test_db' başarıyla silindi.\n";
     echo "✅ Temizlik tamamlandı!\n";
-
 } catch (PDOException $e) {
     echo "❌ Veritabanı hatası: " . $e->getMessage() . "\n";
     exit(1);

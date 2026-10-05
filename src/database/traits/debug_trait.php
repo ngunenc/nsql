@@ -32,7 +32,8 @@ trait debug_trait
 
     /**
      * Debug çıktısı oluşturur
-     */    public function debug(): void
+     */
+    public function debug(): void
     {
         if (! $this->debug_mode) {
             echo '<div style="color:red;font-weight:bold;">Debug modu kapalı! Detaylı sorgu ve hata bilgisi için nsql nesnesini debug modda başlatın.</div>';
@@ -245,7 +246,8 @@ HTML;
 
     /**
      * Debug çıktısını render eder
-     */    private function render_debug_output(string $query, string $params_json): void
+     */
+    private function render_debug_output(string $query, string $params_json): void
     {
         if (! defined('NSQL_TEMPLATE')) {
             define('NSQL_TEMPLATE', true);

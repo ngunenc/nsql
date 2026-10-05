@@ -4,7 +4,7 @@ namespace nsql\database\cache;
 
 /**
  * In-Memory Cache Adapter
- * 
+ *
  * Mevcut cache_trait'in array-based cache'ini adapter pattern'e uyarlar
  */
 class in_memory_adapter implements cache_adapter_interface
@@ -28,7 +28,7 @@ class in_memory_adapter implements cache_adapter_interface
         }
 
         $entry = $this->cache[$key];
-        
+
         // TTL kontrolü
         if (isset($entry['expires_at']) && $entry['expires_at'] < time()) {
             $this->delete($key);

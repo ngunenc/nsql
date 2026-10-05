@@ -123,7 +123,7 @@ trait transaction_trait
         $this->throw_on_error = true;
 
         try {
-            for ($attempt = 1; ; $attempt++) {
+            for ($attempt = 1;; $attempt++) {
                 $this->begin();
 
                 try {

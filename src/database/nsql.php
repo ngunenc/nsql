@@ -113,7 +113,7 @@ class nsql
             'dbname' => $db,
             'charset' => $charset,
         ];
-        
+
         // SQLite için path kullan
         if ($driver_name === 'sqlite') {
             $config['path'] = $db;
@@ -121,7 +121,7 @@ class nsql
         } else {
             $config['port'] = config::get('db_port', $this->get_default_port($driver_name));
         }
-        
+
         $this->dsn = $this->driver->build_dsn($config);
         $this->user = (string)$user;
         $this->pass = (string)$pass;
@@ -131,7 +131,7 @@ class nsql
         $this->options = array_merge($driver_options, [
             \PDO::ATTR_PERSISTENT => (int)(bool)config::get('persistent_connection', config::persistent_connection),
         ]);
-        
+
         // MySQL için timeout DSN'e eklenir (PDO attribute olarak desteklenmez)
         if ($driver_name === 'mysql' && config::has('connection_timeout')) {
             $timeout = (int)config::get('connection_timeout', config::connection_timeout);
@@ -188,7 +188,7 @@ class nsql
         // DSN'den driver oluştur
         $driver = driver_factory::create_from_dsn($dsn);
         $parsed = $driver->parse_dsn($dsn);
-        
+
         // Driver'a göre instance oluştur
         $instance = new static(
             host: $parsed['host'] ?? null,
@@ -198,14 +198,14 @@ class nsql
             charset: $parsed['charset'] ?? null,
             driver: $parsed['driver']
         );
-        
+
         // Özel options varsa uygula
         if ($options !== null) {
             foreach ($options as $key => $value) {
                 $instance->pdo?->setAttribute($key, $value);
             }
         }
-        
+
         return $instance;
     }
 
@@ -233,10 +233,10 @@ class nsql
     public function query(string $query, ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
     {
         $this->set_last_called_method();
-        
+
         // GELISTIRME-009: Error handling - exception fırlatma
         $result = $this->execute_query($query, [], $fetch_mode, ...$fetch_mode_args);
-        
+
         // query() her iki modda da fırlatır (geriye uyumluluk)
         if ($result === false) {
             throw $this->make_query_exception($query, []);
@@ -245,7 +245,7 @@ class nsql
         if ($result !== false && ! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
             $this->invalidate_cache_for_write($query);
         }
-        
+
         return $result;
     }
 
@@ -322,7 +322,7 @@ class nsql
         if ($stmt === false) {
             return null;
         }
-        
+
         // Sonucu al, last_results ve cache'i guncelle
         $result = $stmt->fetch(PDO::FETCH_OBJ);
         $stmt->closeCursor();
@@ -417,7 +417,7 @@ class nsql
         }
 
         $cache_key = $this->generate_query_cache_key($query, $params);
-        
+
         // Zaten cache'de varsa true döndür
         if (isset($this->query_cache[$cache_key])) {
             return true;
@@ -432,7 +432,7 @@ class nsql
 
             // Sonuçları al
             $results = $stmt->fetchAll(\PDO::FETCH_OBJ);
-            
+
             // Tabloları otomatik çıkar (eğer belirtilmemişse)
             if (empty($tables)) {
                 $tables = $this->extract_tables_from_query($query);
@@ -472,7 +472,7 @@ class nsql
                     $warm_query['tags'] ?? [],
                     $warm_query['tables'] ?? []
                 );
-                
+
                 if ($success) {
                     $loaded++;
                 }

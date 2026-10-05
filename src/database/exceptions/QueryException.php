@@ -7,7 +7,7 @@ use nsql\database\exceptions\error_codes;
 
 /**
  * Query Exception
- * 
+ *
  * SQL sorgu hatalarını temsil eder
  */
 class QueryException extends DatabaseException
@@ -26,7 +26,7 @@ class QueryException extends DatabaseException
         if (empty($message)) {
             $message = error_codes::get_message($code);
         }
-        
+
         parent::__construct($message, $code, $previous);
         $this->sql = $sql;
         $this->params = $params;

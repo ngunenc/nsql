@@ -340,13 +340,15 @@ class QueryBuilderIntegrationTest extends DatabaseTestCase
 
     public function test_invalid_value_and_operator_combinations_throw(): void
     {
-        foreach ([
+        foreach (
+            [
             fn () => $this->qb()->from('qb_products')->where('id', '=', [1, 2]),
             fn () => $this->qb()->from('qb_products')->where('id', 'IN', 5),
             fn () => $this->qb()->from('qb_products')->where('id', 'IS', 5),
             fn () => $this->qb()->from('qb_products')->where('id', '>', null),
             fn () => $this->qb()->from('qb_products')->where_in('id', [[1]]),
-        ] as $call) {
+            ] as $call
+        ) {
             try {
                 $call();
                 $this->fail('InvalidArgumentException bekleniyordu');

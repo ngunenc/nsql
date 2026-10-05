@@ -7,7 +7,7 @@ use nsql\database\exceptions\error_codes;
 
 /**
  * Connection Exception
- * 
+ *
  * Veritabanı bağlantı hatalarını temsil eder
  */
 class ConnectionException extends DatabaseException
@@ -28,7 +28,7 @@ class ConnectionException extends DatabaseException
         if (empty($message)) {
             $message = error_codes::get_message($code);
         }
-        
+
         parent::__construct($message, $code, $previous);
         $this->dsn = $dsn;
         $this->host = $host;
