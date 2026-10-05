@@ -13,6 +13,7 @@ use nsql\database\traits\{
     error_model_trait,
     log_path_trait,
     query_analyzer_trait,
+    query_events_trait,
     query_execution_trait,
     query_parameter_trait,
     session_facade_trait,
@@ -33,6 +34,7 @@ use PDOStatement;
  * Sorumluluklar trait'lere ayrılmıştır:
  * - connection_trait / transaction_trait: bağlantı, reconnect, transaction
  * - query_execution_trait: prepare/bind/execute, reconnect retry
+ * - query_events_trait: on_query() dinleyicileri, yavaş sorgu logu
  * - write_operations_trait: insert/update/delete/statement/batch_*
  * - streaming_trait: get_yield, chunk_by_id, get_chunk (bellek: optimization\memory_monitor)
  * - cache_trait / statement_cache_trait: sorgu ve statement cache
@@ -52,6 +54,7 @@ class nsql
     use error_model_trait;
     use log_path_trait;
     use query_execution_trait;
+    use query_events_trait;
     use write_operations_trait;
     use streaming_trait;
     use session_facade_trait;

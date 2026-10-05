@@ -9,6 +9,7 @@
 - [Security Sınıfları](#-security-sınıfları)
 - [Migration Manager](#-migration-manager)
 - [Traits](#-traits)
+- [Loglama, Sorgu Olayları ve Paylaşılan Cache](#-loglama-sorgu-olayları-ve-paylaşılan-cache-v1100)
 - [Yeni İstatistik API'leri (v1.4)](#-yeni-istatistik-apileri-v14)
 
 ## 🏗 Ana Sınıflar
@@ -661,6 +662,55 @@ try {
     // Hata işleme
 }
 ```
+
+## 🔌 Loglama, Sorgu Olayları ve Paylaşılan Cache (v1.10.0+)
+
+### PSR-3 logger (Monolog)
+
+```php
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
+
+$log = new Logger('nsql');
+$log->pushHandler(new StreamHandler(__DIR__ . '/storage/logs/nsql.log', Logger::WARNING));
+
+$db->set_logger($log);   // null = dahili dosya logger'ı (LOG_FILE)
+```
+
+Hatalar `error`, yavaş sorgular `warning`, debug çıktıları `debug` seviyesinde iletilir. Context içindeki parametreler maskelenmiştir (`SENSITIVE_KEYS`).
+
+### Sorgu dinleyicileri
+
+```php
+use nsql\database\events\query_event;
+
+$db->on_query(function (query_event $e): void {
+    // $e->sql, $e->params (maskeli), $e->duration_ms, $e->row_count (unbuffered akışta null),
+    // $e->success, $e->error (?Throwable), $e->driver
+    $profiler->add($e->sql, $e->duration_ms);
+});
+
+$db->clear_query_listeners();
+```
+
+Olay yalnızca veritabanına giden sorgularda üretilir; cache'ten dönen sonuçlar için üretilmez. Dinleyicide fırlatılan exception sorgu çağrısına yayılır.
+
+### Yavaş sorgu logu
+
+```env
+SLOW_QUERY_THRESHOLD_MS=250   # 0 = kapalı (varsayılan)
+```
+
+Eşiği aşan her sorgu `Yavaş sorgu` mesajıyla `warning` seviyesinde loglanır (`sql`, maskeli `params`, `duration_ms`, `threshold_ms`, `row_count`).
+
+### PSR-16 query cache store
+
+```php
+// Herhangi bir PSR-16 uygulaması: symfony/cache Psr16Cache, Laravel Repository, vb.
+$db->set_query_cache_store($psr16Cache, prefix: 'myapp_qc_');
+```
+
+`QUERY_CACHE_ENABLED=true` gerekir. Process içi LRU cache birinci seviye olarak kalır; ıskalamada paylaşılan store'a bakılır. Yazma sonrası tablo/tag/global geçersiz kılma tüm süreçlere yansır (store'da tutulan sürüm token'larıyla). Transaction içindeki yazmalar commit sonrası tekrar geçersiz kılınır. Store hataları sorguyu bozmaz (okuma = miss, yazma = yok sayılır).
 
 ## 📊 Yeni İstatistik API'leri (v1.4)
 

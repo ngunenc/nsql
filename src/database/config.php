@@ -50,6 +50,7 @@ class config
     public const yield_unbuffered = false; // v2.0.0'da true olacak
     public const throw_on_error = false; // v2.0.0'da true olacak
     public const transaction_retry_attempts = 1; // transaction(): deadlock/lock wait'te toplam deneme
+    public const slow_query_threshold_ms = 0; // >0: bu süreyi aşan sorgular WARNING seviyesinde loglanır
     public const auto_adjust_chunk_size = true;
     public const min_chunk_size = 200; // 100 → 200 (daha büyük minimum chunk)
     public const max_chunk_size = 15000; // 10000 → 15000 (daha büyük maximum chunk)
@@ -490,6 +491,7 @@ class config
             'YIELD_UNBUFFERED' => self::yield_unbuffered,
             'THROW_ON_ERROR' => self::throw_on_error,
             'TRANSACTION_RETRY_ATTEMPTS' => self::transaction_retry_attempts,
+            'SLOW_QUERY_THRESHOLD_MS' => self::slow_query_threshold_ms,
             'AUTO_ADJUST_CHUNK_SIZE' => self::auto_adjust_chunk_size,
             'MIN_CHUNK_SIZE' => self::min_chunk_size,
             'MAX_CHUNK_SIZE' => self::max_chunk_size,

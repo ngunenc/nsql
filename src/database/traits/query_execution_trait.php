@@ -137,16 +137,20 @@ trait query_execution_trait
     private function run_with_reconnect(string $sql, array $params, ?int $fetch_mode, mixed ...$fetch_mode_args): PDOStatement|false
     {
         $attempts = 0;
+        $started = hrtime(true);
 
         while (true) {
             $stmt = $this->prepare_bound_statement($sql, $params, $fetch_mode, ...$fetch_mode_args);
             if ($stmt === false) {
+                $this->dispatch_query_event($sql, $params, $started, null, $this->last_pdo_exception);
+
                 return false;
             }
 
             try {
                 @$stmt->execute();
                 $this->touch_connection();
+                $this->dispatch_query_event($sql, $params, $started, $stmt, null);
 
                 return $stmt;
             } catch (PDOException $e) {
@@ -154,6 +158,8 @@ trait query_execution_trait
                 $this->handle_execution_error($e);
 
                 if (! $this->should_retry($e, $attempts)) {
+                    $this->dispatch_query_event($sql, $params, $started, null, $e);
+
                     return false;
                 }
 

@@ -166,6 +166,7 @@ trait streaming_trait
             }
 
             // Statement cache'e alınmaz: unbuffered cursor kapanmadan aynı statement yeniden kullanılamaz
+            $started = hrtime(true);
             try {
                 $stmt = $pdo->prepare($query);
                 if ($stmt === false) {
@@ -174,8 +175,10 @@ trait streaming_trait
                 $this->bind_parameters($stmt, $params);
                 $stmt->execute();
                 $this->touch_connection();
+                $this->dispatch_query_event($query, $params, $started, $stmt, null, row_count_known: false);
             } catch (PDOException $e) {
                 $this->handle_execution_error($e);
+                $this->dispatch_query_event($query, $params, $started, null, $e);
                 if ($this->throw_on_error()) {
                     throw $this->make_query_exception($query, $params);
                 }

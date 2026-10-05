@@ -8,6 +8,8 @@ use nsql\database\exceptions\QueryException;
 use nsql\database\logging\logger;
 use nsql\database\security\sensitive_data_filter;
 use PDOException;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
 use Throwable;
 
 /**
@@ -16,13 +18,19 @@ use Throwable;
 trait error_model_trait
 {
     private ?logger $logger = null;
+    private ?LoggerInterface $psr_logger = null;
     private ?bool $throw_on_error = null;
     private ?PDOException $last_pdo_exception = null;
     private ?Throwable $last_exception = null;
 
     private function log_error(string $message, array $context = [], int $level = logger::ERROR): void
     {
-        // Yeni structured logger kullan
+        if ($this->psr_logger !== null) {
+            $this->psr_logger->log(self::psr_level($level), $message, $context);
+
+            return;
+        }
+
         if ($this->logger === null) {
             $this->logger = new logger(
                 $this->log_file,
@@ -167,20 +175,31 @@ trait error_model_trait
     public function log_debug_info(string $message, mixed $data = null): void
     {
         if ($this->debug_mode) {
-            if ($this->logger === null) {
-                $this->logger = new logger(
-                    $this->log_file,
-                    null,
-                    true
-                );
-            }
-
-            $context = [];
-            if ($data !== null) {
-                $context['data'] = $data;
-            }
-
-            $this->logger->debug($message, $context);
+            $this->log_error($message, $data !== null ? ['data' => $data] : [], logger::DEBUG);
         }
+    }
+
+    /**
+     * Logları PSR-3 logger'a (ör. Monolog) yönlendirir; null = dahili dosya logger'ı.
+     */
+    public function set_logger(?LoggerInterface $logger): static
+    {
+        $this->psr_logger = $logger;
+
+        return $this;
+    }
+
+    private static function psr_level(int $level): string
+    {
+        return match (true) {
+            $level >= logger::EMERGENCY => LogLevel::EMERGENCY,
+            $level >= logger::ALERT => LogLevel::ALERT,
+            $level >= logger::CRITICAL => LogLevel::CRITICAL,
+            $level >= logger::ERROR => LogLevel::ERROR,
+            $level >= logger::WARNING => LogLevel::WARNING,
+            $level >= logger::NOTICE => LogLevel::NOTICE,
+            $level >= logger::INFO => LogLevel::INFO,
+            default => LogLevel::DEBUG,
+        };
     }
 }

@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.9.3
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.10.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -83,6 +83,8 @@
 > **v1.9.2**: CI onarımı ve platform düzeltmesi: minimum PHP 8.1 olarak doğru bildirildi, entegrasyon testlerinin CI'da bağlanamamasına yol açan test sızıntısı giderildi, PSR-12 lint ruleset'i eklendi.
 >
 > **v1.9.3**: CI'daki son iki hata giderildi: memcached_adapter sunucu yokken kullanılabilir görünüyordu; test fixture tablosunda eksik kolon.
+>
+> **v1.10.0**: PSR-3 logger (`set_logger`), PSR-16 paylaşılan query cache store (`set_query_cache_store`), `on_query()` sorgu dinleyicileri ve `SLOW_QUERY_THRESHOLD_MS` yavaş sorgu logu (#52).
 
 ## 🌟 Özellikler
 
@@ -135,7 +137,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.9.3 --prefer-dist
+composer require ngunenc/nsql:^1.10.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -155,13 +157,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.9.3"
+        "ngunenc/nsql": "^1.10.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.9.3 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.10.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1176,9 +1178,9 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 - Separation of Concerns
 
 ### Genişletilebilirlik
-- Plugin sistemi desteği
-- Olay (Event) sistemi
-- Custom handler desteği
+- PSR-3 logger (`set_logger()`, ör. Monolog)
+- PSR-16 paylaşılan query cache store (`set_query_cache_store()`)
+- Sorgu olay dinleyicileri (`on_query()`) ve yavaş sorgu logu (`SLOW_QUERY_THRESHOLD_MS`)
 
 ## 📊 Sürüm Matrisi ve Uyumluluk
 
@@ -1657,6 +1659,9 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v1.10.0 (2026-10-05)
+  - PSR-3 set_logger, PSR-16 query cache store, on_query listener, slow query log (#52)
+
 - v1.9.3 (2026-10-05)
   - memcached_adapter erişilebilirlik kontrolü, test fixture düzeltmesi
 
@@ -1899,7 +1904,6 @@ Son Güncelleme: 27 Ocak 2025
 ### v2.0.0 - 2026
 - Tam ORM desteği
 - NoSQL adaptörleri
-- Event sistemi
 - Plugin sistemi
 
 ---
