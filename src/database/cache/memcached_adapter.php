@@ -41,6 +41,15 @@ class memcached_adapter implements cache_adapter_interface
             $this->memcached->setOption(\Memcached::OPT_DISTRIBUTION, \Memcached::DISTRIBUTION_CONSISTENT);
             $this->memcached->setOption(\Memcached::OPT_LIBKETAMA_COMPATIBLE, true);
 
+            // addServers() bağlantı kurmaz; ulaşılamayan sunucular 255.255.255 sürümü döndürür
+            $versions = $this->memcached->getVersion();
+            $reachable = is_array($versions) && array_filter($versions, fn ($v) => $v !== false && $v !== '255.255.255') !== [];
+            if (! $reachable) {
+                $this->memcached = null;
+
+                return false;
+            }
+
             $this->connected = true;
             return true;
         } catch (\Exception $e) {

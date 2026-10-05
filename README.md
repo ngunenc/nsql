@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.9.2
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.9.3
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -81,6 +81,8 @@
 > **v1.9.1**: İç mimari: `nsql` god object'i sorumluluklara göre parçalandı (1742 → ~490 satır); public API değişmedi (#16).
 >
 > **v1.9.2**: CI onarımı ve platform düzeltmesi: minimum PHP 8.1 olarak doğru bildirildi, entegrasyon testlerinin CI'da bağlanamamasına yol açan test sızıntısı giderildi, PSR-12 lint ruleset'i eklendi.
+>
+> **v1.9.3**: CI'daki son iki hata giderildi: memcached_adapter sunucu yokken kullanılabilir görünüyordu; test fixture tablosunda eksik kolon.
 
 ## 🌟 Özellikler
 
@@ -133,7 +135,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.9.2 --prefer-dist
+composer require ngunenc/nsql:^1.9.3 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -153,13 +155,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.9.2"
+        "ngunenc/nsql": "^1.9.3"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.9.2 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.9.3 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1654,6 +1656,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.9.3 (2026-10-05)
+  - memcached_adapter erişilebilirlik kontrolü, test fixture düzeltmesi
 
 - v1.9.2 (2026-10-05)
   - CI onarımı: PHP >=8.1, test env sızıntısı, phpcs ruleset, Windows yol düzeltmesi

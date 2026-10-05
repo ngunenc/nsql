@@ -4,6 +4,12 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.9.3] - 2026-10-05
+
+### Düzeltme
+- `memcached_adapter::is_available()` sunucu çalışmıyorken de `true` döndürüyordu (`addServers()` bağlantı kurmaz). Artık `getVersion()` ile en az bir sunucunun erişilebilir olduğu doğrulanıyor.
+- Test fixture migration'ı (`test_table`) testlerin kullandığı `value` kolonunu içermiyordu; temiz veritabanında (CI) `CrudIntegrationTest::testNullValues` başarısız oluyordu.
+
 ## [1.9.2] - 2026-10-05
 
 ### Değişen
