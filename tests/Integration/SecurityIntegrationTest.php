@@ -15,11 +15,11 @@ class SecurityIntegrationTest extends DatabaseTestCase
         $this->assertNotEquals($input, $escaped);
 
         // CSRF token testi
-        $token = \nsql\database\security\session_manager::get_csrf_token();
-        $this->assertTrue(\nsql\database\security\session_manager::validate_csrf_token($token));
+        $token = \nsql\security\session_manager::get_csrf_token();
+        $this->assertTrue(\nsql\security\session_manager::validate_csrf_token($token));
 
         // Şifreleme testi
-        $encryption = new \nsql\database\security\encryption();
+        $encryption = new \nsql\security\encryption();
         $data = 'sensitive_data';
         $encrypted = $encryption->encrypt($data);
         $decrypted = $encryption->decrypt($encrypted);

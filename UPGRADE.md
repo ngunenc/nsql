@@ -55,6 +55,24 @@ try {
 - `batch_update()` artık başarısız bir satırı atlamıyor; tüm işlem geri alınıp `QueryException` fırlatılıyor
   (iki modda da).
 
+## 1.x → 2.0 hazırlığı: web güvenlik katmanı namespace'i (v1.13.0+)
+
+Veritabanı dışı yardımcılar opsiyonel `nsql\security` namespace'ine taşındı. Eski adlar 1.x boyunca
+`class_alias` ile aynı sınıfı gösterir (`instanceof` ve statik çağrılar çalışır); 2.0.0'da kaldırılacak.
+
+| 1.x (deprecated) | Yeni |
+|------------------|------|
+| `nsql\database\security\security_manager` | `nsql\security\security_manager` |
+| `nsql\database\security\session_manager` | `nsql\security\session_manager` |
+| `nsql\database\security\rate_limiter` | `nsql\security\rate_limiter` |
+| `nsql\database\security\ip_resolver` | `nsql\security\ip_resolver` |
+| `nsql\database\security\encryption` | `nsql\security\encryption` |
+| `nsql\database\security\key_manager` | `nsql\security\key_manager` |
+| `nsql\database\security\audit_logger` | `nsql\security\audit_logger` |
+
+`query_analyzer` ve `sensitive_data_filter` çekirdeğin parçası olarak `nsql\database\security` altında kalır.
+Geçiş: `use` satırlarında `nsql\database\security\` → `nsql\security\` (yalnızca yukarıdaki sınıflar için).
+
 ## 1.x → 2.0 hazırlığı: ORM tablo adları (`ORM_TABLE_NAMING`, v1.12.0+)
 
 `$table` belirtilmeyen modellerde tablo adı 1.x'te `strtolower(Sınıf) . 's'`, 2.0'da `inflector` ile türetilecek:

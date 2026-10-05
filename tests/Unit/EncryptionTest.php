@@ -3,8 +3,8 @@
 namespace Tests\Unit;
 
 use nsql\database\config;
-use nsql\database\security\encryption;
-use nsql\database\security\key_manager;
+use nsql\security\encryption;
+use nsql\security\key_manager;
 use PHPUnit\Framework\TestCase;
 
 class EncryptionTest extends TestCase

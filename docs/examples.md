@@ -363,7 +363,7 @@ $users = searchUsers($db, $filters);
 ```php
 <?php
 use nsql\database\nsql;
-use nsql\database\security\security_manager;
+use nsql\security\security_manager;
 
 $db = new nsql();
 
@@ -391,7 +391,7 @@ echo $safeInput; // &lt;script&gt;alert("XSS")&lt;/script&gt;
 
 ```php
 <?php
-use nsql\database\security\security_manager;
+use nsql\security\security_manager;
 
 // Form oluşturma
 $csrfToken = security_manager::generate_csrf_token();
@@ -423,7 +423,7 @@ if ($_POST) {
 
 ```php
 <?php
-use nsql\database\security\rate_limiter;
+use nsql\security\rate_limiter;
 
 $limiter = new rate_limiter($db);
 
@@ -445,7 +445,7 @@ echo "API yanıtı";
 
 ```php
 <?php
-use nsql\database\security\encryption;
+use nsql\security\encryption;
 
 $encryption = new encryption();
 

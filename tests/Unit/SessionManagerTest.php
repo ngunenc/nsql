@@ -3,7 +3,7 @@
 namespace Tests\Unit;
 
 use nsql\database\config;
-use nsql\database\security\session_manager;
+use nsql\security\session_manager;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 

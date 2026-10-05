@@ -2,7 +2,7 @@
 
 namespace Tests\Portable;
 
-use nsql\database\security\rate_limiter;
+use nsql\security\rate_limiter;
 use Tests\Support\PortableTestCase;
 
 class RateLimiterPortableTest extends PortableTestCase

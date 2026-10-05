@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.12.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -94,11 +94,15 @@
 >
 > **v1.12.0**: ORM ilişkileri, casting, guarded, soft delete ve inflector (#9)
 >
+> **v1.13.0**: Web güvenlik yardımcıları opsiyonel nsql\security namespace'ine taşındı (#25)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
 >
 > **v1.12.0**: ORM: `has_one` / `has_many` / `belongs_to` lazy load (model örnekleri), `$casts` (int, float, bool, array/json, datetime, date), `$guarded`, opsiyonel soft delete, `inflector` ile tablo adı çözümü (`ORM_TABLE_NAMING=inflector`) (#9).
+>
+> **v1.13.0**: Web güvenlik yardımcıları (`security_manager`, `session_manager`, `rate_limiter`, `ip_resolver`, `encryption`, `key_manager`, `audit_logger`) opsiyonel `nsql\security` namespace'ine taşındı; eski adlar 2.0'a kadar takma ad olarak çalışır (#25).
 
 ## 🌟 Özellikler
 
@@ -152,7 +156,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.12.0 --prefer-dist
+composer require ngunenc/nsql:^1.13.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -172,13 +176,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.12.0"
+        "ngunenc/nsql": "^1.13.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.12.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.13.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -408,11 +412,8 @@ nsql/
 │       ├── migration_manager.php   # Migration yönetimi
 │       ├── nsql.php               # Ana PDO wrapper sınıfı
 │       ├── query_builder.php      # SQL sorgu oluşturucu
-│       ├── security/             # Güvenlik bileşenleri
-│       │   ├── audit_logger.php   # Güvenlik log sistemi
-│       │   ├── encryption.php     # Şifreleme işlemleri
-│       │   ├── rate_limiter.php   # İstek sınırlama
-│       │   ├── security_manager.php # Güvenlik yönetimi
+│       ├── security/             # Çekirdek: SQL analizi ve log maskeleme
+│       │   ├── query_analyzer.php
 │       │   └── sensitive_data_filter.php # Hassas veri filtresi
 │       ├── seeds/                # Seed dosyaları
 │       ├── templates/            # View şablonları
@@ -423,6 +424,13 @@ nsql/
 │           ├── query_parameter_trait.php # Sorgu parametreleri
 │           ├── statement_cache_trait.php # Statement önbellekleme
 │           └── transaction_trait.php # Transaction yönetimi
+│   └── security/                # Opsiyonel web güvenlik katmanı (nsql\security, v1.13.0+)
+│       ├── security_manager.php # CSRF, XSS escape, input doğrulama
+│       ├── session_manager.php  # Güvenli oturum
+│       ├── rate_limiter.php     # Token bucket (veritabanı destekli)
+│       ├── ip_resolver.php      # Trusted proxy ile istemci IP'si
+│       ├── encryption.php / key_manager.php # Şifreleme ve anahtar rotasyonu
+│       └── audit_logger.php     # Güvenlik olay logu
 ├── bin/nsql                    # CLI (vendor/bin/nsql)
 ├── examples/                   # Örnekler (pakete dahil değil)
 │   ├── basic.php               # Temel kullanım demosu
@@ -448,11 +456,20 @@ nsql/
 - **query_builder**: Akıcı arayüz ile SQL sorgu oluşturma
 
 #### Güvenlik Bileşenleri
-- **security_manager**: Merkezi güvenlik yönetimi
-- **encryption**: Veri şifreleme ve çözme işlemleri
-- **rate_limiter**: İstek sınırlama ve DDoS koruması
-- **audit_logger**: Güvenlik olayları loglama
-- **sensitive_data_filter**: Hassas veri filtreleme
+
+**Çekirdek** (`nsql\database\security`) — veritabanı katmanının parçası, her zaman kullanılır:
+- **query_analyzer**: SQL güvenlik analizi
+- **sensitive_data_filter**: Log, exception ve sorgu olaylarında hassas veri maskeleme
+
+**Opsiyonel web katmanı** (`nsql\security`, v1.13.0+) — veritabanı API'sinden bağımsızdır; kullanmıyorsanız yüklenmez:
+- **security_manager**: CSRF, XSS escape, input doğrulama
+- **session_manager**: Güvenli oturum (`nsql::secure_session_start()` buna delege eder)
+- **rate_limiter**: Veritabanı destekli token bucket
+- **ip_resolver**: `TRUSTED_PROXIES` ile istemci IP'si / HTTPS tespiti
+- **encryption** / **key_manager**: Şifreleme ve anahtar rotasyonu
+- **audit_logger**: Güvenlik olay logu
+
+> Eski adlar (`nsql\database\security\session_manager` vb.) 1.x boyunca `class_alias` ile çalışır ve 2.0.0'da kaldırılacak. İleride bu katmanın ayrı bir pakete (`nsql/security`) ayrılması planlanıyor.
 
 #### Veritabanı Yönetimi
 - **migration_manager**: Veritabanı şema yönetimi
@@ -618,11 +635,13 @@ try {
 
 ## 🛡️ Güvenlik
 
+> Bu bölümdeki CSRF, oturum, rate limit ve şifreleme yardımcıları **opsiyonel** `nsql\security` katmanındadır (v1.13.0+). Veritabanı güvenliği (prepared statement, identifier doğrulama, log maskeleme) çekirdekte ve her zaman açıktır.
+
 ### CSRF Koruması
 
 ```php
 // Token üretme
-$token = \nsql\database\security\session_manager::get_csrf_token();
+$token = \nsql\security\session_manager::get_csrf_token();
 
 // Token doğrulama
 if (nsql::validate_csrf($_POST['token'] ?? '')) {
@@ -654,7 +673,7 @@ TRUSTED_PROXIES=*
 `X-Forwarded-For` zinciri sağdan sola okunur; güvenilir proxy olmayan ilk adres istemci IP'sidir, bu yüzden istemcinin zincirin başına eklediği sahte adresler sonucu etkilemez.
 
 ```php
-use nsql\database\security\ip_resolver;
+use nsql\security\ip_resolver;
 
 $resolver = new ip_resolver(['10.0.0.0/8'], $_SERVER);
 $ip = $resolver->client_ip();
@@ -765,8 +784,8 @@ $seeder->run(); // Örnek kullanıcı verilerini ekler
 Gerçek uygulamalarda rate limiting ve veri şifreleme gibi güvenlik modüllerini entegre edebilirsiniz:
 
 ```php
-use nsql\database\security\rate_limiter;
-use nsql\database\security\security_manager;
+use nsql\security\rate_limiter;
+use nsql\security\security_manager;
 
 // RATE_LIMIT_MAX_REQUESTS=100, RATE_LIMIT_WINDOW=60 → kova 100 token, dakikada tamamen dolar
 // RATE_LIMIT_BURST=10 → aynı saniyede en fazla 10 istek
@@ -780,8 +799,8 @@ if (! $limiter->check_rate_limit(security_manager::get_client_ip(), 'api')) {
 // Tablo ilk çağrıda oluşturulur. DDL açık transaction'ı commit edeceğinden deploy sırasında kurmak için:
 $limiter->install();                    // veya migration içinde: rate_limiter::schema_sql()
 
-use nsql\database\security\encryption;
-use nsql\database\security\key_manager;
+use nsql\security\encryption;
+use nsql\security\key_manager;
 
 // Anahtar: ENCRYPTION_KEY env (base64, 32 byte) veya storage/keys/encryption.key
 // Üretmek için: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
@@ -1023,7 +1042,7 @@ $result = $db->safe_execute(function() use ($db) {
 nsql::secure_session_start();
 
 // CSRF koruması
-$token = \nsql\database\security\session_manager::get_csrf_token();
+$token = \nsql\security\session_manager::get_csrf_token();
 if (nsql::validate_csrf($_POST['token'] ?? '')) {
     // Form işleme
 }
@@ -1534,7 +1553,7 @@ Formlarınızda CSRF koruması için aşağıdaki fonksiyonları kullanabilirsin
 
 **Token üretimi ve formda kullanımı:**
 ```php
-<input type="hidden" name="csrf_token" value="<?= \nsql\database\security\session_manager::get_csrf_token() ?>">
+<input type="hidden" name="csrf_token" value="<?= \nsql\security\session_manager::get_csrf_token() ?>">
 ```
 
 **Token doğrulama:**
@@ -1763,6 +1782,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.13.0 (2026-10-05)
+  - Web güvenlik yardımcıları opsiyonel `nsql\security` namespace'ine taşındı; eski adlar 2.0'a kadar `class_alias` (#25).
 
 - v1.12.0 (2026-10-05)
   - ORM: `has_one` / `has_many` / `belongs_to` lazy load, `$casts`, `$guarded`, soft delete, `inflector` tablo adı çözümü (#9).

@@ -3,7 +3,7 @@
 namespace Tests\Unit;
 
 use nsql\database\config;
-use nsql\database\security\security_manager;
+use nsql\security\security_manager;
 use PHPUnit\Framework\TestCase;
 
 class LogPathTest extends TestCase

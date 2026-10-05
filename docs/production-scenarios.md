@@ -272,7 +272,7 @@ class WriteBehindCache
 ```php
 <?php
 // 1. Rate Limiting
-use nsql\database\security\rate_limiter;
+use nsql\security\rate_limiter;
 
 $limiter = new rate_limiter($db);
 
@@ -455,7 +455,7 @@ if (!validator::validate_many($_POST, $rules)) {
 
 ```php
 <?php
-use nsql\database\security\audit_logger;
+use nsql\security\audit_logger;
 
 $audit = new audit_logger();
 
@@ -480,7 +480,7 @@ try {
 
 ```php
 <?php
-use nsql\database\security\rate_limiter;
+use nsql\security\rate_limiter;
 
 $limiter = new rate_limiter($db);
 
