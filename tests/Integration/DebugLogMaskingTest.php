@@ -61,6 +61,32 @@ class DebugLogMaskingTest extends DatabaseTestCase
         $this->assertStringNotContainsString('hunter2', $html);
     }
 
+    public function test_debug_log_records_public_method_name(): void
+    {
+        $db = $this->debug_db();
+        $db->get_results('SELECT 1 AS x');
+
+        ob_start();
+        $db->debug();
+        ob_end_clean();
+
+        $log = (string) file_get_contents($this->dir . DIRECTORY_SEPARATOR . 'debug.txt');
+        $this->assertStringContainsString('Çalıştırılan Metod: get_results', $log);
+    }
+
+    public function test_last_called_method_is_not_tracked_outside_debug_mode(): void
+    {
+        $db = new nsql(
+            host: config::get('db_host', 'localhost'),
+            db: config::get('db_name', 'nsql_test_db'),
+            user: config::get('db_user', 'root'),
+            pass: config::get('db_pass', ''),
+        );
+        $db->get_results('SELECT 1 AS x');
+
+        $this->assertSame('unknown', (fn () => $this->last_called_method)->call($db));
+    }
+
     public function test_interpolation_does_not_corrupt_prefixed_placeholders(): void
     {
         $db = $this->debug_db();

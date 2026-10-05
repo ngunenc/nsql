@@ -576,6 +576,7 @@ class nsql
 
             try {
                 @$stmt->execute();
+                $this->touch_connection();
 
                 return $stmt;
             } catch (PDOException $e) {
@@ -1090,17 +1091,6 @@ class nsql
             return $this->driver->get_last_insert_id($this->pdo);
         }
         return $this->last_insert_id;
-    }
-
-    /**
-     * Son çalıştırılan sorgunun detaylarını ve hata ayıklama bilgilerini gösterir.
-     *
-     * @return void
-     */
-    private function set_last_called_method(): void
-    {
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-        $this->last_called_method = $trace[1]['function'] ?? 'unknown';
     }
 
     /**
