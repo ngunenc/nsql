@@ -114,7 +114,7 @@ trait transaction_trait
      * - İç içe çağrılar SAVEPOINT kullanır; iç hata yalnızca kendi savepoint'ine geri döner.
      * - Callable içinde sorgu hataları her zaman exception'dır (THROW_ON_ERROR geçici olarak açılır);
      *   sessiz `false` dönüşüyle yarım işlemin commit edilmesi önlenir.
-     * - Deadlock (1213), lock wait timeout (1205) ve SQLSTATE 40001'de en dış seviyede işlem baştan
+     * - Deadlock (1213, PostgreSQL 40P01), lock wait timeout (1205) ve SQLSTATE 40001'de en dış seviyede işlem baştan
      *   tekrarlanır. Deneme sayısı: $attempts ?? TRANSACTION_RETRY_ATTEMPTS (varsayılan 1 = tekrar yok).
      *   Callable tekrar çalışabileceği için yan etkisiz (idempotent) olmalıdır.
      *
@@ -171,7 +171,7 @@ trait transaction_trait
             if ($current instanceof \PDOException) {
                 $driver_code = (int) ($current->errorInfo[1] ?? 0);
                 $sql_state = (string) ($current->errorInfo[0] ?? $current->getCode());
-                if (in_array($driver_code, [1213, 1205], true) || $sql_state === '40001') {
+                if (in_array($driver_code, [1213, 1205], true) || in_array($sql_state, ['40001', '40P01'], true)) {
                     return true;
                 }
             }

@@ -4,6 +4,20 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.11.1] - 2026-10-05
+
+### Added
+- **Portable test suite** (#53): `tests/Portable` (CRUD, Query Builder, transaction, streaming, migration, rate limiter) `DB_DRIVER=mysql|pgsql|sqlite` ile aynı testleri koşturur; `composer test:portable`. `composer test:cache` artık portable suite'i de kapsar.
+- CI: `portable` job'ı — PostgreSQL 16 service ve SQLite, query cache açık/kapalı.
+- README: veritabanı başına özellik desteği tablosu.
+- `rate_limiter::schema_statements($table, $driver)`; `schema_sql()` yeni `$driver` parametresi.
+
+### Fixed
+- `migration_manager`: migrations tablosu DDL'i ve kolon listesi (`SHOW COLUMNS` / `information_schema` / `PRAGMA table_info`) sürücüye göre; `NOW()` yerine `CURRENT_TIMESTAMP` (SQLite).
+- `rate_limiter`: PostgreSQL/SQLite DDL'i, `ON CONFLICT DO NOTHING`; SQLite'ta `FOR UPDATE` kullanılmaz. Kurulum önbelleği sürücü+tablo bazında.
+- `pgsql_driver::get_last_insert_id`: sequence kullanılmamış oturumda `lastval()` hatası yerine 0.
+- `transaction(callable)` retry: PostgreSQL deadlock SQLSTATE `40P01` de yeniden denenir.
+
 ## [1.11.0] - 2026-10-05
 
 ### Added

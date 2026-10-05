@@ -368,7 +368,8 @@ $allowed = $limiter->check_rate_limit(string $identifier, string $request_type =
 
 // Tablo kurulumu
 $limiter->install(): void
-rate_limiter::schema_sql(string $table = 'rate_limits'): string
+rate_limiter::schema_sql(string $table = 'rate_limits', string $driver = 'mysql'): string
+rate_limiter::schema_statements(string $table = 'rate_limits', string $driver = 'mysql'): array // pgsql/sqlite: ifadeleri tek tek çalıştırın
 
 // Saniyede eklenen token (max_requests / window)
 $limiter->refill_rate(): float
