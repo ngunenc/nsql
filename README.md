@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.27
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.28
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -57,6 +57,8 @@
 > **v1.5.26**: Kökteki demo `examples/basic.php`'ye, monitoring örnekleri `examples/monitoring/`'e taşındı; tek storage kökü; `debug()` log'u artık CWD'ye değil `storage/logs`'a yazıyor; `bin/` dist pakete dahil (#22).
 >
 > **v1.5.27**: Test altyapısı: entegrasyon testleri cache açık modda da koşuyor (`composer test:cache`, CI), query builder testleri gerçek sorgu çalıştırıyor; `config::set()` bootstrap öncesi çağrıda `.env` tarafından ezilmiyor (#40).
+>
+> **v1.5.28**: Monitoring token'ı `?token=` URL parametresiyle varsayılan olarak kabul edilmiyor; yalnızca başlık. Gerekirse `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true` (#41).
 
 ## 🌟 Özellikler
 
@@ -109,7 +111,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.27 --prefer-dist
+composer require ngunenc/nsql:^1.5.28 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -129,13 +131,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.27"
+        "ngunenc/nsql": "^1.5.28"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.27 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.28 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -771,7 +773,14 @@ NSQL_MONITORING_TOKEN=uzun-rastgele-secret
 
 ```bash
 curl -H "Authorization: Bearer $NSQL_MONITORING_TOKEN" http://localhost/health.php
-# veya: X-NSQL-Monitoring-Token / ?token=
+# veya: -H "X-NSQL-Monitoring-Token: $NSQL_MONITORING_TOKEN"
+```
+
+> v1.5.28+: `?token=` URL parametresi varsayılan olarak **kabul edilmez** (erişim/proxy loglarına, tarayıcı geçmişine ve `Referer`'a sızar). Başlık gönderemeyen bir izleme aracı için `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true` ile açıkça açılabilir.
+
+```bash
+# yalnızca NSQL_MONITORING_ALLOW_QUERY_TOKEN=true iken:
+# curl "http://localhost/health.php?token=$NSQL_MONITORING_TOKEN"
 ```
 
 > v1.5.5+: `nsql` artık `PDO`'yu extend etmez. Ham PDO için `$db->get_pdo()` kullanın.
@@ -1592,6 +1601,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.28 (2026-10-05)
+  - Monitoring ?token= varsayılan kapalı, NSQL_MONITORING_ALLOW_QUERY_TOKEN opt-in (#41)
 
 - v1.5.27 (2026-10-05)
   - Cache açık entegrasyon suite'i, gerçek sorgulu query builder testleri, config::set() bootstrap düzeltmesi (#40)

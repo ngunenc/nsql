@@ -5,7 +5,9 @@ namespace nsql\database\monitoring;
 /**
  * Monitoring endpoint koruması (health / metrics).
  *
- * Auth: Authorization Bearer, X-NSQL-Monitoring-Token veya ?token=
+ * Auth: Authorization Bearer veya X-NSQL-Monitoring-Token başlığı.
+ * `?token=` yalnızca NSQL_MONITORING_ALLOW_QUERY_TOKEN=true ile kabul edilir (URL'deki
+ * gizli bilgi erişim loglarına, proxy loglarına, tarayıcı geçmişine ve Referer'a sızar).
  * Env: NSQL_MONITORING_TOKEN (zorunlu), NSQL_MONITORING_ENABLED (false ile kapat)
  */
 class endpoint_guard
@@ -17,31 +19,59 @@ class endpoint_guard
      */
     public static function protect(): void
     {
+        $denied = self::authorize();
+        if ($denied !== null) {
+            self::respond($denied['status'], $denied['body']);
+        }
+    }
+
+    /**
+     * İsteği doğrular; yetkiliyse null, değilse yanıt durum kodu ve gövdesini döndürür.
+     *
+     * @return array{status: int, body: array<string, string>}|null
+     */
+    public static function authorize(): ?array
+    {
         if (! self::is_enabled()) {
-            self::respond(404, [
-                'status' => 'error',
-                'message' => 'Monitoring endpoint disabled',
-                'timestamp' => date('Y-m-d H:i:s'),
-            ]);
+            return self::denial(404, 'Monitoring endpoint disabled');
         }
 
         $configured = self::get_configured_token();
         if ($configured === null || $configured === '') {
-            self::respond(403, [
-                'status' => 'error',
-                'message' => 'Monitoring token not configured',
-                'timestamp' => date('Y-m-d H:i:s'),
-            ]);
+            return self::denial(403, 'Monitoring token not configured');
         }
 
         $provided = self::extract_request_token();
         if ($provided === null || ! hash_equals($configured, $provided)) {
-            self::respond(401, [
-                'status' => 'error',
-                'message' => 'Unauthorized',
-                'timestamp' => date('Y-m-d H:i:s'),
-            ]);
+            return self::denial(401, 'Unauthorized');
         }
+
+        return null;
+    }
+
+    /**
+     * @return array{status: int, body: array<string, string>}
+     */
+    private static function denial(int $status, string $message): array
+    {
+        return [
+            'status' => $status,
+            'body' => [
+                'status' => 'error',
+                'message' => $message,
+                'timestamp' => date('Y-m-d H:i:s'),
+            ],
+        ];
+    }
+
+    public static function allows_query_token(): bool
+    {
+        $raw = self::env('NSQL_MONITORING_ALLOW_QUERY_TOKEN');
+        if ($raw === null) {
+            return false;
+        }
+
+        return in_array(strtolower(trim($raw)), ['1', 'true', 'on', 'yes'], true);
     }
 
     public static function is_enabled(): bool
@@ -76,7 +106,10 @@ class endpoint_guard
             return $m[1];
         }
 
-        if (isset($_GET['token']) && is_string($_GET['token']) && $_GET['token'] !== '') {
+        if (
+            self::allows_query_token()
+            && isset($_GET['token']) && is_string($_GET['token']) && $_GET['token'] !== ''
+        ) {
             return $_GET['token'];
         }
 
