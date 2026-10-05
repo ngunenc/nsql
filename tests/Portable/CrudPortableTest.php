@@ -43,6 +43,7 @@ class CrudPortableTest extends PortableTestCase
     {
         $this->db->insert('INSERT INTO p_users (name, score) VALUES (?, ?), (?, ?), (?, ?)', ['a', 1, 'b', 2, 'c', 3]);
 
+        $this->db->set_throw_on_error(false);
         $this->assertTrue($this->db->update('UPDATE p_users SET score = score + 1 WHERE score >= ?', [2]));
 
         $this->db->set_throw_on_error(true);
@@ -88,6 +89,7 @@ class CrudPortableTest extends PortableTestCase
 
     public function test_query_error_is_reported_and_thrown_when_enabled(): void
     {
+        $this->db->set_throw_on_error(false);
         $this->assertSame([], $this->db->get_results('SELECT * FROM p_missing_table'));
         $this->assertNotNull($this->db->get_last_error());
 

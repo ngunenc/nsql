@@ -47,13 +47,13 @@ class Config
     public const memory_limit_critical = 402653184; // 256MB → 384MB (daha yüksek critical)
     public const memory_warning_ratio = 0.75; // memory_limit'in oranı (MEMORY_LIMIT_WARNING ayarlı değilse)
     public const memory_critical_ratio = 0.9;
-    public const yield_unbuffered = false; // v2.0.0'da true olacak
-    public const throw_on_error = false; // v2.0.0'da true olacak
+    public const yield_unbuffered = true; // false: get_yield() tüm sonucu istemci belleğine alır (1.x davranışı)
+    public const throw_on_error = true; // false: hatalarda null/[]/false döner (1.x davranışı, bkz. UPGRADE.md)
     public const transaction_retry_attempts = 1; // transaction(): deadlock/lock wait'te toplam deneme
     public const slow_query_threshold_ms = 0; // >0: bu süreyi aşan sorgular WARNING seviyesinde loglanır
     public const read_write_split = false; // true: okumalar DB_READ_HOST replica'sına gider
     public const read_write_sticky = true; // yazmadan sonra aynı örnekte okumalar primary'de kalır
-    public const orm_table_naming = 'legacy'; // 'inflector': BlogPost → blog_posts (v2.0'da varsayılan)
+    public const orm_table_naming = 'inflector'; // 'legacy': BlogPost → blogposts (1.x davranışı)
     public const auto_adjust_chunk_size = true;
     public const min_chunk_size = 200; // 100 → 200 (daha büyük minimum chunk)
     public const max_chunk_size = 15000; // 10000 → 15000 (daha büyük maximum chunk)

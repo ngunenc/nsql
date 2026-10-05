@@ -46,9 +46,9 @@ Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıd
 
 ```php
 // Örnek kullanım
-config::set_project_root(__DIR__); // uygulama kökü — .env burada aranır (önerilir)
-config::set_environment('development');
-$db_host = config::get('db_host'); // .env içindeki DB_HOST
+Config::set_project_root(__DIR__); // uygulama kökü — .env burada aranır (önerilir)
+Config::set_environment('development');
+$db_host = Config::get('db_host'); // .env içindeki DB_HOST
 
 // Proje kökü tespiti (set_project_root yoksa):
 // NSQL_PROJECT_ROOT → uygulama kökü (.env / composer+autoload) → vendor paketinden kaçınılmış fallback
@@ -64,11 +64,11 @@ $db_host = config::get('db_host'); // .env içindeki DB_HOST
 - Environment kontrollerini minimize edin
 - Varsayılan değerleri akıllıca belirleyin
 
-### 2. Bağlantı Havuzu (connection_pool.php)
+### 2. Bağlantı Havuzu (ConnectionPool.php)
 
 ```php
 // Örnek kullanım
-connection_pool::initialize([
+ConnectionPool::initialize([
     'dsn' => 'mysql:host=localhost;dbname=test',
     'username' => 'root',
     'password' => '',
@@ -89,7 +89,7 @@ connection_pool::initialize([
 - Health check aralıklarını workload'a göre ayarlayın
 - Idle connection temizleme stratejisini belirleyin
 
-### 3. Sorgu Oluşturucu (query_builder.php)
+### 3. Sorgu Oluşturucu (QueryBuilder.php)
 
 ```php
 // Anti-pattern:
@@ -112,17 +112,17 @@ $db->table('users')
 
 ## 🔒 Güvenlik Mekanizmaları
 
-### 1. Security Manager (src/security/security_manager.php)
+### 1. Security Manager (src/security/SecurityManager.php)
 
 Merkezi güvenlik yönetimi sağlar (opsiyonel `nsql\security` katmanı):
 
 ```php
-use nsql\security\security_manager;
+use nsql\security\SecurityManager;
 
-$security = new security_manager($db);
+$security = new SecurityManager($db);
 
 // Rate limiting
-$security->check_rate_limit(security_manager::get_client_ip(), 'api');
+$security->check_rate_limit(SecurityManager::get_client_ip(), 'api');
 
 // Hassas veri filtresi
 $safe = $security->filter_sensitive_data($input);
@@ -136,18 +136,18 @@ $encrypted = $security->encrypt($data);
 - Şifreleme anahtarlarını düzenli değiştirin
 - Audit logları düzenli kontrol edin
 
-### 2. Rate Limiter (src/security/rate_limiter.php)
+### 2. Rate Limiter (src/security/RateLimiter.php)
 
 Veritabanı destekli token bucket; MySQL, PostgreSQL ve SQLite'ta çalışır.
 
 ```php
-use nsql\security\rate_limiter;
-use nsql\security\security_manager;
+use nsql\security\RateLimiter;
+use nsql\security\SecurityManager;
 
-$limiter = new rate_limiter($db, null, ['max_requests' => 100, 'window' => 60, 'burst' => 20]);
-$limiter->install(); // veya migration içinde: rate_limiter::schema_sql()
+$limiter = new RateLimiter($db, null, ['max_requests' => 100, 'window' => 60, 'burst' => 20]);
+$limiter->install(); // veya migration içinde: RateLimiter::schema_sql()
 
-if (! $limiter->check_rate_limit(security_manager::get_client_ip(), 'api')) {
+if (! $limiter->check_rate_limit(SecurityManager::get_client_ip(), 'api')) {
     http_response_code(429);
     exit;
 }
@@ -155,7 +155,7 @@ if (! $limiter->check_rate_limit(security_manager::get_client_ip(), 'api')) {
 
 ## 🚀 Performans Optimizasyonları
 
-### 1. Query Cache (traits/cache_trait.php)
+### 1. Query Cache (traits/CacheTrait.php)
 
 Sürücüler: `memory` (süreç içi, varsayılan), `redis`, `memcached`; ayrıca `set_query_cache_store()` ile herhangi bir PSR-16 store.
 
@@ -172,7 +172,7 @@ $stats  = $db->get_all_cache_stats();
 
 Yazma sorguları ilgili tabloların cache kayıtlarını geçersiz kılar; paylaşılan store'da bu süreçler arasında da geçerlidir.
 
-### 2. Statement Cache (traits/statement_cache_trait.php)
+### 2. Statement Cache (traits/StatementCacheTrait.php)
 
 Hazırlanmış statement'lar LRU/LFU ile önbelleklenir (`STATEMENT_CACHE_LIMIT`).
 
@@ -185,7 +185,7 @@ $db->clear_statement_cache();
 Testler `tests/Unit`, `tests/Integration` (MySQL/MariaDB) ve `tests/Portable` (MySQL, PostgreSQL, SQLite) altındadır. Komutlar ve CI eşikleri için README'deki "Test ve Kalite" bölümüne bakın.
 
 ```php
-$db->transaction(function (nsql $db) {
+$db->transaction(function (Nsql $db) {
     $db->insert('INSERT INTO logs (msg) VALUES (:m)', ['m' => 'test']);
 });
 ```
@@ -193,30 +193,30 @@ $db->transaction(function (nsql $db) {
 ## 📊 Monitoring ve Debug
 
 ```php
-$db = new nsql(debug: true);
+$db = new Nsql(debug: true);
 $db->get_results('SELECT * FROM users');
 $db->debug();                       // son sorgu, parametreler, süre
 
 $stats = $db->get_memory_stats();   // streaming bellek istatistikleri
-$pool  = nsql::get_pool_stats();
+$pool  = Nsql::get_pool_stats();
 
 // Sorgu olayları ve yavaş sorgu logu (SLOW_QUERY_THRESHOLD_MS)
-$db->on_query(function (\nsql\database\events\query_event $e) {
+$db->on_query(function (\nsql\database\events\QueryEvent $e) {
     if ($e->duration_ms > 200) {
         error_log("Yavaş sorgu ({$e->duration_ms} ms): {$e->sql}");
     }
 });
 
 // Sağlık kontrolü
-$health = (new \nsql\database\monitoring\health_check($db))->check();
+$health = (new \Nsql\database\monitoring\HealthCheck($db))->check();
 ```
 
 ## 🔧 Maintenance
 
-### Migration Manager (migration_manager.php)
+### Migration Manager (MigrationManager.php)
 
 ```php
-$manager = new migration_manager($db);
+$manager = new MigrationManager($db);
 $manager->create('create_users_table');   // database/migrations/..._create_users_table.php
 $manager->migrate();                      // bekleyenleri uygular
 $manager->rollback();                     // son batch'i geri alır
@@ -243,7 +243,7 @@ DB_READ_HOST=replica1.example.com,replica2.example.com
 $db->set_read_replica(['host' => 'replica1.example.com']); // veya kod içinden
 $db->stick_to_primary(true);                               // yazmadan sonra okumaları primary'de tut
 
-$reporting = nsql::connection('reporting');                // isimlendirilmiş bağlantı
+$reporting = Nsql::connection('reporting');                // isimlendirilmiş bağlantı
 ```
 
 Sharding, circuit breaker ve otomatik backup kütüphane kapsamında değildir; ihtiyaç halinde uygulama katmanında kurulmalıdır (bkz. [production-scenarios.md](production-scenarios.md)).

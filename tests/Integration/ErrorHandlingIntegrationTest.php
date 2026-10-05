@@ -36,7 +36,22 @@ class ErrorHandlingIntegrationTest extends DatabaseTestCase
 
         $this->assertIsArray($result);
 
-        // Hatalı işlem — production'da false yerine wrapped RuntimeException döner
+        // Hatalı işlem — 2.0 varsayılanı: generic RuntimeException fırlatılır
+        try {
+            $this->db->safe_execute(function () {
+                return $this->db->query("INVALID SQL");
+            }, 'Custom error message');
+            $this->fail('RuntimeException bekleniyordu');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Custom error message', $e->getMessage());
+            $this->assertNotNull($e->getPrevious());
+        }
+    }
+
+    public function testSafeExecuteLegacyModeReturnsException()
+    {
+        $this->db->set_throw_on_error(false);
+
         $result = $this->db->safe_execute(function () {
             return $this->db->query("INVALID SQL");
         }, 'Custom error message');

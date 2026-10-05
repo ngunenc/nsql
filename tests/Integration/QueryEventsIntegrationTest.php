@@ -98,7 +98,11 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
     {
         $events = $this->record($this->db);
 
-        $this->db->get_results('SELECT missing_column FROM ev_items');
+        try {
+            $this->db->get_results('SELECT missing_column FROM ev_items');
+            $this->fail('QueryException bekleniyordu');
+        } catch (\nsql\database\exceptions\QueryException $e) {
+        }
 
         $this->assertCount(1, $events);
         $this->assertFalse($events[0]->success);
@@ -157,7 +161,11 @@ class QueryEventsIntegrationTest extends DatabaseTestCase
         $logger = new ArrayLogger();
         $this->db->set_logger($logger);
 
-        $this->db->get_results('SELECT missing_column FROM ev_items');
+        try {
+            $this->db->get_results('SELECT missing_column FROM ev_items');
+            $this->fail('QueryException bekleniyordu');
+        } catch (\nsql\database\exceptions\QueryException $e) {
+        }
 
         $this->assertNotSame([], $logger->matching(LogLevel::ERROR, 'missing_column'));
     }

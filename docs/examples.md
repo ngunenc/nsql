@@ -19,16 +19,16 @@
 <?php
 require_once 'vendor/autoload.php';
 
-use nsql\database\nsql;
-use nsql\database\config;
+use nsql\database\Nsql;
+use nsql\database\Config;
 
-config::set_project_root(__DIR__); // bu dosya proje kökündeyse; public/index.php ise dirname(__DIR__)
+Config::set_project_root(__DIR__); // bu dosya proje kökündeyse; public/index.php ise dirname(__DIR__)
 
 // Yapılandırma
-config::set_environment('development');
+Config::set_environment('development');
 
 // Veritabanı bağlantısı (.env: DB_HOST, DB_NAME, …)
-$db = new nsql();
+$db = new Nsql();
 
 // Basit sorgu
 $result = $db->query("SELECT NOW() as current_time");
@@ -42,11 +42,11 @@ echo "Mevcut zaman: " . $time['current_time'];
 
 ```php
 <?php
-use nsql\database\nsql;
-use nsql\database\config;
+use nsql\database\Nsql;
+use nsql\database\Config;
 
 // Özel yapılandırma
-$db = new nsql(
+$db = new Nsql(
     host: 'localhost',
     db: 'my_database',
     user: 'my_user',
@@ -71,9 +71,9 @@ try {
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Tek kayıt ekleme
 $id = $db->insert(
@@ -106,9 +106,9 @@ foreach ($users as $user) {
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Tek kayıt
 $user = $db->get_row(
@@ -143,9 +143,9 @@ $users = $db->get_results(
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Tek kayıt güncelleme
 $updated = $db->update(
@@ -172,9 +172,9 @@ $db->update(
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Tek kayıt silme
 $deleted = $db->delete(
@@ -199,9 +199,9 @@ $db->delete(
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 $db->begin_transaction();
 
@@ -232,9 +232,9 @@ try {
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 $db->begin_transaction();
 
@@ -278,11 +278,11 @@ try {
 
 ```php
 <?php
-use nsql\database\nsql;
-use nsql\database\query_builder;
+use nsql\database\Nsql;
+use nsql\database\QueryBuilder;
 
-$db = new nsql();
-$builder = new query_builder($db);
+$db = new Nsql();
+$builder = new QueryBuilder($db);
 
 // Basit sorgu
 $users = $builder
@@ -312,10 +312,10 @@ foreach ($results as $result) {
 
 ```php
 <?php
-use nsql\database\query_builder;
+use nsql\database\QueryBuilder;
 
 function searchUsers($db, $filters = []) {
-    $builder = new query_builder($db);
+    $builder = new QueryBuilder($db);
     
     $builder->select('*')->from('users');
     
@@ -362,16 +362,16 @@ $users = searchUsers($db, $filters);
 
 ```php
 <?php
-use nsql\database\nsql;
-use nsql\security\security_manager;
+use nsql\database\Nsql;
+use nsql\security\SecurityManager;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Kullanıcıdan gelen veri
 $userInput = '<script>alert("XSS")</script>';
 
 // Güvenli hale getirme
-$safeInput = security_manager::escape_html($userInput);
+$safeInput = SecurityManager::escape_html($userInput);
 
 // Veritabanına kaydetme
 $db->insert(
@@ -391,10 +391,10 @@ echo $safeInput; // &lt;script&gt;alert("XSS")&lt;/script&gt;
 
 ```php
 <?php
-use nsql\security\security_manager;
+use nsql\security\SecurityManager;
 
 // Form oluşturma
-$csrfToken = security_manager::generate_csrf_token();
+$csrfToken = SecurityManager::generate_csrf_token();
 ?>
 
 <form method="POST" action="update_user.php">
@@ -408,12 +408,12 @@ $csrfToken = security_manager::generate_csrf_token();
 if ($_POST) {
     $token = $_POST['csrf_token'] ?? '';
     
-    if (!\nsql\database\nsql::validate_csrf($token)) {
+    if (!\nsql\database\Nsql::validate_csrf($token)) {
         die('CSRF token geçersiz!');
     }
     
     // Güvenli işlem
-    $name = security_manager::escape_html($_POST['name']);
+    $name = SecurityManager::escape_html($_POST['name']);
     // ... veritabanı işlemleri
 }
 ?>
@@ -423,9 +423,9 @@ if ($_POST) {
 
 ```php
 <?php
-use nsql\security\rate_limiter;
+use nsql\security\RateLimiter;
 
-$limiter = new rate_limiter($db);
+$limiter = new RateLimiter($db);
 
 // Kullanıcı IP'si
 $userIP = $_SERVER['REMOTE_ADDR'];
@@ -445,9 +445,9 @@ echo "API yanıtı";
 
 ```php
 <?php
-use nsql\security\encryption;
+use nsql\security\Encryption;
 
-$encryption = new encryption();
+$encryption = new Encryption();
 
 // Hassas veriyi şifrele
 $sensitiveData = "Kredi kartı numarası: 1234-5678-9012-3456";
@@ -473,9 +473,9 @@ echo $decrypted; // Orijinal veri
 <?php
 // database/migrations/2023_12_01_000001_create_users_table.php  (vendor/bin/nsql migrate:create create_users_table)
 
-use nsql\database\base_migration;
+use nsql\database\BaseMigration;
 
-return new class extends base_migration {
+return new class extends BaseMigration {
     public function up(): void
     {
         $sql = "CREATE TABLE IF NOT EXISTS users (
@@ -507,9 +507,9 @@ return new class extends base_migration {
 
 ```php
 <?php
-use nsql\database\migration_manager;
+use nsql\database\MigrationManager;
 
-$manager = new migration_manager($db);
+$manager = new MigrationManager($db);
 
 // Tüm migration'ları çalıştır
 $executed = $manager->migrate();
@@ -531,11 +531,11 @@ $manager->rollback(2); // Son 2 migration'ı geri al
 
 namespace nsql\database\seeds;
 
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 class user_seeder
 {
-    public function run(nsql $db): void
+    public function run(Nsql $db): void
     {
         $users = [
             [
@@ -567,9 +567,9 @@ class user_seeder
 
 ```php
 <?php
-use nsql\database\migration_manager;
+use nsql\database\MigrationManager;
 
-$manager = new migration_manager($db);
+$manager = new MigrationManager($db);
 
 // Tüm seed'leri çalıştır
 $manager->seed();
@@ -585,9 +585,9 @@ $manager->seed('user_seeder');
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Büyük veri setini parça parça işle
 foreach ($db->get_chunk("SELECT * FROM large_table", [], 1000) as $chunk) {
@@ -611,11 +611,11 @@ function processRow($row) {
 
 ```php
 <?php
-use nsql\database\nsql;
-use nsql\database\connection_pool;
+use nsql\database\Nsql;
+use nsql\database\ConnectionPool;
 
 // Connection pool istatistikleri
-$stats = nsql::get_pool_stats();
+$stats = Nsql::get_pool_stats();
 
 echo "Aktif bağlantılar: " . $stats['active_connections'] . "\n";
 echo "Boşta bağlantılar: " . $stats['idle_connections'] . "\n";
@@ -627,9 +627,9 @@ echo "Toplam bağlantılar: " . $stats['total_connections'] . "\n";
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 // Aynı sorguyu birden fazla çalıştır (cache'den gelecek)
 $users1 = $db->get_results("SELECT * FROM users WHERE active = 1");
@@ -646,9 +646,9 @@ $db->clear_query_cache();
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 
 try {
     $result = $db->query("SELECT * FROM non_existent_table");
@@ -666,13 +666,13 @@ try {
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 class DatabaseErrorHandler
 {
     private nsql $db;
     
-    public function __construct(nsql $db)
+    public function __construct(Nsql $db)
     {
         $this->db = $db;
     }
@@ -691,7 +691,7 @@ class DatabaseErrorHandler
     }
 }
 
-$db = new nsql();
+$db = new Nsql();
 $errorHandler = new DatabaseErrorHandler($db);
 
 try {
@@ -706,10 +706,10 @@ try {
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 // Debug modu ile bağlantı
-$db = new nsql(debug: true);
+$db = new Nsql(debug: true);
 
 // Debug bilgileri otomatik loglanacak
 $db->query("SELECT * FROM users WHERE id = :id", ['id' => 1]);
@@ -725,8 +725,8 @@ $db->log_debug_info("Custom debug message", ['data' => 'value']);
 
 ```php
 <?php
-use nsql\database\nsql;
-use nsql\database\query_builder;
+use nsql\database\Nsql;
+use nsql\database\QueryBuilder;
 
 class UserAPI
 {
@@ -734,12 +734,12 @@ class UserAPI
     
     public function __construct()
     {
-        $this->db = new nsql();
+        $this->db = new Nsql();
     }
     
     public function getUsers(): array
     {
-        $builder = new query_builder($this->db);
+        $builder = new QueryBuilder($this->db);
         
         return $builder
             ->select('id', 'name', 'email', 'created_at')
@@ -803,7 +803,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 ```php
 <?php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 class EventManager
 {
@@ -829,7 +829,7 @@ class UserService
     private nsql $db;
     private EventManager $events;
     
-    public function __construct(nsql $db, EventManager $events)
+    public function __construct(Nsql $db, EventManager $events)
     {
         $this->db = $db;
         $this->events = $events;
@@ -872,7 +872,7 @@ $events->on('user.created', function($data) {
 });
 
 // Kullanım
-$db = new nsql();
+$db = new Nsql();
 $userService = new UserService($db, $events);
 
 $userId = $userService->createUser([
@@ -1074,7 +1074,7 @@ try {
 ### 1. Pagination ile Büyük Veri Setleri
 
 ```php
-function getUsersPaginated(nsql $db, int $page = 1, int $perPage = 50): array
+function getUsersPaginated(Nsql $db, int $page = 1, int $perPage = 50): array
 {
     $offset = ($page - 1) * $perPage;
     
@@ -1164,7 +1164,7 @@ abstract class BaseRepository
     protected nsql $db;
     protected string $table;
     
-    public function __construct(nsql $db)
+    public function __construct(Nsql $db)
     {
         $this->db = $db;
     }

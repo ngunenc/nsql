@@ -54,7 +54,7 @@ class StreamingIntegrationTest extends DatabaseTestCase
             }
             $this->assertSame(500, $count);
         } finally {
-            Config::set('yield_unbuffered', false);
+            Config::set('yield_unbuffered', Config::yield_unbuffered);
         }
     }
 
@@ -131,8 +131,15 @@ class StreamingIntegrationTest extends DatabaseTestCase
         }
     }
 
-    public function test_chunk_by_id_missing_column_reports_error(): void
+    public function test_chunk_by_id_missing_column_throws(): void
     {
+        $this->expectException(\nsql\database\exceptions\QueryException::class);
+        iterator_to_array($this->db->chunk_by_id('SELECT name FROM test_table', [], 'name_missing', 10), false);
+    }
+
+    public function test_chunk_by_id_missing_column_reports_error_in_legacy_mode(): void
+    {
+        $this->db->set_throw_on_error(false);
         $chunks = iterator_to_array($this->db->chunk_by_id('SELECT name FROM test_table', [], 'name_missing', 10), false);
 
         $this->assertSame([], $chunks);
@@ -150,10 +157,15 @@ class StreamingIntegrationTest extends DatabaseTestCase
         $this->assertCount(3, $chunks);
     }
 
-    public function test_top_level_limit_is_rejected(): void
+    public function test_top_level_limit_is_rejected_in_buffered_mode(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        iterator_to_array($this->db->get_yield('SELECT id FROM test_table LIMIT 10'));
+        iterator_to_array($this->db->get_yield('SELECT id FROM test_table LIMIT 10', [], false));
+    }
+
+    public function test_unbuffered_default_allows_top_level_limit(): void
+    {
+        $this->assertCount(10, iterator_to_array($this->db->get_yield('SELECT id FROM test_table ORDER BY id LIMIT 10'), false));
     }
 
     public function test_get_chunk_does_not_fill_query_cache(): void

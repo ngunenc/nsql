@@ -4,14 +4,14 @@ info:
   description: |
     nsql bir PHP kütüphanesidir; HTTP API sunmaz. Bu şema yalnızca
     `examples/monitoring/health.php` ve `examples/monitoring/metrics.php`
-    örnek endpoint'lerini tanımlar (`nsql\database\monitoring\health_check`,
-    `metrics` ve `endpoint_guard`).
+    örnek endpoint'lerini tanımlar (`nsql\database\monitoring\HealthCheck`,
+    `Metrics` ve `EndpointGuard`).
 
     Kimlik doğrulama: `Authorization: Bearer <token>` veya `X-NSQL-Monitoring-Token`
     başlığı. Token `NSQL_MONITORING_TOKEN` ile tanımlanır; tanımlı değilse 403 döner.
     `?token=` sorgu parametresi yalnızca `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true` iken kabul edilir.
     `NSQL_MONITORING_ENABLED=false` endpoint'leri kapatır (404).
-  version: 1.13.3
+  version: 2.0.0
   license:
     name: MIT
     url: https://github.com/ngunenc/nsql/blob/main/LICENSE

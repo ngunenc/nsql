@@ -72,6 +72,7 @@ class TransactionCallableIntegrationTest extends DatabaseTestCase
 
     public function test_silent_query_failure_inside_transaction_rolls_back(): void
     {
+        $this->db->set_throw_on_error(false);
         $this->assertFalse($this->db->throw_on_error());
 
         try {

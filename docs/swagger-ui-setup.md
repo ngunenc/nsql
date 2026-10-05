@@ -219,10 +219,10 @@ jobs:
 // scripts/generate-openapi.php
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 // Reflection kullanarak metodları analiz et
-$reflection = new ReflectionClass(nsql::class);
+$reflection = new ReflectionClass(Nsql::class);
 $methods = $reflection->getMethods(ReflectionMethod::IS_PUBLIC);
 
 // OpenAPI spec oluştur

@@ -65,29 +65,29 @@ RATE_LIMIT_WINDOW=60
 
 ```php
 <?php
-use nsql\database\config;
+use nsql\database\Config;
 
 // Environment
-config::set_environment('production');
+Config::set_environment('production');
 
 // Connection Pool
-config::set('db_pool_min', 5);
-config::set('db_pool_max', 20);
-config::set('db_pool_timeout', 30);
+Config::set('db_pool_min', 5);
+Config::set('db_pool_max', 20);
+Config::set('db_pool_timeout', 30);
 
 // Cache
-config::set('cache_enabled', true);
-config::set('cache_driver', 'redis');
-config::set('cache_ttl', 3600);
+Config::set('cache_enabled', true);
+Config::set('cache_driver', 'redis');
+Config::set('cache_ttl', 3600);
 
 // Security
-config::set('security_strict_mode', true);
-config::set('rate_limit_enabled', true);
+Config::set('security_strict_mode', true);
+Config::set('rate_limit_enabled', true);
 
 // Logging
-config::set('log_level', 'warning');
-config::set('log_file', '/var/log/nsql/error.log');
-config::set('log_rotation', true);
+Config::set('log_level', 'warning');
+Config::set('log_file', '/var/log/nsql/error.log');
+Config::set('log_rotation', true);
 ```
 
 ## 🚀 Performans Optimizasyonu
@@ -96,11 +96,11 @@ config::set('log_rotation', true);
 
 ```php
 <?php
-use nsql\database\connection_pool;
-use nsql\database\nsql;
+use nsql\database\ConnectionPool;
+use nsql\database\Nsql;
 
 // Connection pool'u başlat
-connection_pool::initialize([
+ConnectionPool::initialize([
     'min_connections' => 5,
     'max_connections' => 20,
     'connection_timeout' => 30,
@@ -108,14 +108,14 @@ connection_pool::initialize([
 ]);
 
 // Pool'dan bağlantı al
-$db = connection_pool::get_connection();
+$db = ConnectionPool::get_connection();
 ```
 
 ### 2. Query Cache
 
 ```php
 <?php
-$db = new nsql();
+$db = new Nsql();
 
 // Cache'i etkinleştir
 $db->enable_query_cache();
@@ -143,9 +143,9 @@ $db->query("SELECT * FROM users WHERE id = ?", [2]); // Cache'den gelecek
 ```php
 <?php
 // Query optimizer ile index önerileri
-use nsql\database\optimization\query_optimizer;
+use nsql\database\optimization\QueryOptimizer;
 
-$suggestions = query_optimizer::suggest_indexes(
+$suggestions = QueryOptimizer::suggest_indexes(
     "SELECT * FROM users WHERE email = ? AND active = ?"
 );
 
@@ -170,19 +170,19 @@ $db->enable_query_cache();
 $db->set_query_cache_timeout(3600); // 1 saat
 
 // 2. Read Replica kullan (eğer varsa)
-$readDb = new nsql(
+$readDb = new Nsql(
     host: 'read-replica.example.com',
     db: 'production_db'
 );
 
 // 3. Connection Pool ile bağlantı yönetimi
-connection_pool::initialize([
+ConnectionPool::initialize([
     'min_connections' => 10,
     'max_connections' => 50,
 ]);
 
 // 4. Pagination ile sonuçları sınırla
-function getUsersPaginated(nsql $db, int $page = 1): array
+function getUsersPaginated(Nsql $db, int $page = 1): array
 {
     $perPage = 50;
     $offset = ($page - 1) * $perPage;
@@ -217,7 +217,7 @@ class UserQueue
     
     public function process(): void
     {
-        $db = new nsql();
+        $db = new Nsql();
         $batch = [];
         
         while ($user = redis()->rpop('user_queue')) {
@@ -256,7 +256,7 @@ class WriteBehindCache
     
     private function flush(): void
     {
-        $db = new nsql();
+        $db = new Nsql();
         $db->batch_insert('cache_updates', $this->pendingWrites);
         $this->pendingWrites = [];
     }
@@ -272,9 +272,9 @@ class WriteBehindCache
 ```php
 <?php
 // 1. Rate Limiting
-use nsql\security\rate_limiter;
+use nsql\security\RateLimiter;
 
-$limiter = new rate_limiter($db);
+$limiter = new RateLimiter($db);
 
 if (!$limiter->check_rate_limit($_SERVER['REMOTE_ADDR'], 'api')) {
     http_response_code(429);
@@ -365,7 +365,7 @@ foreach ($db->get_chunk("SELECT * FROM large_table", [], 1000) as $chunk) {
 
 ```php
 <?php
-function importLargeDataset(nsql $db, string $file): void
+function importLargeDataset(Nsql $db, string $file): void
 {
     $handle = fopen($file, 'r');
     $batch = [];
@@ -396,7 +396,7 @@ function importLargeDataset(nsql $db, string $file): void
 
 ```php
 <?php
-function archiveOldData(nsql $db, int $daysOld = 365): void
+function archiveOldData(Nsql $db, int $daysOld = 365): void
 {
     $cutoffDate = date('Y-m-d', strtotime("-{$daysOld} days"));
     
@@ -439,14 +439,14 @@ $user = $db->get_row("SELECT * FROM users WHERE id = {$userId}");
 
 ```php
 <?php
-use nsql\database\validation\validator;
+use nsql\database\validation\Validator;
 
 $rules = [
     'email' => ['required', 'email'],
     'age' => ['required', 'integer', 'min:18', 'max:100'],
 ];
 
-if (!validator::validate_many($_POST, $rules)) {
+if (!Validator::validate_many($_POST, $rules)) {
     throw new ValidationException('Invalid input');
 }
 ```
@@ -455,9 +455,9 @@ if (!validator::validate_many($_POST, $rules)) {
 
 ```php
 <?php
-use nsql\security\audit_logger;
+use nsql\security\AuditLogger;
 
-$audit = new audit_logger();
+$audit = new AuditLogger();
 
 // Güvenlik olaylarını logla
 $audit->log_security_event(
@@ -480,9 +480,9 @@ try {
 
 ```php
 <?php
-use nsql\security\rate_limiter;
+use nsql\security\RateLimiter;
 
-$limiter = new rate_limiter($db);
+$limiter = new RateLimiter($db);
 
 // API endpoint'lerinde
 if (!$limiter->check_rate_limit($userId, 'api')) {
@@ -497,11 +497,11 @@ if (!$limiter->check_rate_limit($userId, 'api')) {
 
 ```php
 <?php
-use nsql\database\logging\logger;
+use nsql\database\logging\Logger;
 
-$logger = new logger(
+$logger = new Logger(
     log_file: '/var/log/nsql/app.log',
-    log_level: logger::WARNING,
+    log_level: Logger::WARNING,
     structured_format: true
 );
 
@@ -540,9 +540,9 @@ echo "nsql_pool_active " . $poolStats['active_connections'] . "\n";
 ```php
 <?php
 // public/health.php
-use nsql\database\monitoring\health_check;
+use nsql\database\monitoring\HealthCheck;
 
-$health = new health_check($db);
+$health = new HealthCheck($db);
 $status = $health->check();
 
 header('Content-Type: application/json');
@@ -555,7 +555,7 @@ echo json_encode($status);
 
 ```php
 <?php
-function backupDatabase(nsql $db): string
+function backupDatabase(Nsql $db): string
 {
     $backupFile = '/backups/db_' . date('Y-m-d_H-i-s') . '.sql';
     
@@ -571,12 +571,12 @@ function backupDatabase(nsql $db): string
 ```php
 <?php
 // Master-Slave setup
-$masterDb = new nsql(
+$masterDb = new Nsql(
     host: 'master.example.com',
     db: 'production_db'
 );
 
-$slaveDb = new nsql(
+$slaveDb = new Nsql(
     host: 'slave.example.com',
     db: 'production_db'
 );
@@ -619,7 +619,7 @@ class DatabaseFailover
             $config = $this->databases[$index];
             
             try {
-                $db = new nsql(
+                $db = new Nsql(
                     host: $config['host'],
                     db: $config['db'],
                     user: $config['user'],

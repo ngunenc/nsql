@@ -68,8 +68,8 @@ abstract class Model implements \JsonSerializable
     /**
      * Sınıf adından tablo adını türetir.
      *
-     * ORM_TABLE_NAMING=inflector: BlogPost → blog_posts, Category → categories, Person → people.
-     * Varsayılan (legacy, 1.x): strtolower(sınıf) . 's' — v2.0'da inflector varsayılan olacak.
+     * Varsayılan (inflector): BlogPost → blog_posts, Category → categories, Person → people.
+     * ORM_TABLE_NAMING=legacy (1.x davranışı): strtolower(sınıf) . 's'.
      */
     private function get_table_name_from_class(): string
     {

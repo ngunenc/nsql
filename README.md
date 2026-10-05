@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.3
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.0.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -102,6 +102,8 @@
 >
 > **v1.13.3**: Doküman ve kırık link temizliği; LICENSE dosyası, gerçekçi yol haritası, monitoring-only OpenAPI (#14)
 >
+> **v2.0.0**: Major sürüm: sınıf adları PascalCase (eski adlar 2.x boyunca çalışır), THROW_ON_ERROR / YIELD_UNBUFFERED / inflector varsayılan, 1.x takma adları kaldırıldı. Geçiş: [UPGRADE.md](UPGRADE.md)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -166,7 +168,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.13.3 --prefer-dist
+composer require ngunenc/nsql:^2.0.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -186,13 +188,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.13.3"
+        "ngunenc/nsql": "^2.0.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.13.3 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.0.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -277,13 +279,13 @@ DEBUG_MODE=false
 #### Veritabanı Bağlantısı
 
 ```php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 // .env dosyasından yapılandırma ile (önerilen)
-$db = new nsql();
+$db = new Nsql();
 
 // veya özel parametrelerle
-$db = new nsql(
+$db = new Nsql(
     host: 'localhost',
     db: 'veritabani_adi',
     user: 'kullanici',
@@ -339,10 +341,10 @@ $db->delete("DELETE FROM kullanicilar WHERE id = :id", ['id' => 1]);
 Aşağıda, nsql kütüphanesinin bir web uygulamasında kullanıcı ekleme, listeleme ve güncelleme işlemleri için nasıl kullanılabileceğine dair tam bir akış örneği verilmiştir:
 
 ```php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 // Bağlantı
-$db = new nsql();
+$db = new Nsql();
 
 // 1. Kullanıcı ekleme
 $db->insert("INSERT INTO kullanicilar (ad, email) VALUES (:ad, :email)", [
@@ -487,7 +489,7 @@ nsql/
 - **encryption** / **key_manager**: Şifreleme ve anahtar rotasyonu
 - **audit_logger**: Güvenlik olay logu
 
-> Eski adlar (`nsql\database\security\session_manager` vb.) 1.x boyunca `class_alias` ile çalışır ve 2.0.0'da kaldırılacak. İleride bu katmanın ayrı bir pakete (`nsql/security`) ayrılması planlanıyor.
+> 1.x'teki `nsql\database\security\*` takma adları 2.0.0'da kaldırıldı (bkz. [UPGRADE.md](UPGRADE.md)). İleride bu katmanın ayrı bir pakete (`nsql/security`) ayrılması planlanıyor.
 
 #### Veritabanı Yönetimi
 - **migration_manager**: Veritabanı şema yönetimi
@@ -523,13 +525,13 @@ ENCRYPTION_KEY=your-secure-base64-key
 ### Temel Bağlantı
 
 ```php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
 // Basit bağlantı
-$db = new nsql();
+$db = new Nsql();
 
 // veya özel parametrelerle
-$db = new nsql(
+$db = new Nsql(
     host: 'localhost',
     db: 'veritabanı',
     user: 'kullanici',
@@ -597,10 +599,10 @@ try {
 
 ```php
 // Token üretme
-$token = \nsql\security\session_manager::get_csrf_token();
+$token = \nsql\security\SessionManager::get_csrf_token();
 
 // Token doğrulama
-if (nsql::validate_csrf($_POST['token'] ?? '')) {
+if (Nsql::validate_csrf($_POST['token'] ?? '')) {
     // Güvenli işlem
 }
 ```
@@ -608,12 +610,12 @@ if (nsql::validate_csrf($_POST['token'] ?? '')) {
 ### XSS Koruması
 
 ```php
-$guvenli_metin = nsql::escape_html($kullanici_girisi);
+$guvenli_metin = Nsql::escape_html($kullanici_girisi);
 ```
 
 ### Proxy / Load Balancer Arkasında İstemci IP'si
 
-`security_manager::get_client_ip()` (audit log, logger, rate limit anahtarı, oturum parmak izi) ve `security_manager::is_https()` varsayılan olarak yalnızca `REMOTE_ADDR` ve `HTTPS` / `SERVER_PORT` değerlerini kullanır. İstemcinin gönderdiği `X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `X-Forwarded-Proto` ve `X-Forwarded-Ssl` başlıkları, isteği doğrudan gönderen adres `TRUSTED_PROXIES` listesinde değilse **yok sayılır**.
+`SecurityManager::get_client_ip()` (audit log, logger, rate limit anahtarı, oturum parmak izi) ve `SecurityManager::is_https()` varsayılan olarak yalnızca `REMOTE_ADDR` ve `HTTPS` / `SERVER_PORT` değerlerini kullanır. İstemcinin gönderdiği `X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `X-Forwarded-Proto` ve `X-Forwarded-Ssl` başlıkları, isteği doğrudan gönderen adres `TRUSTED_PROXIES` listesinde değilse **yok sayılır**.
 
 ```env
 # nginx / HAProxy / AWS ALB özel ağda
@@ -629,9 +631,9 @@ TRUSTED_PROXIES=*
 `X-Forwarded-For` zinciri sağdan sola okunur; güvenilir proxy olmayan ilk adres istemci IP'sidir, bu yüzden istemcinin zincirin başına eklediği sahte adresler sonucu etkilemez.
 
 ```php
-use nsql\security\ip_resolver;
+use nsql\security\IpResolver;
 
-$resolver = new ip_resolver(['10.0.0.0/8'], $_SERVER);
+$resolver = new IpResolver(['10.0.0.0/8'], $_SERVER);
 $ip = $resolver->client_ip();
 $https = $resolver->is_https();
 ```
@@ -649,7 +651,7 @@ Bağlantılar havuzda tutulur ve gerektiğinde yeniden kullanılır, böylece pe
 ### Debug Modu
 
 ```php
-$db = new nsql(debug: true);
+$db = new Nsql(debug: true);
 
 // Sorgu çalıştır
 $db->get_results("SELECT * FROM tablo");
@@ -664,10 +666,10 @@ $db->debug();
 
 ```php
 // Güvenli oturum başlatma
-nsql::secure_session_start();
+Nsql::secure_session_start();
 
 // Oturum ID'sini yenileme (ör. login sonrası)
-\nsql\security\security_manager::regenerate_session_id();
+\nsql\security\SecurityManager::regenerate_session_id();
 ```
 
 ### Hata Yönetimi
@@ -695,14 +697,14 @@ vendor/bin/nsql migrate:rollback                    # son batch'i geri alır
 vendor/bin/nsql migrate --path=db/schema            # farklı dizin
 ```
 
-Oluşturulan dosya bir migration nesnesi döndürür; bağlantı `migration_manager` tarafından enjekte edilir (`$this->db()`):
+Oluşturulan dosya bir migration nesnesi döndürür; bağlantı `MigrationManager` tarafından enjekte edilir (`$this->db()`):
 
 ```php
 <?php
 
-use nsql\database\base_migration;
+use nsql\database\BaseMigration;
 
-return new class extends base_migration {
+return new class extends BaseMigration {
     public function up(): void
     {
         $this->db()->query('CREATE TABLE posts (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255) NOT NULL)');
@@ -718,9 +720,9 @@ return new class extends base_migration {
 Sınıf tanımlayan dosyalar da desteklenir: sınıf adı, tarih öneki çıkarılmış dosya adıdır (`2026_10_04_120000_create_posts_table.php` → `create_posts_table`, dosyadaki namespace ile).
 
 ```php
-use nsql\database\migration_manager;
+use nsql\database\MigrationManager;
 
-$manager = new migration_manager($db);              // veya new migration_manager($db, __DIR__ . '/database/migrations')
+$manager = new MigrationManager($db);              // veya new MigrationManager($db, __DIR__ . '/database/migrations')
 $executed = $manager->migrate();
 ```
 
@@ -729,9 +731,9 @@ $executed = $manager->migrate();
 Test ve demo verisi eklemek için seed modülünü kullanabilirsiniz:
 
 ```php
-use nsql\database\seeds\user_seeder;
+use nsql\database\seeds\UserSeeder;
 
-$seeder = new user_seeder();
+$seeder = new UserSeeder();
 $seeder->run(); // Örnek kullanıcı verilerini ekler
 ```
 
@@ -740,27 +742,27 @@ $seeder->run(); // Örnek kullanıcı verilerini ekler
 Gerçek uygulamalarda rate limiting ve veri şifreleme gibi güvenlik modüllerini entegre edebilirsiniz:
 
 ```php
-use nsql\security\rate_limiter;
-use nsql\security\security_manager;
+use nsql\security\RateLimiter;
+use nsql\security\SecurityManager;
 
 // RATE_LIMIT_MAX_REQUESTS=100, RATE_LIMIT_WINDOW=60 → kova 100 token, dakikada tamamen dolar
 // RATE_LIMIT_BURST=10 → aynı saniyede en fazla 10 istek
-$limiter = new rate_limiter($db);
-if (! $limiter->check_rate_limit(security_manager::get_client_ip(), 'api')) {
+$limiter = new RateLimiter($db);
+if (! $limiter->check_rate_limit(SecurityManager::get_client_ip(), 'api')) {
     http_response_code(429);
     exit('Çok fazla istek!');
 }
 
-// Ayarları kod içinde ezmek: new rate_limiter($db, null, ['max_requests' => 5, 'window' => 300, 'burst' => 5])
+// Ayarları kod içinde ezmek: new RateLimiter($db, null, ['max_requests' => 5, 'window' => 300, 'burst' => 5])
 // Tablo ilk çağrıda oluşturulur. DDL açık transaction'ı commit edeceğinden deploy sırasında kurmak için:
-$limiter->install();                    // veya migration içinde: rate_limiter::schema_sql()
+$limiter->install();                    // veya migration içinde: RateLimiter::schema_sql()
 
-use nsql\security\encryption;
-use nsql\security\key_manager;
+use nsql\security\Encryption;
+use nsql\security\KeyManager;
 
 // Anahtar: ENCRYPTION_KEY env (base64, 32 byte) veya storage/keys/encryption.key
 // Üretmek için: php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
-$enc = new encryption();
+$enc = new Encryption();
 $crypted = $enc->encrypt('gizli veri');   // "v2:..." (AES-256-GCM, ham 32 byte anahtar, 12 byte IV, key_id)
 $plain = $enc->decrypt($crypted);         // v1 (<= 1.5.22) verileri de çözülür
 
@@ -774,7 +776,7 @@ if ($enc->needs_reencrypt($crypted)) {
 }
 
 // Anahtarı açıkça verip arşivi eklemek
-$enc = new encryption($key, key_manager::get_archived_keys());
+$enc = new Encryption($key, KeyManager::get_archived_keys());
 ```
 
 > `ENCRYPTION_KEY` env ile verilen anahtar storage'dan önce gelir; rotation sonrası yeni anahtarı env'e de yazmanız gerekir. Eski anahtarlar `storage/keys/archive/` altında kaldığı sürece eski veriler çözülebilir.
@@ -807,9 +809,9 @@ curl -H "Authorization: Bearer $NSQL_MONITORING_TOKEN" http://localhost/health.p
 Sorgu önbellekleme ile performansı artırmak için:
 
 ```php
-use nsql\database\nsql;
+use nsql\database\Nsql;
 
-$db = new nsql();
+$db = new Nsql();
 // Cache yapılandırması .env/config üzerinden yönetilir
 $sonuclar = $db->get_results("SELECT * FROM tablo");
 // İstatistikleri görüntüleme
@@ -831,10 +833,10 @@ nsql sınıfını yapılandırma dosyasından veya özel parametrelerle başlata
 ```php
 // .env dosyasından yapılandırma ile
 require_once __DIR__ . '/vendor/autoload.php';
-$db = new \nsql\database\nsql();
+$db = new \Nsql\database\Nsql();
 
 // veya özel parametrelerle
-$db = new nsql(
+$db = new Nsql(
     host: 'localhost',
     db: 'veritabanı_adi',
     user: 'kullanici',
@@ -941,7 +943,7 @@ Connection Pool, veritabanı bağlantılarını yönetir ve performansı artır�
 
 ```php
 // Süreçteki tüm havuzların toplam istatistikleri
-$stats = nsql::get_pool_stats();
+$stats = Nsql::get_pool_stats();
 print_r($stats);
 
 // Yalnızca bu örneğin havuzu
@@ -985,16 +987,16 @@ $result = $db->safe_execute(function() use ($db) {
 
 ```php
 // Güvenli oturum başlatma
-nsql::secure_session_start();
+Nsql::secure_session_start();
 
 // CSRF koruması
-$token = \nsql\security\session_manager::get_csrf_token();
-if (nsql::validate_csrf($_POST['token'] ?? '')) {
+$token = \nsql\security\SessionManager::get_csrf_token();
+if (Nsql::validate_csrf($_POST['token'] ?? '')) {
     // Form işleme
 }
 
 // XSS koruması
-echo nsql::escape_html($userInput);
+echo Nsql::escape_html($userInput);
 ```
 
 ### Transaction İşlemleri
@@ -1218,7 +1220,7 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 | `chunk_by_id()` | ✅ | ✅ | ✅ |
 | Query cache (process içi / Redis / Memcached) | ✅ | ✅ | ✅ |
 | Migration manager | ✅ | ✅ | ✅ |
-| `rate_limiter` | ✅ `FOR UPDATE` | ✅ `FOR UPDATE` | ✅ (veritabanı kilidi) |
+| `RateLimiter` | ✅ `FOR UPDATE` | ✅ `FOR UPDATE` | ✅ (veritabanı kilidi) |
 | Okuma/yazma ayrımı (replica) | ✅ | ✅ | — |
 | `get_row()` otomatik `LIMIT 1` | ✅ | ✅ | ✅ |
 
@@ -1306,7 +1308,7 @@ Debug modunda aşağıdaki bilgileri görüntüleyebilirsiniz:
 
 ```php
 // Debug modu ile başlatma
-$db = new nsql(debug: true);
+$db = new Nsql(debug: true);
 
 // veya .env dosyasında
 DEBUG_MODE=true
@@ -1321,7 +1323,7 @@ Debug çıktısı şunları içerir:
 - Sonuç verisi (tablo formatında)
 - Query execution detayları
 
-> v1.5.29+: Debug çıktısı, debug log'u, structured logger context'i ve audit log aynı filtreden (`sensitive_data_filter`) geçer. Adı `password`, `token`, `secret`, `api_key`, `auth_`, `credit_card` vb. içeren parametre ve kolonlar `********` olarak yazılır. Listeyi genişletmek için: `SENSITIVE_KEYS=phone,national_id`. Bağlantı hatalarında uygulamaya dönen exception mesajı kullanıcı adı/host içermez (`Veritabanı bağlantısı kurulamadı (SQLSTATE HY000, kod 1045).`); sürücü mesajı yalnızca log'a yazılır.
+> v1.5.29+: Debug çıktısı, debug log'u, structured logger context'i ve audit log aynı filtreden (`SensitiveDataFilter`) geçer. Adı `password`, `token`, `secret`, `api_key`, `auth_`, `credit_card` vb. içeren parametre ve kolonlar `********` olarak yazılır. Listeyi genişletmek için: `SENSITIVE_KEYS=phone,national_id`. Bağlantı hatalarında uygulamaya dönen exception mesajı kullanıcı adı/host içermez (`Veritabanı bağlantısı kurulamadı (SQLSTATE HY000, kod 1045).`); sürücü mesajı yalnızca log'a yazılır.
 
 #### Güvenli Hata Yönetimi
 
@@ -1371,7 +1373,7 @@ class NsqlTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->db = new nsql(
+        $this->db = new Nsql(
             host: 'localhost',
             db: 'test_db',
             user: 'test_user',
@@ -1454,10 +1456,10 @@ Oturum başlatırken ve cookie ayarlarında güvenlik için aşağıdaki fonksiy
 
 ```php
 // Oturum başlatmadan önce çağırın
-nsql::secure_session_start();
+Nsql::secure_session_start();
 ```
 
-Bu fonksiyon (`session_manager`);
+Bu fonksiyon (`SessionManager`);
 - Oturum çerezini `HttpOnly` ve `SameSite=Strict` olarak ayarlar; `secure` verilmezse isteğin HTTPS olup olmadığına göre belirlenir (yerel HTTP geliştirmede çerez çalışır).
 - Uygulama oturumu zaten başlattıysa oturumu **yok etmez**; mevcut oturumu kullanır.
 - `X-Frame-Options` ve `X-Content-Type-Options` gönderir. HSTS yalnızca HTTPS'te ve `hsts` açıkça verilirse gönderilir; artık önerilmeyen `X-XSS-Protection` gönderilmez.
@@ -1465,17 +1467,17 @@ Bu fonksiyon (`session_manager`);
 - `validate()` session ID'yi `regenerate_interval` saniyede bir yeniler.
 
 ```php
-nsql::secure_session_start([
+Nsql::secure_session_start([
     'hsts' => true,               // veya 'max-age=31536000; includeSubDomains; preload'
     'fingerprint_ip' => 'prefix',
 ]);
-nsql::session()->validate();      // her istekte
-nsql::session()->regenerate_id(); // login sonrası
+Nsql::session()->validate();      // her istekte
+Nsql::session()->regenerate_id(); // login sonrası
 ```
 
-CSRF token'ın süresi `CSRF_TOKEN_TTL` (varsayılan 7200 sn, `0` = süresiz) sonunda dolar ve yenilenir; login gibi yetki değişikliklerinden sonra `session_manager::rotate_csrf_token()` çağırın.
+CSRF token'ın süresi `CSRF_TOKEN_TTL` (varsayılan 7200 sn, `0` = süresiz) sonunda dolar ve yenilenir; login gibi yetki değişikliklerinden sonra `SessionManager::rotate_csrf_token()` çağırın.
 
-> v1.5.30+: `security_manager::secure_session_start()` kullanımdan kaldırıldı (deprecated) ve `nsql::secure_session_start()`'a delege ediyor; tek session API'si `session_manager`.
+> v1.5.30+: `SecurityManager::secure_session_start()` kullanımdan kaldırıldı (deprecated) ve `nsql::secure_session_start()`'a delege ediyor; tek session API'si `SessionManager`.
 
 ---
 
@@ -1487,7 +1489,7 @@ Kütüphanede yer alan `nsql::escape_html()` fonksiyonu ile kullanıcıdan gelen
 
 ```php
 // HTML çıktısı için güvenli şekilde kullanın
-echo nsql::escape_html($kullanici->isim);
+echo Nsql::escape_html($kullanici->isim);
 ```
 
 #### CSRF (Cross-Site Request Forgery) Koruması
@@ -1496,12 +1498,12 @@ Formlarınızda CSRF koruması için aşağıdaki fonksiyonları kullanabilirsin
 
 **Token üretimi ve formda kullanımı:**
 ```php
-<input type="hidden" name="csrf_token" value="<?= \nsql\security\session_manager::get_csrf_token() ?>">
+<input type="hidden" name="csrf_token" value="<?= \nsql\security\SessionManager::get_csrf_token() ?>">
 ```
 
 **Token doğrulama:**
 ```php
-if (!nsql::validate_csrf($_POST['csrf_token'] ?? '')) {
+if (!Nsql::validate_csrf($_POST['csrf_token'] ?? '')) {
     die('Geçersiz CSRF token');
 }
 ```
@@ -1540,9 +1542,9 @@ JOIN closure'ının döndürdüğü ON koşulu da raw kabul edilir.
 ### 🧩 ORM Model (v1.5.16+)
 
 ```php
-use nsql\database\orm\model;
+use nsql\database\orm\Model;
 
-class User extends model
+class User extends Model
 {
     protected string $table = 'users';
     protected array $fillable = ['name', 'email', 'password'];
@@ -1565,7 +1567,7 @@ $user->set_attribute('role', 'editor');
 #### İlişkiler, casting ve soft delete (v1.12.0+)
 
 ```php
-class Author extends model
+class Author extends Model
 {
     protected array $fillable = ['name', 'settings', 'is_active', 'born_at'];
     protected array $casts = [
@@ -1578,7 +1580,7 @@ class Author extends model
     public function profile(): ?Profile { return $this->has_one(Profile::class); }
 }
 
-class Post extends model
+class Post extends Model
 {
     protected bool $soft_deletes = true;   // delete() → deleted_at; restore(), force_delete(), trashed()
 
@@ -1597,7 +1599,7 @@ echo json_encode($author);                 // cast'li alanlar + yüklenmiş ili�
 - İlişki metotları: `belongs_to($class, $foreign_key = '<ilişkili>_id', $owner_key = pk)`, `has_one` / `has_many($class, $foreign_key = '<bu_model>_id', $local_key = pk)`. Anahtar adları sınıfın snake_case adından türetilir (`BlogPost` → `blog_post_id`). İlişki metotları model örnekleri döndürür (v1.12.0 öncesi `has_many()` satır nesneleri döndürüyordu; özellik erişimi aynı çalışır).
 - Cast tipleri: `int`, `float`/`decimal`, `bool`, `string`, `array`/`json`, `object`, `datetime`, `date`. Ham değer: `get_raw_attribute()`.
 - Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find()`, `find_or_fail()` (`ModelNotFoundException`, `DatabaseException` alt sınıfı), `hydrate($rows)`. `all()` geriye uyumluluk için satır nesneleri döndürmeye devam eder.
-- Tablo adı: `$table` verilmezse 1.x'te `strtolower(Sınıf) . 's'`. `ORM_TABLE_NAMING=inflector` ile `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people` (v2.0'da varsayılan olacak).
+- Tablo adı: `$table` verilmezse `Inflector` ile türetilir: `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people` (2.0 varsayılanı). 1.x davranışı (`strtolower(Sınıf) . 's'`): `ORM_TABLE_NAMING=legacy`.
 
 ---
 
@@ -1727,6 +1729,9 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v2.0.0 (2026-10-05)
+  - Major sürüm (bkz. UPGRADE.md): sınıf/interface/trait adları PascalCase (#24, eski snake_case adlar `legacy_autoload` ile 2.x boyunca çalışır); `THROW_ON_ERROR=true`, `YIELD_UNBUFFERED=true`, `ORM_TABLE_NAMING=inflector` varsayılan (#47, #45, #9); `nsql\database\security\*` ve `model_not_found_exception` takma adları kaldırıldı (#25).
+
 - v1.13.3 (2026-10-05)
   - Doküman temizliği (#14): kırık linkler/anchor'lar, LICENSE, çalışmayan README örnekleri, mükerrer bölümler, eski "Planlanan" yol haritaları GitHub issues'a yönlendirildi; `docs/openapi.yaml` yalnızca health/metrics.
 
@@ -1746,7 +1751,7 @@ $db->debug();
   - CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`), sürücüden bağımsız migration manager ve rate limiter, veritabanı başına özellik tablosu (#53).
 
 - v1.11.0 (2026-10-05)
-  - İsimlendirilmiş çoklu bağlantı (`nsql::connection()`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`) (#51).
+  - İsimlendirilmiş çoklu bağlantı (`nsql::connection()`, `ConnectionManager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`) (#51).
 
 - v1.10.1 (2026-10-05)
   - QUERY_CACHE_DRIVER: redis/memcached paylaşılan query cache, adapter_simple_cache köprüsü (#18)
@@ -1848,7 +1853,7 @@ $db->debug();
   - Vendor köküne yazım engeli; Composer prefer-dist / dirty tree kurtarma (#28)
 
 - v1.5.9 (2026-07-29)
-  - Transaction metotları yalnızca `transaction_trait` içinde (#7)
+  - Transaction metotları yalnızca `TransactionTrait` içinde (#7)
 
 - v1.5.8 (2026-07-29)
   - `.env.example` tek şablon; pool/cache env → config alias mapping (#13)
@@ -1962,7 +1967,7 @@ Geliştirici: [Necip Günenç](https://github.com/ngunenc)
 
 ## 🎯 Yol Haritası
 
-Planlanan işler sabit tarihli bir liste yerine [GitHub issues](https://github.com/ngunenc/nsql/issues) üzerinden takip edilir. Yayınlanan değişiklikler için [CHANGELOG.md](CHANGELOG.md), sürüm geçişleri ve 2.0'da kaldırılacak alias'lar için [UPGRADE.md](UPGRADE.md) dosyasına bakın.
+Planlanan işler sabit tarihli bir liste yerine [GitHub issues](https://github.com/ngunenc/nsql/issues) üzerinden takip edilir. Yayınlanan değişiklikler için [CHANGELOG.md](CHANGELOG.md), sürüm geçişleri için [UPGRADE.md](UPGRADE.md) dosyasına bakın.
 
 ---
 

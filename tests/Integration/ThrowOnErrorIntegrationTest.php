@@ -14,7 +14,7 @@ class ThrowOnErrorIntegrationTest extends DatabaseTestCase
 {
     protected function tearDown(): void
     {
-        Config::set('throw_on_error', false);
+        Config::set('throw_on_error', Config::throw_on_error);
         parent::tearDown();
     }
 
@@ -52,8 +52,18 @@ class ThrowOnErrorIntegrationTest extends DatabaseTestCase
         }
     }
 
+    public function test_throw_on_error_is_default(): void
+    {
+        $this->assertTrue($this->db->throw_on_error());
+
+        $this->expectException(QueryException::class);
+        $this->db->get_results('SELECT * FROM no_such_table');
+    }
+
     public function test_legacy_mode_returns_false_or_empty(): void
     {
+        $this->db->set_throw_on_error(false);
+
         $this->assertFalse($this->db->update('UPDATE no_such_table SET a = 1'));
         $this->assertFalse($this->db->delete('DELETE FROM no_such_table'));
         $this->assertFalse($this->db->insert('INSERT INTO no_such_table (a) VALUES (1)'));
@@ -72,7 +82,7 @@ class ThrowOnErrorIntegrationTest extends DatabaseTestCase
         $this->assertSame(0, $this->db->update("UPDATE test_table SET name = 'x' WHERE name = 'none'"));
         $this->assertSame(2, $this->db->delete('DELETE FROM test_table'));
 
-        $this->db->set_throw_on_error(null);
+        $this->db->set_throw_on_error(false);
         $this->assertTrue($this->db->update("UPDATE test_table SET name = 'y'"));
     }
 

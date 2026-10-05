@@ -23,28 +23,28 @@ Yapılandırma yönetimi için merkezi sınıf.
 
 ```php
 // Ortam ayarlama
-config::set_environment(string $env): void
+Config::set_environment(string $env): void
 
-// .env dosyasının okunacağı uygulama kökü (autoload sonrası, ilk config::get öncesi)
-config::set_project_root(?string $path): void
+// .env dosyasının okunacağı uygulama kökü (autoload sonrası, ilk Config::get öncesi)
+Config::set_project_root(?string $path): void
 
 // Değer alma (.env ve ortam değişkeni anahtarları büyük harf: DB_HOST vb.)
-config::get(string $key, mixed $default = null): mixed
+Config::get(string $key, mixed $default = null): mixed
 
 // Değer ayarlama
-config::set(string $key, mixed $value): void
+Config::set(string $key, mixed $value): void
 
 // Değer kontrolü
-config::has(string $key): bool
+Config::has(string $key): bool
 
 // Tüm yapılandırma
-config::all(): array
+Config::all(): array
 
 // Proje kök dizini (bootstrap sonrası)
-config::get_project_root(): string
+Config::get_project_root(): string
 
 // .env önbelleğini sıfırlayıp yeniden yükler
-config::refresh(): void
+Config::refresh(): void
 ```
 
 #### Not — Veritabanı ve yapılandırma anahtarları
@@ -58,7 +58,7 @@ Ana veritabanı sınıfı. PDO wrapper ve tüm özelliklerin merkezi.
 #### Constructor
 
 ```php
-new nsql(
+new Nsql(
     ?string $host = null,
     ?string $db = null,
     ?string $user = null,
@@ -149,7 +149,7 @@ transaction(callable $fn, ?int $attempts = null): mixed
 // - 1213 (deadlock) / 1205 (lock wait timeout) / SQLSTATE 40001: en dış seviyede baştan tekrar
 //   (attempts ?? TRANSACTION_RETRY_ATTEMPTS, varsayılan 1). Callable tekrar çalışabilir.
 // Örnek:
-// $order_id = $db->transaction(function (nsql $db) use ($data) {
+// $order_id = $db->transaction(function (Nsql $db) use ($data) {
 //     $id = $db->insert('INSERT INTO orders (user_id) VALUES (?)', [$data['user_id']]);
 //     $db->update('UPDATE stock SET qty = qty - 1 WHERE product_id = ?', [$data['product_id']]);
 //     return $id;
@@ -214,13 +214,13 @@ set_throw_on_error(?bool $enabled): static   // null = THROW_ON_ERROR ayarı
 
 ```php
 // HTML escape
-nsql::escape_html(mixed $string): string
+Nsql::escape_html(mixed $string): string
 
 // CSRF token oluşturma
-nsql::generate_csrf_token(): string
+Nsql::generate_csrf_token(): string
 
 // CSRF token doğrulama
-nsql::validate_csrf(mixed $token): bool
+Nsql::validate_csrf(mixed $token): bool
 ```
 
 ## 🔧 Query Builder
@@ -230,7 +230,7 @@ Fluent interface ile SQL sorguları oluşturma.
 ### Constructor
 
 ```php
-new query_builder(nsql $db)
+new QueryBuilder(Nsql $db)
 ```
 
 ### Metodlar
@@ -260,8 +260,8 @@ when(mixed $condition, callable $callback, ?callable $default = null): self   //
 allow_empty_strings(bool $allow = true): self       // varsayılan: QUERY_BUILDER_ALLOW_EMPTY_STRING (true)
 
 // Açık raw ifade (v1.9.0+): where() değeri, insert/update/upsert değeri veya select() kolonu
-query_builder::raw(string $sql, array $bindings = []): raw_expression
-// ->update(['qty' => query_builder::raw('qty + :inc', ['inc' => 1])])
+QueryBuilder::raw(string $sql, array $bindings = []): raw_expression
+// ->update(['qty' => QueryBuilder::raw('qty + :inc', ['inc' => 1])])
 // Raw SQL doğrulanmaz; kullanıcı girdisi yalnızca $bindings ile verilmelidir.
 
 // ORDER BY clause
@@ -296,7 +296,7 @@ delete(bool $allow_without_where = false): int                // silinen satır
 // WHERE olmadan update()/delete() LogicException verir; tüm tablo için ikinci parametre true olmalı.
 upsert(array $rows, array $update_columns, array $unique_by = []): int
 // MySQL: ON DUPLICATE KEY UPDATE; PostgreSQL/SQLite: ON CONFLICT ($unique_by) DO UPDATE ($unique_by zorunlu)
-// $update_columns: ['name', 'qty'] (yeni değer) veya ['qty' => query_builder::raw('qty + 1')]
+// $update_columns: ['name', 'qty'] (yeni değer) veya ['qty' => QueryBuilder::raw('qty + 1')]
 
 // SQL sorgusunu alma (test için)
 get_query(): string
@@ -307,7 +307,7 @@ get_query(): string
 ### Örnek Kullanım
 
 ```php
-$builder = new query_builder($db);
+$builder = new QueryBuilder($db);
 
 $results = $builder
     ->select('id', 'name', 'email')
@@ -326,19 +326,19 @@ Güvenlik işlemlerinin merkezi yönetimi.
 
 ```php
 // HTML escape
-security_manager::escape_html(mixed $string): string
+SecurityManager::escape_html(mixed $string): string
 
 // CSRF token oluşturma
-security_manager::generate_csrf_token(): string
+SecurityManager::generate_csrf_token(): string
 
 // CSRF token doğrulama
-security_manager::validate_csrf_token(mixed $token): bool
+SecurityManager::validate_csrf_token(mixed $token): bool
 
 // SQL parametrelerini doğrulama
-security_manager::validate_sql_params(array $params): bool
+SecurityManager::validate_sql_params(array $params): bool
 
 // Güvenli sorgu hazırlama
-security_manager::prepare_safe_query(string $sql, array $params): string
+SecurityManager::prepare_safe_query(string $sql, array $params): string
 ```
 
 ### Encryption
@@ -346,7 +346,7 @@ security_manager::prepare_safe_query(string $sql, array $params): string
 Veri şifreleme ve çözme.
 
 ```php
-$encryption = new encryption(?string $key = null);
+$encryption = new Encryption(?string $key = null);
 
 // Veri şifreleme
 $encrypted = $encryption->encrypt(string $data): string
@@ -361,15 +361,15 @@ Rate limiting ve DDoS koruması.
 
 ```php
 // options: table, max_requests, window, burst (varsayılan: RATE_LIMIT_* config)
-$limiter = new rate_limiter(?nsql $db = null, ?callable $clock = null, array $options = []);
+$limiter = new RateLimiter(?Nsql $db = null, ?callable $clock = null, array $options = []);
 
 // Token bucket kontrolü (satır SELECT ... FOR UPDATE ile kilitlenir)
 $allowed = $limiter->check_rate_limit(string $identifier, string $request_type = 'default'): bool
 
 // Tablo kurulumu
 $limiter->install(): void
-rate_limiter::schema_sql(string $table = 'rate_limits', string $driver = 'mysql'): string
-rate_limiter::schema_statements(string $table = 'rate_limits', string $driver = 'mysql'): array // pgsql/sqlite: ifadeleri tek tek çalıştırın
+RateLimiter::schema_sql(string $table = 'rate_limits', string $driver = 'mysql'): string
+RateLimiter::schema_statements(string $table = 'rate_limits', string $driver = 'mysql'): array // pgsql/sqlite: ifadeleri tek tek çalıştırın
 
 // Saniyede eklenen token (max_requests / window)
 $limiter->refill_rate(): float
@@ -380,7 +380,7 @@ $limiter->refill_rate(): float
 Güvenlik olaylarını loglama.
 
 ```php
-$logger = new audit_logger(?string $log_file = null);
+$logger = new AuditLogger(?string $log_file = null);
 
 // Güvenlik olayı loglama
 $logger->log_security_event(string $event_type, string $description, array $context = [], string $severity = 'info'): void
@@ -395,7 +395,7 @@ Veritabanı migration'larını yönetme.
 
 ```php
 // Yollar null ise MIGRATIONS_PATH / SEEDS_PATH veya <proje kökü>/database/{migrations,seeds}
-$manager = new migration_manager(nsql $db, ?string $migrations_path = null, ?string $seeds_path = null);
+$manager = new MigrationManager(Nsql $db, ?string $migrations_path = null, ?string $seeds_path = null);
 $manager->set_migrations_table(string $table): void
 
 // Migration'ları çalıştırma
@@ -487,14 +487,14 @@ interpolate_query(string $sql, array $params): string
 ### Temel Kullanım
 
 ```php
-use nsql\database\nsql;
-use nsql\database\config;
+use nsql\database\Nsql;
+use nsql\database\Config;
 
 // Yapılandırma
-config::set_environment('production');
+Config::set_environment('production');
 
 // Veritabanı bağlantısı
-$db = new nsql();
+$db = new Nsql();
 
 // Veri ekleme
 $id = $db->insert(
@@ -535,9 +535,9 @@ try {
 ### Query Builder Kullanımı
 
 ```php
-use nsql\database\query_builder;
+use nsql\database\QueryBuilder;
 
-$builder = new query_builder($db);
+$builder = new QueryBuilder($db);
 
 $users = $builder
     ->select('id', 'name', 'email')
@@ -552,22 +552,22 @@ $users = $builder
 ### Security Kullanımı
 
 ```php
-use nsql\security\security_manager;
+use nsql\security\SecurityManager;
 
 // XSS koruması
-$safe_html = security_manager::escape_html('<script>alert("xss")</script>');
+$safe_html = SecurityManager::escape_html('<script>alert("xss")</script>');
 
 // CSRF koruması
-$token = security_manager::generate_csrf_token();
-$is_valid = security_manager::validate_csrf_token($token);
+$token = SecurityManager::generate_csrf_token();
+$is_valid = SecurityManager::validate_csrf_token($token);
 ```
 
 ### Migration Kullanımı
 
 ```php
-use nsql\database\migration_manager;
+use nsql\database\MigrationManager;
 
-$manager = new migration_manager($db);
+$manager = new MigrationManager($db);
 
 // Tüm migration'ları çalıştır
 $executed = $manager->migrate();
@@ -684,9 +684,9 @@ Hatalar `error`, yavaş sorgular `warning`, debug çıktıları `debug` seviyesi
 ### Sorgu dinleyicileri
 
 ```php
-use nsql\database\events\query_event;
+use nsql\database\events\QueryEvent;
 
-$db->on_query(function (query_event $e): void {
+$db->on_query(function (QueryEvent $e): void {
     // $e->sql, $e->params (maskeli), $e->duration_ms, $e->row_count (unbuffered akışta null),
     // $e->success, $e->error (?Throwable), $e->driver
     $profiler->add($e->sql, $e->duration_ms);
@@ -719,21 +719,21 @@ $db->set_query_cache_store($psr16Cache, prefix: 'myapp_qc_');
 ### İsimlendirilmiş bağlantılar
 
 ```php
-use nsql\database\connection_manager;
-use nsql\database\nsql;
+use nsql\database\ConnectionManager;
+use nsql\database\Nsql;
 
-connection_manager::add('reporting', [
+ConnectionManager::add('reporting', [
     'host' => 'report-db', 'db' => 'reports', 'user' => 'ro', 'pass' => '...',
     // 'port', 'driver', 'charset', 'debug', 'read' (replica ayarı) da verilebilir
 ]);
 
-$main = nsql::connection();            // 'default' → DB_* değerleri
-$reports = nsql::connection('reporting');
+$main = Nsql::connection();            // 'default' → DB_* değerleri
+$reports = Nsql::connection('reporting');
 ```
 
 - Her isim için süreçte tek örnek tutulur (ilk kullanımda açılır); transaction, hata durumu ve statement cache bağlantılar arasında paylaşılmaz.
 - `add()` yapılmamış isimler ortamdan okunur: `DB_REPORTING_HOST`, `DB_REPORTING_NAME`, `DB_REPORTING_USER`, `DB_REPORTING_PASS`, `DB_REPORTING_PORT`, `DB_REPORTING_DRIVER`, `DB_REPORTING_CHARSET`. Tanımlı olmayan alanlar `DB_*` değerlerinden gelir; hiçbiri yoksa `InvalidArgumentException`.
-- `connection_manager::set($name, $nsql)` hazır örneği kaydeder, `purge($name)` bağlantıyı bırakır, `reset()` her şeyi sıfırlar.
+- `ConnectionManager::set($name, $nsql)` hazır örneği kaydeder, `purge($name)` bağlantıyı bırakır, `reset()` her şeyi sıfırlar.
 - `new nsql(...)` artık `port:` parametresi de alır.
 
 ### Okuma/yazma ayrımı
