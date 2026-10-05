@@ -2,6 +2,8 @@
 
 Bu kılavuz, nsql kütüphanesi için Swagger UI'ı nasıl kurup kullanacağınızı gösterir.
 
+> **Kapsam (v1.13.3):** nsql bir PHP kütüphanesidir, HTTP API sunmaz. [`openapi.yaml`](openapi.yaml) yalnızca `examples/monitoring/` altındaki `health.php` ve `metrics.php` örnek endpoint'lerini tanımlar. Aşağıdaki sorgu/CRUD endpoint örnekleri uygulamanızda kendi API'nizi belgelemek içindir.
+
 ## 📑 İçindekiler
 
 - [Kurulum](#-kurulum)

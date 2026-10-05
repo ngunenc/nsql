@@ -6,8 +6,8 @@ Bu kılavuz, nsql kütüphanesini farklı versiyonlar arasında geçiş yaparken
 
 - [Genel Bakış](#-genel-bakış)
 - [v1.3 → v1.4 Geçişi](#-v13--v14-geçişi)
-- [Breaking Changes](#-breaking-changes)
-- [Yeni Özellikler](#-yeni-özellikler)
+- [Breaking Changes](#breaking-changes)
+- [Yeni Özellikler](#yeni-özellikler)
 - [Deprecated Özellikler](#-deprecated-özellikler)
 - [Adım Adım Geçiş](#-adım-adım-geçiş)
 - [Sorun Giderme](#-sorun-giderme)
@@ -336,11 +336,10 @@ vendor/bin/phpunit --coverage-html coverage/
 
 Sorun yaşarsanız:
 
-1. [Troubleshooting Guide](../TROUBLESHOOTING.md) dosyasına bakın
-2. [GitHub Issues](https://github.com/your-repo/nsql/issues) üzerinden sorun bildirin
+1. 1.x içindeki güncel geçiş notları için [UPGRADE.md](../UPGRADE.md) dosyasına bakın
+2. [GitHub Issues](https://github.com/ngunenc/nsql/issues) üzerinden sorun bildirin
 3. [API Reference](api-reference.md) dokümantasyonunu kontrol edin
 
 ---
 
-**Son Güncelleme**: 2026-01-22  
-**Versiyon**: 1.4.0
+> Bu belge v1.3 → v1.4 geçişini anlatır (tarihsel). v1.5 ve sonrası için [UPGRADE.md](../UPGRADE.md) ve [CHANGELOG.md](../CHANGELOG.md) esas alınır.

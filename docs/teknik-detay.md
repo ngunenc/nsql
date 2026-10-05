@@ -112,21 +112,23 @@ $db->table('users')
 
 ## 🔒 Güvenlik Mekanizmaları
 
-### 1. Security Manager (security_manager.php)
+### 1. Security Manager (src/security/security_manager.php)
 
-Merkezi güvenlik yönetimi sağlar:
+Merkezi güvenlik yönetimi sağlar (opsiyonel `nsql\security` katmanı):
 
 ```php
-$security = new security_manager();
+use nsql\security\security_manager;
+
+$security = new security_manager($db);
 
 // Rate limiting
-$security->rateLimiter->check($ip, $route);
+$security->check_rate_limit(security_manager::get_client_ip(), 'api');
 
 // Hassas veri filtresi
-$security->dataFilter->sanitize($input);
+$safe = $security->filter_sensitive_data($input);
 
 // Şifreleme
-$encrypted = $security->encryption->encrypt($data);
+$encrypted = $security->encrypt($data);
 ```
 
 **Güvenlik Tavsiyeleri:**
@@ -134,278 +136,127 @@ $encrypted = $security->encryption->encrypt($data);
 - Şifreleme anahtarlarını düzenli değiştirin
 - Audit logları düzenli kontrol edin
 
-### 2. Rate Limiter (rate_limiter.php)
+### 2. Rate Limiter (src/security/rate_limiter.php)
+
+Veritabanı destekli token bucket; MySQL, PostgreSQL ve SQLite'ta çalışır.
 
 ```php
-// Yapılandırma
-const WINDOW_SIZE = 3600; // 1 saat
-const MAX_REQUESTS = 1000;
+use nsql\security\rate_limiter;
+use nsql\security\security_manager;
 
-// Kullanım
-$limiter = new rate_limiter();
-if ($limiter->checkLimit($ip)) {
-    // İşleme devam et
+$limiter = new rate_limiter($db, null, ['max_requests' => 100, 'window' => 60, 'burst' => 20]);
+$limiter->install(); // veya migration içinde: rate_limiter::schema_sql()
+
+if (! $limiter->check_rate_limit(security_manager::get_client_ip(), 'api')) {
+    http_response_code(429);
+    exit;
 }
 ```
-
-**Optimizasyon:**
-- Redis/Memcached ile distributed rate limiting
-- Adaptive rate limiting stratejileri
-- IP bazlı whitelist/blacklist
 
 ## 🚀 Performans Optimizasyonları
 
-### 1. Query Cache (cache_trait.php)
+### 1. Query Cache (traits/cache_trait.php)
 
-```php
-// Cache stratejileri
-const CACHE_STRATEGIES = [
-    'memory' => MemoryCache::class,
-    'redis' => RedisCache::class,
-    'file' => FileCache::class
-];
+Sürücüler: `memory` (süreç içi, varsayılan), `redis`, `memcached`; ayrıca `set_query_cache_store()` ile herhangi bir PSR-16 store.
 
-// Örnek kullanım
-// Cache yapılandırması config üzerinden yönetilir
-$result = $db->get_results($query);
+```env
+QUERY_CACHE_ENABLED=true
+QUERY_CACHE_DRIVER=redis
+QUERY_CACHE_TIMEOUT=3600
 ```
 
-**Cache Optimizasyonları:**
-- TTL değerlerini veri değişim sıklığına göre ayarlayın
-- Cache invalidation stratejilerini belirleyin
-- Cache hit/miss oranlarını monitör edin
-
-### 2. Statement Cache (statement_cache_trait.php)
-
 ```php
-// LRU Cache yapılandırması
-const STATEMENT_CACHE_SIZE = 100;
-
-// Otomatik statement cache
-$stmt = $db->prepare($query); // Önbellekte varsa kullanır
+$result = $db->get_results($query);   // ilk çağrı DB, sonrakiler cache
+$stats  = $db->get_all_cache_stats();
 ```
 
-**Performans İpuçları:**
-- Cache boyutunu workload'a göre ayarlayın
-- Sık kullanılan statementları önceliklendirin
-- Memory kullanımını monitör edin
+Yazma sorguları ilgili tabloların cache kayıtlarını geçersiz kılar; paylaşılan store'da bu süreçler arasında da geçerlidir.
+
+### 2. Statement Cache (traits/statement_cache_trait.php)
+
+Hazırlanmış statement'lar LRU/LFU ile önbelleklenir (`STATEMENT_CACHE_LIMIT`).
+
+```php
+$db->clear_statement_cache();
+```
 
 ## 🧪 Test ve Kalite
 
-### 1. Unit Tests (tests/nsql_test.php)
+Testler `tests/Unit`, `tests/Integration` (MySQL/MariaDB) ve `tests/Portable` (MySQL, PostgreSQL, SQLite) altındadır. Komutlar ve CI eşikleri için README'deki "Test ve Kalite" bölümüne bakın.
 
 ```php
-class NsqlTest extends TestCase
-{
-    public function testTransactions()
-    {
-        $db->begin();
-        try {
-            // Test senaryosu
-            $this->assertTrue($result);
-            $db->commit();
-        } catch (Exception $e) {
-            $db->rollback();
-            $this->fail($e->getMessage());
-        }
-    }
-}
+$db->transaction(function (nsql $db) {
+    $db->insert('INSERT INTO logs (msg) VALUES (:m)', ['m' => 'test']);
+});
 ```
-
-**Test Stratejileri:**
-- Her özellik için unit test yazın
-- Edge case'leri test edin
-- Performance testleri ekleyin
-- Coverage hedeflerini belirleyin
 
 ## 📊 Monitoring ve Debug
 
-### Debug Trait (debug_trait.php)
-
 ```php
-// Debug modu etkinleştirme
-$db->enableDebug();
+$db = new nsql(debug: true);
+$db->get_results('SELECT * FROM users');
+$db->debug();                       // son sorgu, parametreler, süre
 
-// Sorgu analizi
-$db->debug(); // Sorgu, parametreler ve timing bilgisi
+$stats = $db->get_memory_stats();   // streaming bellek istatistikleri
+$pool  = nsql::get_pool_stats();
 
-// Memory kullanımı
-$stats = $db->get_memory_stats();
+// Sorgu olayları ve yavaş sorgu logu (SLOW_QUERY_THRESHOLD_MS)
+$db->on_query(function (\nsql\database\events\query_event $e) {
+    if ($e->duration_ms > 200) {
+        error_log("Yavaş sorgu ({$e->duration_ms} ms): {$e->sql}");
+    }
+});
+
+// Sağlık kontrolü
+$health = (new \nsql\database\monitoring\health_check($db))->check();
 ```
-
-**Monitoring Tavsiyeleri:**
-- Query execution time thresholds belirleyin
-- Slow query log tutun
-- Resource usage alerts tanımlayın
-- Regular performance audits yapın
 
 ## 🔧 Maintenance
 
 ### Migration Manager (migration_manager.php)
 
 ```php
-// Migration oluşturma
-$manager->create('create_users_table');
-
-// Migration çalıştırma stratejileri
-$manager->migrate(['--pretend' => true]); // Dry run
-$manager->migrate(['--force' => true]); // Tehlikeli operasyonları onayla
+$manager = new migration_manager($db);
+$manager->create('create_users_table');   // database/migrations/..._create_users_table.php
+$manager->migrate();                      // bekleyenleri uygular
+$manager->rollback();                     // son batch'i geri alır
 ```
 
-**Bakım İpuçları:**
-- Regular schema backups alın
-- Migration dependency'leri yönetin
-- Rollback stratejileri belirleyin
-- Zero-downtime migration planları yapın
+CLI karşılıkları: `vendor/bin/nsql migrate:create`, `migrate`, `migrate:rollback`.
 
 ## 🔍 Debugging ve Troubleshooting
 
-### Yaygın Sorunlar ve Çözümleri
-
-1. **Bağlantı Sorunları**
-```php
-try {
-    $db->ensure_connection();
-} catch (ConnectionException $e) {
-    // Retry logic
-    $db->reconnect(['timeout' => 5]);
-}
-```
-
-2. **Memory Leaks**
-```php
-// Resource temizleme
-$db->disconnect();
-$db->clearStatementCache();
-$db->clear_query_cache();
-```
-
-3. **Deadlock Yönetimi**
-```php
-$db->setDeadlockRetries(3)
-   ->setDeadlockWait(200); // ms
-```
-
-### Performance Tuning Checklist
-
-1. **Query Optimizasyonu**
-   - EXPLAIN kullanımı
-   - İndeks stratejisi
-   - Query refactoring
-
-2. **Resource Yönetimi**
-   - Connection pool monitoring
-   - Memory usage tracking
-   - Cache hit/miss analysis
-
-3. **Error Handling**
-   - Structured logging
-   - Error aggregation
-   - Alert thresholds
+1. **Bağlantı sorunları**: `ensure_connection()` bağlantıyı doğrular; kopan bağlantılar sorgu sırasında otomatik yeniden kurulur. Elle: `$db->reconnect()`.
+2. **Bellek**: Büyük sonuçlarda `get_results()` yerine `get_yield()` veya `chunk_by_id()` kullanın; `clear_statement_cache()` ile statement önbelleğini boşaltın.
+3. **Deadlock**: `transaction(callable)` deadlock/serialization hatalarında yeniden dener (`TRANSACTION_RETRY_ATTEMPTS`, ya da `$db->transaction($fn, attempts: 5)`).
 
 ## 📈 Ölçeklendirme
 
-### Horizontal Scaling
+### Okuma/Yazma Ayrımı (v1.11.0)
 
-```php
-// Read/Write splitting
-$db->setReadWriteSplit(true);
-$db->addReadServer('slave1.example.com');
-$db->addReadServer('slave2.example.com');
+```env
+READ_WRITE_SPLIT=true
+DB_READ_HOST=replica1.example.com,replica2.example.com
 ```
 
-### Sharding Strategy
-
 ```php
-// Shard key belirleme
-$db->setShardKey('user_id');
-$db->addShard('shard1', ['range' => [1, 1000]]);
-$db->addShard('shard2', ['range' => [1001, 2000]]);
+$db->set_read_replica(['host' => 'replica1.example.com']); // veya kod içinden
+$db->stick_to_primary(true);                               // yazmadan sonra okumaları primary'de tut
+
+$reporting = nsql::connection('reporting');                // isimlendirilmiş bağlantı
 ```
+
+Sharding, circuit breaker ve otomatik backup kütüphane kapsamında değildir; ihtiyaç halinde uygulama katmanında kurulmalıdır (bkz. [production-scenarios.md](production-scenarios.md)).
 
 ## 🔐 Security Best Practices
-
-### 1. Input Validation
 
 ```php
 // Anti-pattern:
 $query = "SELECT * FROM users WHERE id = " . $_GET['id'];
 
-// Secure pattern:
-$id = $filter->sanitize($_GET['id'], 'int');
-$user = $db->get_row("SELECT * FROM users WHERE id = :id", ['id' => $id]);
+// Güvenli:
+$user = $db->get_row('SELECT * FROM users WHERE id = :id', ['id' => (int) $_GET['id']]);
 ```
-
-### 2. Access Control
-
-```php
-// Role-based query filtering
-$db->addQueryFilter(function($query) use ($userRole) {
-    if ($userRole !== 'admin') {
-        return $query->where('is_public', true);
-    }
-    return $query;
-});
-```
-
-## 📊 Monitoring ve Metrics
-
-### Performance Metrics
-
-```php
-// Query timing
-$db->enableQueryTiming();
-$result = $db->get_results($query);
-$timing = $db->getLastQueryTiming();
-
-// Connection pool stats
-$pool_stats = $db->get_pool_stats();
-$active_connections = $pool_stats['active_connections'];
-```
-
-### Health Checks
-
-```php
-// Basic health check
-$health = $db->getHealthStatus();
-
-// Detailed diagnostics
-$diagnostics = $db->getDiagnostics([
-    'connection_pool',
-    'query_cache',
-    'statement_cache',
-    'memory_usage'
-]);
-```
-
-## 🔄 Recovery ve Backup
-
-### Otomatik Recovery
-
-```php
-// Retry mekanizması
-$db->setRetryPolicy([
-    'max_attempts' => 3,
-    'initial_wait' => 100,
-    'multiplier' => 2
-]);
-
-// Circuit breaker
-$db->enableCircuitBreaker([
-    'failure_threshold' => 5,
-    'reset_timeout' => 30
-]);
-```
-
-### Backup Stratejileri
-
-```php
-// Point-in-time recovery
-$backup = new DatabaseBackup($db);
-$backup->createSnapshot();
-$backup->restoreToPoint('2025-05-27 12:00:00');
-```
-
 ## 🎯 Best Practices Özeti
 
 1. **Güvenlik**
@@ -432,31 +283,6 @@ $backup->restoreToPoint('2025-05-27 12:00:00');
    - Load balancing implementasyonu yapın
    - Monitoring ve alerting kurun
 
-## 📦 Versiyon Detayları
+## 📦 Sürüm Bilgisi
 
-### v1.0.0 (Güncel)
-- İlk kararlı sürüm
-- Temel veritabanı işlemleri
-- Connection pool implementasyonu
-- Query ve statement cache
-- Temel güvenlik özellikleri
-
-### v1.1.0 (Planlanan)
-- Read/Write splitting
-- Gelişmiş monitoring
-- Circuit breaker pattern
-- Redis cache desteği
-- Migration system iyileştirmeleri
-
-### v1.2.0 (Planlanan)
-- Otomatik sharding desteği
-- Distributed cache
-- GraphQL desteği
-- Real-time monitoring
-- Async query execution
-
-### v1.3.0 (Planlanan)
-- Database proxy
-- Query optimization engine
-- Advanced security features
-- Cloud integration
+Sürüm geçmişi [CHANGELOG.md](../CHANGELOG.md), geçiş notları [UPGRADE.md](../UPGRADE.md) dosyasındadır. Planlanan işler sabit sürüm listesi yerine [GitHub issues](https://github.com/ngunenc/nsql/issues) üzerinden takip edilir.

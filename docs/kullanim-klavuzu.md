@@ -314,102 +314,28 @@ $result = $db->safe_execute(function() use ($db) {
    - Detaylı log tutun
    - Debug modunu geliştirme ortamında kullanın
 
-## 📦 Versiyon Özellikleri ve Kullanım
+## 📦 Sürüm Bilgisi ve Yol Haritası
 
-### v1.0.0 (Güncel)
-**Yeni Özellikler:**
-- PDO tabanlı veritabanı soyutlama
-- Connection pooling
-- Query ve statement cache
-- Temel güvenlik özellikleri
+Yayınlanan özellikler için [CHANGELOG.md](../CHANGELOG.md), sürüm geçişleri için [UPGRADE.md](../UPGRADE.md) esas alınır. Planlanan işler [GitHub issues](https://github.com/ngunenc/nsql/issues) üzerinden takip edilir.
 
-**Örnek Kullanım:**
+Önceki sürümlerde "planlanan" olarak listelenen bazı özellikler artık mevcuttur:
+
 ```php
-// Temel veritabanı işlemleri
+// Okuma/yazma ayrımı (v1.11.0): .env -> READ_WRITE_SPLIT=true, DB_READ_HOST=replica1,replica2
 $db = new nsql();
-$db->get_results("SELECT * FROM users");
+$db->set_read_replica(['host' => 'replica1.example.com']);
 
-// Connection pool kullanımı
-$stats = $db->get_pool_stats();
+// İsimlendirilmiş bağlantılar (v1.11.0)
+$reporting = nsql::connection('reporting');
 
-// Cache kullanımı
-// Cache config üzerinden yönetilir; istenirse istatistikler alınabilir
-$result = $db->get_results($query);
-```
-
-### v1.1.0 (Planlanan)
-**Yeni Özellikler:**
-- Master/Slave yapılandırması
-- Circuit breaker implementasyonu
-- Redis cache entegrasyonu
-- Gelişmiş monitoring araçları
-
-**Örnek Kullanım:**
-```php
-// Read/Write splitting
-$db->setReadWriteSplit(true);
-$db->addReadServer('slave1.example.com');
-
-// Redis cache
-$db->setCacheDriver('redis');
-// Cache istatistikleri
+// Redis / Memcached query cache (v1.10.1): .env -> QUERY_CACHE_DRIVER=redis
 $cache_stats = $db->get_all_cache_stats();
-
-// Circuit breaker
-$db->enableCircuitBreaker([
-    'failure_threshold' => 5,
-    'reset_timeout' => 30
-]);
 ```
-
-### v1.2.0 (Planlanan)
-**Yeni Özellikler:**
-- Otomatik sharding
-- GraphQL desteği
-- Distributed caching
-- Async sorgular
-
-**Örnek Kullanım:**
-```php
-// Sharding kullanımı
-$db->setShardKey('user_id');
-$db->addShard('shard1', ['range' => [1, 1000]]);
-
-// GraphQL sorguları
-$db->graphql()->query('{
-    users(first: 5) {
-        id
-        name
-        email
-    }
-}');
-
-// Async sorgu
-$promise = $db->async()->get_results($query);
-$result = await($promise);
-```
-
-### v1.3.0 (Planlanan)
-**Yeni Özellikler:**
-- Query optimization
-- Cloud entegrasyonları
-- Advanced security
-
-**Örnek Kullanım:**
-```php
-// Query optimization
-$db->enableQueryOptimizer();
-$plan = $db->explainQuery($query);
-
-// Cloud storage
-$db->backup()->toCloud('aws-s3');
-```
-
 ## 🤝 Destek ve Katkı
 
 - GitHub Issues: [https://github.com/ngunenc/nsql/issues](https://github.com/ngunenc/nsql/issues)
-- Katkıda bulunmak için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasını inceleyin.
+- Katkıda bulunmak için [CONTRIBUTING.md](../CONTRIBUTING.md) dosyasını inceleyin.
 
 ## 📜 Lisans
 
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakınız.
+Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](../LICENSE) dosyasına bakınız.

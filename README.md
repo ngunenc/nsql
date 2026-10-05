@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.2
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.13.3
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -100,6 +100,8 @@
 >
 > **v1.13.2**: Coverage %65 ve CI'da %50 eşiği; DSN ayrıştırma düzeltmesi (#40)
 >
+> **v1.13.3**: Doküman ve kırık link temizliği; LICENSE dosyası, gerçekçi yol haritası, monitoring-only OpenAPI (#14)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -164,7 +166,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.13.2 --prefer-dist
+composer require ngunenc/nsql:^1.13.3 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -184,13 +186,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.13.2"
+        "ngunenc/nsql": "^1.13.3"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.13.2 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.13.3 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -492,71 +494,9 @@ nsql/
 - **migration**: Migration arayüzü tanımı
 - **seeds**: Test ve başlangıç verisi yönetimi
 
-## 🌟 Özellikler
+## 🔧 Örnek `.env` Yapılandırması
 
-### Core Özellikler
-- PDO tabanlı veritabanı soyutlama
-- Akıcı (fluent) sorgu arayüzü
-- Otomatik bağlantı yönetimi
-- Transaction desteği
-- Migration sistemi
-
-### Güvenlik
-- SQL injection koruması (PDO prepared statements)
-- XSS ve CSRF koruma mekanizmaları
-- Güvenli oturum yönetimi ve cookie kontrolü
-- Rate limiting ve DDoS koruması
-- Hassas veri filtreleme ve şifreleme
-- Güvenlik olay loglaması
-
-### Performans
-- Connection Pool ile bağlantı yönetimi
-- Statement Cache (LRU algoritması)
-- Query Cache sistemi
-- Generator desteği ile düşük bellek kullanımı
-- Otomatik garbage collection
-
-### Geliştirici Araçları
-- Detaylı debug sistemi
-- Kapsamlı hata yönetimi
-- Komut satırı araçları (planlanan)
-- PHPUnit test desteği
-- PSR-12 kod standardı uyumluluğu
-
-## 🔧 Kurulum
-
-### Sistem Gereksinimleri
-
-- PHP 8.1+
-- PDO PHP Eklentisi
-- JSON PHP Eklentisi
-- OpenSSL PHP Eklentisi (şifreleme için)
-- MySQL 5.7.8+ veya MariaDB 10.2+
-
-### Composer ile Kurulum
-
-```bash
-composer require ngunenc/nsql
-```
-
-### Manuel Kurulum
-
-1. Projeyi klonlayın:
-```bash
-git clone https://github.com/ngunenc/nsql.git
-```
-
-2. Bağımlılıkları yükleyin:
-```bash
-composer install
-```
-
-3. Yapılandırma dosyasını oluşturun:
-```bash
-cp .env.example .env
-```
-
-4. Veritabanı ayarlarını yapılandırın:
+Kurulum adımları için yukarıdaki [Kurulum](#-kurulum) bölümüne bakın. Kapsamlı bir örnek:
 ```ini
 db_host=localhost
 db_name=database_name
@@ -726,8 +666,8 @@ $db->debug();
 // Güvenli oturum başlatma
 nsql::secure_session_start();
 
-// Oturum ID'sini yenileme
-nsql::regenerateSessionId();
+// Oturum ID'sini yenileme (ör. login sonrası)
+\nsql\security\security_manager::regenerate_session_id();
 ```
 
 ### Hata Yönetimi
@@ -880,16 +820,6 @@ $stats = $db->get_all_cache_stats();
 
 Bu örnekler, nsql kütüphanesinin migration, seed, güvenlik ve cache gibi modüllerinin gerçek bir projede nasıl kullanılabileceğini göstermektedir.
 
-## 📜 Lisans
-
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakınız.
-DEBUG_MODE=false
-
-# Loglama ayarları
-LOG_FILE=error_log.txt
-STATEMENT_CACHE_LIMIT=100
-```
-
 ---
 
 ### ⚙️ **Kullanım**
@@ -900,8 +830,8 @@ nsql sınıfını yapılandırma dosyasından veya özel parametrelerle başlata
 
 ```php
 // .env dosyasından yapılandırma ile
-require_once 'pdo.php';
-$db = new nsql();
+require_once __DIR__ . '/vendor/autoload.php';
+$db = new \nsql\database\nsql();
 
 // veya özel parametrelerle
 $db = new nsql(
@@ -1193,9 +1123,9 @@ $db->delete("DELETE FROM users WHERE id = :id", [
   - HttpOnly, Secure ve SameSite cookie ayarları
   - Otomatik session ID rotasyonu
   - Güvenli IP/HTTPS tespiti (proxy/load balancer desteği)
-- **Thread Safety**
-  - Connection pool file-based lock mekanizması
-  - Query cache process içidir (istekler arası paylaşılmaz; dosya kilidi yok)
+- **Süreç Modeli**
+  - Connection pool süreç içidir (DSN + kullanıcı başına); süreçler arası paylaşılmaz
+  - Varsayılan query cache süreç içidir; süreçler arası paylaşım için `QUERY_CACHE_DRIVER=redis|memcached` veya PSR-16 store kullanın
 
 ### Performans Optimizasyonları
 - **Bağlantı Yönetimi**
@@ -1205,7 +1135,7 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 - **Önbellekleme Sistemleri**
   - Statement Cache (LRU ve LFU algoritmaları, dinamik cache size)
   - Query Cache ile sorgu sonuçları önbellekleme (per-table TTL, cache warming)
-  - Thread-safe cache invalidation
+  - Tablo bazlı cache invalidation (paylaşılan store'da süreçler arası)
   - Otomatik önbellek temizleme
 - **Bellek Optimizasyonu**
   - Generator desteği ile düşük bellek kullanımı (memory leak düzeltmeleri)
@@ -1262,9 +1192,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 ### PHP Sürüm Uyumluluğu
 | nsql Sürümü | PHP Minimum | PHP Maksimum | Notlar |
 |-------------|-------------|--------------|---------|
-| 1.0.x       | 8.0.0      | 8.2.x        | Tam destek |
-| 1.1.x       | 8.0.0      | 8.3.x        | Tam destek |
-| 1.9.2+      | 8.1.0      | 8.4.x        | CI: 8.1–8.4 |
+| 1.0.x–1.9.1 | 8.0.0      | 8.3.x        | Eski sürümler, destek yok |
+| 1.9.2+      | 8.1.0      | 8.4.x        | CI: 8.1–8.4 (güncel: 1.13.x) |
 
 ### Veritabanı Uyumluluğu
 | Veritabanı     | Minimum Sürüm | Önerilen Sürüm | CI |
@@ -1300,8 +1229,6 @@ Notlar:
 
 ---
 
-### 🧠 Yeni Özellikler
- 
 ## ⚡ Benchmark Sonuçları (v1.5.2)
 
 Yerel ortam ölçümleri, `benchmarks/` betikleri ile alınmıştır (MySQL, PHP 8.2, Windows). Değerler yaklaşıktır ve ortalama tek çalıştırma sonuçlarını temsil eder.
@@ -1800,6 +1727,9 @@ $db->debug();
 
 ## 📝 Sürüm Geçmişi
 
+- v1.13.3 (2026-10-05)
+  - Doküman temizliği (#14): kırık linkler/anchor'lar, LICENSE, çalışmayan README örnekleri, mükerrer bölümler, eski "Planlanan" yol haritaları GitHub issues'a yönlendirildi; `docs/openapi.yaml` yalnızca health/metrics.
+
 - v1.13.2 (2026-10-05)
   - Satır coverage %65.4 ve CI'da %50 eşiği (#40); MySQL/PostgreSQL `parse_dsn` port/dbname düzeltmesi.
 
@@ -2016,21 +1946,6 @@ vendor/bin/nsql migrate
 vendor/bin/nsql seed
 ```
 
-## 📊 Performans Metrikleri
-
-### Test Sonuçları
-- **PHPStan**: 53/122 hata düzeltildi (%57 iyileştirme)
-- **PSR-12**: 800+/1000+ hata düzeltildi (%80 iyileştirme)
-- **Test Coverage**: 9 test metodu, 6 başarılı
-- **Memory Usage**: Optimize edilmiş connection pool ile düşük bellek kullanımı
-
-### Özellik Durumu
-- ✅ **Core Features**: Tamamlandı
-- ✅ **Security**: Tamamlandı
-- ✅ **Performance**: Tamamlandı
-- ✅ **Testing**: Tamamlandı
-- ✅ **Documentation**: Güncellendi
-
 ## 📄 Lisans
 
 Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE](LICENSE) dosyasına bakın.
@@ -2044,29 +1959,10 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylı bilgi için [LICENSE
 ---
 
 Geliştirici: [Necip Günenç](https://github.com/ngunenc)
-Son Güncelleme: 27 Ocak 2025
 
-## 🎯 Planlanan Özellikler
+## 🎯 Yol Haritası
 
-### v1.2.0 - Q3 2025
-- PostgreSQL desteği
-- SQLite desteği
-- Query Builder geliştirmeleri
-
-### v1.3.0 - Q4 2025
-- Redis önbellek entegrasyonu
-- Migration sistemi
-- Şema validasyonu (henüz yok; [#54](https://github.com/ngunenc/nsql/issues/54))
-
-### v1.4.0 - Q1 2026
-- Otomatik backup sistemi
-- CLI araçları
-- Docker desteği
-
-### v2.0.0 - 2026
-- Tam ORM desteği
-- NoSQL adaptörleri
-- Plugin sistemi
+Planlanan işler sabit tarihli bir liste yerine [GitHub issues](https://github.com/ngunenc/nsql/issues) üzerinden takip edilir. Yayınlanan değişiklikler için [CHANGELOG.md](CHANGELOG.md), sürüm geçişleri ve 2.0'da kaldırılacak alias'lar için [UPGRADE.md](UPGRADE.md) dosyasına bakın.
 
 ---
 

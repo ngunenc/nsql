@@ -1,3 +1,5 @@
+> **Arşiv (v1.5.2, 2025-01-27).** Bu rapor güncel değildir; burada "tamamlandı" olarak işaretlenen bazı maddeler sonraki incelemelerde geçersiz çıkmış ve GitHub issue'larıyla ele alınmıştır (ör. #40 testler, #46 cache, #16 mimari, #47 hata modeli). Güncel durum için [CHANGELOG.md](../../CHANGELOG.md), [UPGRADE.md](../../UPGRADE.md) ve [GitHub issues](https://github.com/ngunenc/nsql/issues) esas alınır.
+
 # 📋 nsql Proje Analiz Raporu
 
 **Tarih:** 2025-01-27  

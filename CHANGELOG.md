@@ -4,6 +4,19 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.13.3] - 2026-10-05
+
+### Added
+- `LICENSE` (MIT) dosyası; README/CHANGELOG/docs içindeki LICENSE linkleri artık çalışıyor.
+
+### Changed
+- Doküman temizliği (#14): tüm markdown link ve anchor'ları doğrulandı (0 kırık). `docs/api-reference.md`, `docs/migration-guide.md`, `docs/kullanim-klavuzu.md` anchor/yol düzeltmeleri.
+- README: mükerrer Özellikler/Kurulum/Lisans bölümleri ve eski performans metrikleri kaldırıldı; `nsql::regenerateSessionId()` → `security_manager::regenerate_session_id()`, `require_once 'pdo.php'` → Composer autoload; PHP uyumluluk tablosu ve süreç modeli (pool/cache süreç içi) güncellendi.
+- "Planlanan Özellikler" listeleri (README, CHANGELOG, `docs/kullanim-klavuzu.md`, `docs/teknik-detay.md`) GitHub issues ve UPGRADE.md'ye yönlendirildi; var olmayan API örnekleri (`setCacheDriver`, `setDeadlockRetries`, `addShard`, `enableCircuitBreaker`, `rateLimiter->check` vb.) gerçek API ile değiştirildi.
+- `docs/openapi.yaml` yalnızca `examples/monitoring/health.php` ve `metrics.php` endpoint'lerini tanımlıyor (kütüphane HTTP API sunmaz).
+- `PROJE_ANALIZ_RAPORU.md` → `docs/archive/` (arşiv notu ile).
+- `composer.json` `archive.exclude`: var olmayan dosya girdileri kaldırıldı, `CONTRIBUTING.md` eklendi.
+
 ## [1.13.2] - 2026-10-05
 
 ### Added
@@ -829,23 +842,7 @@ Kod davranışı değişmedi; public API etkilenmedi.
 
 ## 📋 Gelecek Sürümler
 
-### [1.3.0] - Planlanan
-- **Multi-Database Support**: PostgreSQL, SQLite desteği
-- **ORM Features**: Object-Relational Mapping
-- **Advanced Caching**: Redis, Memcached entegrasyonu
-- **API Documentation**: Swagger/OpenAPI dokümantasyonu
-
-### [1.4.0] - Planlanan
-- **Microservice Support**: Service discovery ve load balancing
-- **Real-time Features**: WebSocket desteği
-- **Advanced Security**: OAuth2, JWT token desteği
-- **Monitoring**: Metrics ve health check endpoints
-
-### [2.0.0] - Planlanan
-- **Breaking Changes**: API değişiklikleri
-- **Performance Rewrite**: Tamamen yeniden yazılmış performans optimizasyonu
-- **Modern PHP**: PHP 8.2+ özellikleri
-- **Cloud Native**: Kubernetes ve Docker desteği
+Planlanan işler [GitHub issues](https://github.com/ngunenc/nsql/issues) üzerinden takip edilir. 2.0.0'da yapılacak kırıcı değişiklikler ve kaldırılacak takma adlar için [UPGRADE.md](UPGRADE.md) dosyasına bakın.
 
 ---
 
@@ -891,7 +888,3 @@ Bu projeye katkıda bulunmak için:
 
 Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
 
----
-
-**Son Güncelleme**: 2024-12-19
-**Sonraki Sürüm**: 1.3.0 (Planlanan)

@@ -1,528 +1,232 @@
 openapi: 3.0.3
 info:
-  title: nsql Database Library API
+  title: nsql Monitoring Endpoints
   description: |
-    nsql PHP veritabanı kütüphanesi için OpenAPI dokümantasyonu.
-    
-    Bu dokümantasyon, nsql kütüphanesinin tüm metodlarını ve kullanım örneklerini içerir.
-  version: 1.4.0
-  contact:
-    name: nsql Support
-    url: https://github.com/your-repo/nsql
+    nsql bir PHP kütüphanesidir; HTTP API sunmaz. Bu şema yalnızca
+    `examples/monitoring/health.php` ve `examples/monitoring/metrics.php`
+    örnek endpoint'lerini tanımlar (`nsql\database\monitoring\health_check`,
+    `metrics` ve `endpoint_guard`).
+
+    Kimlik doğrulama: `Authorization: Bearer <token>` veya `X-NSQL-Monitoring-Token`
+    başlığı. Token `NSQL_MONITORING_TOKEN` ile tanımlanır; tanımlı değilse 403 döner.
+    `?token=` sorgu parametresi yalnızca `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true` iken kabul edilir.
+    `NSQL_MONITORING_ENABLED=false` endpoint'leri kapatır (404).
+  version: 1.13.3
   license:
     name: MIT
-    url: https://opensource.org/licenses/MIT
+    url: https://github.com/ngunenc/nsql/blob/main/LICENSE
 
 servers:
-  - url: https://api.example.com/v1
-    description: Production server
-  - url: https://api-staging.example.com/v1
-    description: Staging server
+  - url: http://localhost
+    description: Örnek dosyaları sunan web sunucusu
 
-tags:
-  - name: Connection
-    description: Veritabanı bağlantı işlemleri
-  - name: Query
-    description: SQL sorgu işlemleri
-  - name: Transaction
-    description: Transaction yönetimi
-  - name: Cache
-    description: Cache işlemleri
-  - name: Security
-    description: Güvenlik işlemleri
-  - name: Migration
-    description: Migration yönetimi
+security:
+  - bearerAuth: []
+  - monitoringToken: []
 
 paths:
-  /connection:
-    post:
-      tags:
-        - Connection
-      summary: Veritabanı bağlantısı oluştur
-      description: Yeni bir veritabanı bağlantısı oluşturur
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - host
-                - database
-                - username
-                - password
-              properties:
-                host:
-                  type: string
-                  example: localhost
-                database:
-                  type: string
-                  example: my_database
-                username:
-                  type: string
-                  example: db_user
-                password:
-                  type: string
-                  format: password
-                charset:
-                  type: string
-                  default: utf8mb4
-      responses:
-        '200':
-          description: Bağlantı başarılı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  connection_id:
-                    type: string
-        '400':
-          description: Geçersiz parametreler
-        '500':
-          description: Bağlantı hatası
-
-  /query:
-    post:
-      tags:
-        - Query
-      summary: SQL sorgusu çalıştır
-      description: Prepared statement ile güvenli SQL sorgusu çalıştırır
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - sql
-              properties:
-                sql:
-                  type: string
-                  example: SELECT * FROM users WHERE id = ?
-                params:
-                  type: array
-                  items:
-                    type: string
-                  example: ["1"]
-                fetch_mode:
-                  type: string
-                  enum: [FETCH_ASSOC, FETCH_OBJ, FETCH_NUM]
-                  default: FETCH_OBJ
-      responses:
-        '200':
-          description: Sorgu başarılı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  data:
-                    type: array
-                    items:
-                      type: object
-                  row_count:
-                    type: integer
-        '400':
-          description: Geçersiz sorgu
-        '500':
-          description: Sorgu hatası
-
-  /insert:
-    post:
-      tags:
-        - Query
-      summary: Veri ekle
-      description: Yeni kayıt ekler ve son insert ID'yi döndürür
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - sql
-                - params
-              properties:
-                sql:
-                  type: string
-                  example: INSERT INTO users (name, email) VALUES (?, ?)
-                params:
-                  type: array
-                  items:
-                    type: string
-                  example: ["John Doe", "john@example.com"]
-      responses:
-        '200':
-          description: Ekleme başarılı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  insert_id:
-                    type: integer
-        '400':
-          description: Geçersiz parametreler
-        '500':
-          description: Ekleme hatası
-
-  /batch-insert:
-    post:
-      tags:
-        - Query
-      summary: Toplu veri ekle
-      description: Birden fazla kaydı tek seferde ekler
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - table
-                - data
-              properties:
-                table:
-                  type: string
-                  example: users
-                data:
-                  type: array
-                  items:
-                    type: object
-                  example:
-                    - name: "John"
-                      email: "john@example.com"
-                    - name: "Jane"
-                      email: "jane@example.com"
-                use_transaction:
-                  type: boolean
-                  default: true
-      responses:
-        '200':
-          description: Toplu ekleme başarılı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  inserted_count:
-                    type: integer
-        '400':
-          description: Geçersiz veri
-        '500':
-          description: Ekleme hatası
-
-  /update:
-    post:
-      tags:
-        - Query
-      summary: Veri güncelle
-      description: Mevcut kaydı günceller
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - sql
-                - params
-              properties:
-                sql:
-                  type: string
-                  example: UPDATE users SET name = ? WHERE id = ?
-                params:
-                  type: array
-                  items:
-                    type: string
-                  example: ["John Doe", "1"]
-      responses:
-        '200':
-          description: Güncelleme başarılı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  affected_rows:
-                    type: integer
-        '400':
-          description: Geçersiz parametreler
-        '500':
-          description: Güncelleme hatası
-
-  /delete:
-    post:
-      tags:
-        - Query
-      summary: Veri sil
-      description: Kaydı siler
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - sql
-                - params
-              properties:
-                sql:
-                  type: string
-                  example: DELETE FROM users WHERE id = ?
-                params:
-                  type: array
-                  items:
-                    type: string
-                  example: ["1"]
-      responses:
-        '200':
-          description: Silme başarılı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  affected_rows:
-                    type: integer
-        '400':
-          description: Geçersiz parametreler
-        '500':
-          description: Silme hatası
-
-  /transaction/begin:
-    post:
-      tags:
-        - Transaction
-      summary: Transaction başlat
-      description: Yeni bir transaction başlatır (nested transaction destekler)
-      responses:
-        '200':
-          description: Transaction başlatıldı
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  transaction_level:
-                    type: integer
-        '500':
-          description: Transaction başlatma hatası
-
-  /transaction/commit:
-    post:
-      tags:
-        - Transaction
-      summary: Transaction commit
-      description: Transaction'ı commit eder
-      responses:
-        '200':
-          description: Transaction commit edildi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '400':
-          description: Aktif transaction yok
-        '500':
-          description: Commit hatası
-
-  /transaction/rollback:
-    post:
-      tags:
-        - Transaction
-      summary: Transaction rollback
-      description: Transaction'ı geri alır
-      responses:
-        '200':
-          description: Transaction rollback edildi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-        '400':
-          description: Aktif transaction yok
-        '500':
-          description: Rollback hatası
-
-  /cache/enable:
-    post:
-      tags:
-        - Cache
-      summary: Query cache'i etkinleştir
-      description: Query cache özelliğini etkinleştirir
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                timeout:
-                  type: integer
-                  default: 3600
-                  description: Cache timeout (saniye)
-                size_limit:
-                  type: integer
-                  default: 100
-                  description: Maksimum cache boyutu
-      responses:
-        '200':
-          description: Cache etkinleştirildi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-
-  /cache/clear:
-    post:
-      tags:
-        - Cache
-      summary: Cache'i temizle
-      description: Tüm query cache'ini temizler
-      responses:
-        '200':
-          description: Cache temizlendi
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-
-  /cache/stats:
+  /health.php:
     get:
-      tags:
-        - Cache
-      summary: Cache istatistikleri
-      description: Query cache istatistiklerini döndürür
+      summary: Sağlık kontrolü
+      description: Veritabanı (`SELECT 1`), query cache ve bellek durumunu raporlar.
       responses:
         '200':
-          description: Cache istatistikleri
+          description: Sağlıklı veya kısmi bozulma (degraded)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  enabled:
-                    type: boolean
-                  size:
-                    type: integer
-                  hits:
-                    type: integer
-                  misses:
-                    type: integer
-                  hit_rate:
-                    type: number
-                    format: float
+                $ref: '#/components/schemas/HealthReport'
+        '503':
+          description: Veritabanı erişilemez (unhealthy) veya beklenmeyen hata
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/HealthReport'
+                  - $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/TokenNotConfigured'
+        '404':
+          $ref: '#/components/responses/Disabled'
 
-  /security/validate-input:
-    post:
-      tags:
-        - Security
-      summary: Input doğrulama
-      description: Kullanıcı girdisini doğrular
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - value
-                - rules
-              properties:
-                value:
-                  type: string
-                  example: "user@example.com"
-                rules:
-                  type: array
-                  items:
-                    type: string
-                  example: ["required", "email"]
+  /metrics.php:
+    get:
+      summary: Çalışma zamanı metrikleri
       responses:
         '200':
-          description: Doğrulama sonucu
+          description: Metrikler
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  valid:
-                    type: boolean
-                  errors:
-                    type: array
-                    items:
-                      type: string
+                $ref: '#/components/schemas/Metrics'
+        '500':
+          description: Beklenmeyen hata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/TokenNotConfigured'
+        '404':
+          $ref: '#/components/responses/Disabled'
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    monitoringToken:
+      type: apiKey
+      in: header
+      name: X-NSQL-Monitoring-Token
+
+  responses:
+    Unauthorized:
+      description: Token eksik veya hatalı
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TokenNotConfigured:
+      description: NSQL_MONITORING_TOKEN tanımlı değil
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Disabled:
+      description: NSQL_MONITORING_ENABLED=false
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
   schemas:
     Error:
       type: object
-      required:
-        - code
-        - message
       properties:
-        code:
-          type: integer
-          description: Hata kodu
+        status:
+          type: string
+          example: error
         message:
           type: string
-          description: Hata mesajı
-        details:
-          type: object
-          description: Ek hata detayları
+          example: Unauthorized
+        timestamp:
+          type: string
+          example: '2026-10-05 12:00:00'
 
-    ConnectionConfig:
+    HealthReport:
       type: object
-      required:
-        - host
-        - database
-        - username
-        - password
       properties:
-        host:
+        status:
           type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+        checks:
+          type: object
+          properties:
+            database:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, unhealthy]
+                response_time:
+                  type: string
+                  example: 1.2ms
+                message:
+                  type: string
+            cache:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, disabled, unhealthy]
+                enabled:
+                  type: boolean
+                hit_rate:
+                  type: string
+                  example: 85%
+                size:
+                  type: integer
+                message:
+                  type: string
+            memory:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [healthy, warning, critical, unknown]
+                current_usage:
+                  type: string
+                peak_usage:
+                  type: string
+                limit:
+                  type: string
+                usage_percent:
+                  type: string
+                message:
+                  type: string
+
+    Metrics:
+      type: object
+      properties:
         database:
+          type: object
+          additionalProperties: true
+        cache:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            size:
+              type: integer
+            limit:
+              type: integer
+            hits:
+              type: integer
+            misses:
+              type: integer
+            hit_rate:
+              type: string
+            timeout:
+              type: integer
+        memory:
+          type: object
+          properties:
+            current_usage:
+              type: integer
+            peak_usage:
+              type: integer
+            limit:
+              type: integer
+            usage_percent:
+              type: number
+        connection_pool:
+          type: object
+          properties:
+            active_connections:
+              type: integer
+            idle_connections:
+              type: integer
+            total_connections:
+              type: integer
+            max_connections:
+              type: integer
+        query_analyzer:
+          type: object
+          properties:
+            total_queries:
+              type: integer
+            slow_queries:
+              type: integer
+            risky_queries:
+              type: integer
+            average_execution_time:
+              type: number
+        timestamp:
           type: string
-        username:
-          type: string
-        password:
-          type: string
-          format: password
-        charset:
-          type: string
-          default: utf8mb4
-
-  securitySchemes:
-    ApiKey:
-      type: apiKey
-      in: header
-      name: X-API-Key
-
-security:
-  - ApiKey: []
