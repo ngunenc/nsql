@@ -36,11 +36,15 @@ final class query_cache_store
     {
         try {
             $stored = $this->cache->get($this->entry_key($key));
-            if (! is_array($stored) || ! isset($stored['entry'], $stored['versions']) || ! is_array($stored['entry'])) {
+            if (! is_array($stored) || ! is_string($stored['payload'] ?? null) || ! isset($stored['versions'])) {
                 return null;
             }
 
-            $entry = $stored['entry'];
+            // Satırlar stdClass; başka sınıf örneklenmez (paylaşılan store'dan object injection yok)
+            $entry = unserialize($stored['payload'], ['allowed_classes' => [\stdClass::class]]);
+            if (! is_array($entry)) {
+                return null;
+            }
             if (! is_int($entry['time'] ?? null) || ! is_array($entry['tables'] ?? null) || ! is_array($entry['tags'] ?? null)) {
                 return null;
             }
@@ -63,8 +67,10 @@ final class query_cache_store
     public function put(string $key, array $entry, int $ttl): void
     {
         try {
+            // Kayıt store'a string olarak yazılır: JSON tabanlı arka uçlarda (redis_adapter) da
+            // satırlar stdClass olarak geri döner
             $this->cache->set($this->entry_key($key), [
-                'entry' => $entry,
+                'payload' => serialize($entry),
                 'versions' => $this->versions($entry['tables'], $entry['tags']),
             ], max(1, $ttl));
         } catch (\Throwable) {
