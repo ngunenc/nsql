@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.33
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.6.0
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -69,6 +69,8 @@
 > **v1.5.32**: Query cache iç yapısı: O(1) LRU, eviction/expiry sonrası tablo-tag eşlemeleri temizleniyor (sınırsız büyüme giderildi), gereksiz dosya kilidi ve cache_version kaldırıldı (#46).
 >
 > **v1.5.33**: Her sorgudan önce atılan `SELECT 1` ping kaldırıldı (yalnızca 30+ sn boşta kalma sonrası), `debug_backtrace` yalnızca debug modunda (#44).
+>
+> **v1.6.0**: Gerçek streaming `get_yield()` (MySQL unbuffered, `YIELD_UNBUFFERED`), keyset tabanlı `chunk_by_id()`, `memory_limit`'e oranlanan ve `.env` ile ayarlanabilen bellek eşikleri (#45).
 
 ## 🌟 Özellikler
 
@@ -121,7 +123,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.33 --prefer-dist
+composer require ngunenc/nsql:^1.6.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -141,13 +143,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.33"
+        "ngunenc/nsql": "^1.6.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.33 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.6.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1558,6 +1560,26 @@ foreach ($db->get_yield("SELECT * FROM cok_buyuk_tablo", []) as $row) {
 
 > Not: `get_yield` fonksiyonu generator döndürür, debug() ile toplu sonuç göstermez. Sadece satır satır işleme için uygundur.
 
+#### Streaming ve keyset chunk (v1.6.0+)
+
+```php
+// Gerçek streaming: tek sorgu, OFFSET yok, sabit bellek (MySQL unbuffered)
+foreach ($db->get_yield("SELECT * FROM cok_buyuk_tablo", [], unbuffered: true) as $row) {
+    // Akış sürerken aynı $db ile başka sorgu çalıştırılamaz
+}
+
+// Döngü içinde yazma gerekiyorsa: birincil anahtara göre parça parça (OFFSET yok)
+foreach ($db->chunk_by_id("SELECT id, email FROM users WHERE active = :a", ['a' => 1], 'id', 1000) as $rows) {
+    foreach ($rows as $user) {
+        $db->update("UPDATE users SET notified = 1 WHERE id = :id", ['id' => $user->id]);
+    }
+}
+```
+
+- `YIELD_UNBUFFERED=true` ile `get_yield()` varsayılan olarak streaming çalışır (1.x'te varsayılan `false`, v2.0.0'da `true`). Kapalıyken eski LIMIT/OFFSET davranışı korunur.
+- 1M satırlık ölçüm (`benchmarks/yield_streaming.php`, yerel MariaDB): unbuffered `get_yield` 1,05 sn / ~47 KB tepe, `chunk_by_id(5000)` 1,06 sn, LIMIT/OFFSET `get_yield` 95 sn.
+- Bellek eşikleri `memory_limit`'e oranlanır: uyarı `MEMORY_WARNING_RATIO` (0.75), kritik `MEMORY_CRITICAL_RATIO` (0.9). Mutlak değer için `MEMORY_LIMIT_WARNING` / `MEMORY_LIMIT_CRITICAL`.
+
 ### get_results vs get_yield: Hangi Durumda Hangisi Kullanılmalı?
 
 - **get_results()**: Tüm sorgu sonucunu dizi olarak belleğe yükler. Küçük ve orta ölçekli veri setleri (ör. 10.000 satır veya ~10 MB altı) için hızlı ve kullanışlıdır. Sonuçlar üzerinde toplu işlem yapmak ve debug() ile tablo halinde görmek için idealdir.
@@ -1622,6 +1644,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.6.0 (2026-10-05)
+  - Unbuffered get_yield, chunk_by_id, memory_limit oranlı bellek eşikleri (#45)
 
 - v1.5.33 (2026-10-05)
   - Sorgu başına ping kaldırıldı, debug_backtrace yalnızca debug modunda (#44)

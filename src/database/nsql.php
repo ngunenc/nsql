@@ -75,6 +75,8 @@ class nsql
     // Sorgu sonuçları
     private array $last_results = [];
 
+    private bool $streaming = false;
+
     private static ?int $last_memory_check = null;
     private static int $current_chunk_size = 1000; // Varsayılan değer
     private static array $memory_stats = [
@@ -461,6 +463,15 @@ class nsql
     private function execute_query(string $sql, array $params = [], ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
     {
         $this->set_last_called_method();
+
+        if ($this->streaming) {
+            throw new \RuntimeException(
+                'Unbuffered get_yield() akışı sürerken aynı bağlantıda sorgu çalıştırılamaz. '
+                . 'Döngü içinde sorgu gerekiyorsa chunk_by_id() kullanın, ayrı bir nsql örneği açın '
+                . 'veya get_yield(..., unbuffered: false) çağırın.'
+            );
+        }
+
         $this->ensure_connection();
 
         // PDO bağlantısı kontrolü
@@ -936,17 +947,17 @@ class nsql
             return [];
         }
 
-        // Büyük veri setleri için optimizasyon
-        $result_count = $stmt->rowCount();
-        if ($result_count > config::large_result_warning) {
+        $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+
+        // rowCount() SELECT için sürücüler arası güvenilir değil; gerçek satır sayısı kullanılır
+        $result_count = count($results);
+        if ($result_count > (int) config::get('large_result_warning', config::large_result_warning)) {
             trigger_error(
-                "Büyük veri seti ($result_count satır). get_chunk() veya get_yield() kullanmayı düşünün.",
+                "Büyük veri seti ($result_count satır). chunk_by_id() veya get_yield() kullanmayı düşünün.",
                 E_USER_NOTICE
             );
         }
 
-        // Sonuçları al, last_results ve cache'i guncelle
-        $results = $stmt->fetchAll(PDO::FETCH_OBJ);
         $this->last_results = $results;
         if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
             $this->add_to_query_cache($cache_key, $results, [], $this->extract_tables_from_query($query));
@@ -958,21 +969,32 @@ class nsql
     /**
      * Büyük veri setlerini satır satır döndürür (Generator)
      *
+     * Unbuffered modda (YIELD_UNBUFFERED=true veya $unbuffered=true) sorgu tek seferde çalışır ve
+     * satırlar sunucudan okundukça döner: sabit bellek, OFFSET yok. Akış sürerken aynı nsql
+     * örneğinde başka sorgu çalıştırılamaz (MySQL kısıtı); döngü içinde yazma gerekiyorsa
+     * chunk_by_id() kullanın. Varsayılan (1.x) mod: LIMIT/OFFSET ile parça parça okuma.
+     *
      * @param string $query SQL sorgusu
      * @param array $params Sorgu parametreleri
-     * @return \Generator
+     * @param bool|null $unbuffered null = YIELD_UNBUFFERED ayarı
+     * @return \Generator<int, object>
      */
-    public function get_yield(string $query, array $params = []): \Generator
+    public function get_yield(string $query, array $params = [], ?bool $unbuffered = null): \Generator
     {
         $this->set_last_called_method();
 
-        // LIMIT ve OFFSET kontrolü
-        if (preg_match('/\b(LIMIT|OFFSET)\b/i', $query)) {
+        if ($unbuffered ?? (bool) config::get('yield_unbuffered', false)) {
+            yield from $this->stream_query($query, $params);
+
+            return;
+        }
+
+        if ($this->has_top_level_limit($query)) {
             throw new \InvalidArgumentException('get_yield() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
         }
 
         $offset = 0;
-        $chunk_size = config::default_chunk_size;
+        $chunk_size = (int) config::get('default_chunk_size', config::default_chunk_size);
         $total_rows = 0;
         $stmt = null;
 
@@ -1026,11 +1048,11 @@ class nsql
                 $offset += $chunk_size;
 
                 // Maksimum limit kontrolü
-                if ($offset >= config::max_result_set_size) {
+                if ($offset >= $this->max_result_set_size()) {
                     throw new \RuntimeException(
                         sprintf(
                             'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                            config::max_result_set_size
+                            $this->max_result_set_size()
                         )
                     );
                 }
@@ -1101,7 +1123,7 @@ class nsql
         $now = time();
 
         if (self::$last_memory_check !== null &&
-            ($now - self::$last_memory_check) < config::memory_check_interval) {
+            ($now - self::$last_memory_check) < (int) config::get('memory_check_interval', config::memory_check_interval)) {
             return;
         }
 
@@ -1114,7 +1136,9 @@ class nsql
             self::$memory_stats['peak_usage'] = $peak_usage;
         }
 
-        if ($current_usage > config::memory_limit_critical) {
+        $thresholds = $this->memory_thresholds();
+
+        if ($current_usage > $thresholds['critical']) {
             self::$memory_stats['critical_count']++;
             $this->cleanup_resources();
             
@@ -1123,12 +1147,12 @@ class nsql
                 sprintf(
                     'Kritik bellek kullanımı aşıldı! Mevcut: %s, Limit: %s',
                     $this->format_bytes($current_usage),
-                    $this->format_bytes(config::memory_limit_critical)
+                    $this->format_bytes($thresholds['critical'])
                 )
             );
         }
 
-        if ($current_usage > config::memory_limit_warning) {
+        if ($current_usage > $thresholds['warning']) {
             self::$memory_stats['warning_count']++;
             $this->cleanup_resources();
             
@@ -1139,9 +1163,191 @@ class nsql
                     sprintf(
                         'Bellek uyarı seviyesi aşıldı: %s (Limit: %s)',
                         $this->format_bytes($current_usage),
-                        $this->format_bytes(config::memory_limit_warning)
+                        $this->format_bytes($thresholds['warning'])
                     )
                 );
+            }
+        }
+    }
+
+    /**
+     * Bellek eşikleri (byte).
+     *
+     * MEMORY_LIMIT_WARNING / MEMORY_LIMIT_CRITICAL açıkça ayarlanmışsa mutlak değer kullanılır;
+     * aksi halde ini memory_limit × MEMORY_WARNING_RATIO (0.75) / MEMORY_CRITICAL_RATIO (0.9).
+     * memory_limit=-1 ise kritik eşik yoktur, uyarı eşiği config::memory_limit_warning'dir.
+     *
+     * @return array{warning: int, critical: int}
+     */
+    private function memory_thresholds(): array
+    {
+        $limit = $this->get_memory_limit();
+        $unlimited = $limit === PHP_INT_MAX;
+
+        $warning = config::has('memory_limit_warning')
+            ? (int) config::get('memory_limit_warning')
+            : ($unlimited ? config::memory_limit_warning : (int) ($limit * (float) config::get('memory_warning_ratio', 0.75)));
+
+        $critical = config::has('memory_limit_critical')
+            ? (int) config::get('memory_limit_critical')
+            : ($unlimited ? PHP_INT_MAX : (int) ($limit * (float) config::get('memory_critical_ratio', 0.9)));
+
+        return ['warning' => max(1, $warning), 'critical' => max(1, $critical)];
+    }
+
+    private function max_result_set_size(): int
+    {
+        return (int) config::get('max_result_set_size', config::max_result_set_size);
+    }
+
+    /**
+     * Sorgunun en dış seviyesinde LIMIT/OFFSET var mı? Subquery ve string literal'ler yok sayılır.
+     */
+    private function has_top_level_limit(string $query): bool
+    {
+        $stripped = (string) preg_replace('/\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|`[^`]*`/s', "''", $query);
+        do {
+            $stripped = (string) preg_replace('/\([^()]*\)/', ' ', $stripped, -1, $count);
+        } while ($count > 0);
+
+        return preg_match('/\b(LIMIT|OFFSET)\b/i', $stripped) === 1;
+    }
+
+    /**
+     * Sorguyu tek seferde çalıştırıp satırları sunucudan okundukça döndürür (MySQL'de unbuffered).
+     *
+     * @return \Generator<int, object>
+     */
+    private function stream_query(string $query, array $params): \Generator
+    {
+        if ($this->streaming) {
+            throw new \RuntimeException('Bu bağlantıda zaten aktif bir get_yield() akışı var.');
+        }
+
+        $this->ensure_connection();
+        $pdo = $this->pdo;
+        if ($pdo === null) {
+            $this->validate_pdo_connection();
+
+            return;
+        }
+
+        $is_mysql = $this->get_driver_name() === 'mysql';
+        $previous_buffered = $is_mysql ? $pdo->getAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY) : null;
+
+        $this->prepare_query_context($query, $params);
+        $this->validate_param_types($params);
+
+        $stmt = null;
+        try {
+            if ($is_mysql) {
+                $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
+            }
+
+            // Statement cache'e alınmaz: unbuffered cursor kapanmadan aynı statement yeniden kullanılamaz
+            try {
+                $stmt = $pdo->prepare($query);
+                if ($stmt === false) {
+                    return;
+                }
+                $this->bind_parameters($stmt, $params);
+                $stmt->execute();
+                $this->touch_connection();
+            } catch (PDOException $e) {
+                $this->handle_execution_error($e);
+
+                return;
+            }
+
+            $this->streaming = true;
+            $cleanup_interval = max(1, (int) config::get('generator_cleanup_interval', 1000));
+            $rows = 0;
+
+            while (($row = $stmt->fetch(PDO::FETCH_OBJ)) !== false) {
+                if (++$rows % $cleanup_interval === 0) {
+                    $this->check_memory_status();
+                }
+
+                yield $row;
+            }
+        } finally {
+            $this->streaming = false;
+            if ($stmt instanceof PDOStatement) {
+                $stmt->closeCursor();
+            }
+            $stmt = null;
+            if ($is_mysql && $this->pdo === $pdo) {
+                $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, $previous_buffered);
+            }
+        }
+    }
+
+    /**
+     * Keyset (seek) tabanlı parça parça okuma: OFFSET kullanmaz, satır atlamaz/tekrarlamaz.
+     *
+     * Sorgu türetilmiş tablo olarak sarılır:
+     * SELECT * FROM (<sorgu>) nsql_chunk WHERE <kolon> > :son ORDER BY <kolon> LIMIT <boyut>
+     * Kolon sonuçta benzersiz ve sıralanabilir olmalıdır (genellikle birincil anahtar).
+     * Her parça ayrı sorgu olduğundan döngü içinde aynı bağlantıda yazma yapılabilir.
+     *
+     * @param string $query SQL sorgusu (kendi ORDER BY / LIMIT'i olmamalı)
+     * @param array $params Sorgu parametreleri (named veya positional)
+     * @param string $column Keyset kolonu (sonuç kümesindeki ad)
+     * @param int $size Parça boyutu
+     * @return \Generator<int, list<object>>
+     */
+    public function chunk_by_id(string $query, array $params = [], string $column = 'id', int $size = 1000): \Generator
+    {
+        $this->set_last_called_method();
+
+        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column)) {
+            throw new \InvalidArgumentException("Geçersiz keyset kolonu: {$column}");
+        }
+        if ($size < 1) {
+            throw new \InvalidArgumentException('Parça boyutu en az 1 olmalıdır.');
+        }
+
+        $quoted = $this->get_driver_name() === 'mysql' ? "`{$column}`" : "\"{$column}\"";
+        $positional = $params !== [] && array_is_list($params);
+        $placeholder = $positional ? '?' : ':nsql_chunk_last';
+        $base = 'SELECT * FROM (' . rtrim(trim($query), ';') . ') nsql_chunk';
+
+        $last = null;
+        while (true) {
+            $sql = $base
+                . ($last === null ? '' : " WHERE nsql_chunk.{$quoted} > {$placeholder}")
+                . " ORDER BY nsql_chunk.{$quoted} LIMIT {$size}";
+
+            $bound = $params;
+            if ($last !== null) {
+                if ($positional) {
+                    $bound[] = $last;
+                } else {
+                    $bound['nsql_chunk_last'] = $last;
+                }
+            }
+
+            $stmt = $this->execute_query($sql, $bound);
+            if ($stmt === false) {
+                return;
+            }
+            $rows = $stmt->fetchAll(PDO::FETCH_OBJ);
+            $stmt->closeCursor();
+
+            if ($rows === []) {
+                return;
+            }
+
+            $tail = $rows[count($rows) - 1];
+            if (! property_exists($tail, $column)) {
+                throw new \InvalidArgumentException("chunk_by_id(): sorgu sonucunda '{$column}' kolonu yok.");
+            }
+            $last = $tail->{$column};
+
+            yield $rows;
+
+            if (count($rows) < $size) {
+                return;
             }
         }
     }
@@ -1178,26 +1384,26 @@ class nsql
     {
         self::initialize_static_vars();
 
-        if (! config::auto_adjust_chunk_size) {
-            self::$current_chunk_size = config::default_chunk_size;
+        if (! (bool) config::get('auto_adjust_chunk_size', config::auto_adjust_chunk_size)) {
+            self::$current_chunk_size = (int) config::get('default_chunk_size', config::default_chunk_size);
             return;
         }
 
         $memory_usage = memory_get_usage(true);
-        $memory_limit = config::memory_limit_warning;
+        $memory_limit = $this->memory_thresholds()['warning'];
         $usage_ratio = $memory_usage / $memory_limit;
 
         // Daha agresif chunk size ayarlaması (performans optimizasyonu)
         if ($usage_ratio > 0.75) {
             // Bellek kullanımı yüksekse chunk size'ı daha agresif azalt
             self::$current_chunk_size = max(
-                config::min_chunk_size,
+                (int) config::get('min_chunk_size', config::min_chunk_size),
                 (int)(self::$current_chunk_size * 0.6) // 0.5 → 0.6 (daha yumuşak azalma)
             );
         } elseif ($usage_ratio < 0.4) {
             // Bellek kullanımı düşükse chunk size'ı artır
             self::$current_chunk_size = min(
-                config::max_chunk_size,
+                (int) config::get('max_chunk_size', config::max_chunk_size),
                 (int)(self::$current_chunk_size * 1.3) // 1.5 → 1.3 (daha yumuşak artış)
             );
         }
@@ -1217,7 +1423,10 @@ class nsql
     }
 
     /**
-     * Büyük veri setlerini chunk'lar halinde döndürür
+     * Büyük veri setlerini chunk'lar halinde döndürür (LIMIT/OFFSET).
+     *
+     * Büyük tablolarda OFFSET maliyeti artar ve ORDER BY yoksa satır sırası garanti değildir;
+     * birincil anahtarlı tablolarda chunk_by_id() tercih edin.
      *
      * @param string $query SQL sorgusu
      * @param array $params Sorgu parametreleri
@@ -1228,8 +1437,7 @@ class nsql
     {
         $this->set_last_called_method();
 
-        // LIMIT ve OFFSET kontrolü
-        if (preg_match('/\b(LIMIT|OFFSET)\b/i', $query)) {
+        if ($this->has_top_level_limit($query)) {
             throw new \InvalidArgumentException('get_chunk() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
         }
 
@@ -1238,23 +1446,9 @@ class nsql
         if ($chunk_size !== null && $chunk_size > 0) {
             self::$current_chunk_size = $chunk_size;
         } else {
-            self::$current_chunk_size = config::default_chunk_size;
+            self::$current_chunk_size = (int) config::get('default_chunk_size', config::default_chunk_size);
         }
         $total_rows = 0;
-
-        // PDO bağlantısı kontrolü
-        if ($this->pdo === null) {
-            $this->ensure_connection();
-            if ($this->pdo === null) {
-                return;
-            }
-        }
-        
-        // Prepared statement hazırla
-        $base_stmt = $this->pdo->prepare($query);
-        if ($base_stmt === false) {
-            return;
-        }
 
         try {
             // Chunk size sabit belirtilmişse auto-adjust'u devre dışı bırak
@@ -1272,28 +1466,12 @@ class nsql
                 // Chunk sorgusu oluştur
                 $chunk_query = $query . " LIMIT " . self::$current_chunk_size . " OFFSET " . $offset;
 
-                // Cache kontrolü ile birlikte sonuçları al
-                $cache_key = $this->generate_query_cache_key($chunk_query, $params);
-                $results = null;
-
-                if ($this->query_cache_enabled) {
-                    $results = $this->get_from_query_cache($cache_key);
+                $stmt = $this->execute_query($chunk_query, $params);
+                if ($stmt === false) {
+                    return;
                 }
-
-                if ($results === null) {
-                    $stmt = $this->execute_query($chunk_query, $params);
-                    if ($stmt === false) {
-                        return;
-                    }
-
-                    $results = $stmt->fetchAll(PDO::FETCH_OBJ);
-
-                    // Küçük chunk'ları cache'le
-                    if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
-                        $tables = $this->extract_tables_from_query($chunk_query);
-                        $this->add_to_query_cache($cache_key, $results, [], $tables);
-                    }
-                }
+                $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+                $stmt->closeCursor();
 
                 // Sonuç yoksa döngüyü bitir
                 if (empty($results)) {
@@ -1308,11 +1486,11 @@ class nsql
                 $offset += self::$current_chunk_size;
 
                 // Maksimum limit kontrolü
-                if ($offset >= config::max_result_set_size) {
+                if ($offset >= $this->max_result_set_size()) {
                     throw new \RuntimeException(
                         sprintf(
                             'Maksimum sonuç kümesi boyutu aşıldı! (Limit: %d)',
-                            config::max_result_set_size
+                            $this->max_result_set_size()
                         )
                     );
                 }
@@ -1324,8 +1502,6 @@ class nsql
                 }
             }
         } finally {
-            // Kaynakları temizle
-            $base_stmt = null;
             gc_collect_cycles();
         }
     }
@@ -1336,11 +1512,14 @@ class nsql
     public function get_memory_stats(): array
     {
         $limit = $this->get_memory_limit();
-        
+        $thresholds = $this->memory_thresholds();
+
         return array_merge(self::$memory_stats, [
             'current_usage' => memory_get_usage(true),
             'peak_usage' => memory_get_peak_usage(true),
             'limit' => $limit,
+            'warning_threshold' => $thresholds['warning'],
+            'critical_threshold' => $thresholds['critical'],
             'current_chunk_size' => self::$current_chunk_size ?? config::default_chunk_size,
         ]);
     }

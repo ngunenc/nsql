@@ -45,6 +45,9 @@ class config
     public const memory_check_interval = 60; // 30s → 60s (performans artışı)
     public const memory_limit_warning = 201326592; // 128MB → 192MB (daha yüksek warning)
     public const memory_limit_critical = 402653184; // 256MB → 384MB (daha yüksek critical)
+    public const memory_warning_ratio = 0.75; // memory_limit'in oranı (MEMORY_LIMIT_WARNING ayarlı değilse)
+    public const memory_critical_ratio = 0.9;
+    public const yield_unbuffered = false; // v2.0.0'da true olacak
     public const auto_adjust_chunk_size = true;
     public const min_chunk_size = 200; // 100 → 200 (daha büyük minimum chunk)
     public const max_chunk_size = 15000; // 10000 → 15000 (daha büyük maximum chunk)
@@ -476,8 +479,11 @@ class config
             'LARGE_RESULT_WARNING' => self::large_result_warning,
             'MAX_RESULT_SET_SIZE' => self::max_result_set_size,
             'MEMORY_CHECK_INTERVAL' => self::memory_check_interval,
-            'MEMORY_LIMIT_WARNING' => self::memory_limit_warning,
-            'MEMORY_LIMIT_CRITICAL' => self::memory_limit_critical,
+            // MEMORY_LIMIT_WARNING / MEMORY_LIMIT_CRITICAL bilerek varsayılansız: ayarlanmadıklarında
+            // eşikler ini memory_limit'e oranla hesaplanır (nsql::memory_thresholds).
+            'MEMORY_WARNING_RATIO' => self::memory_warning_ratio,
+            'MEMORY_CRITICAL_RATIO' => self::memory_critical_ratio,
+            'YIELD_UNBUFFERED' => self::yield_unbuffered,
             'AUTO_ADJUST_CHUNK_SIZE' => self::auto_adjust_chunk_size,
             'MIN_CHUNK_SIZE' => self::min_chunk_size,
             'MAX_CHUNK_SIZE' => self::max_chunk_size,
