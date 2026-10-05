@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <ruleset name="nsql">
-    <description>PSR-12; snake_case sınıf/metot/sabit isimleri proje politikasıdır (#24).</description>
+    <description>PSR-12; isimlendirme politikası için CONTRIBUTING.md (#24): 1.x'te sınıf/metot/sabit snake_case, exception'lar PascalCase.</description>
 
     <file>src</file>
     <file>tests</file>
@@ -12,7 +12,6 @@
 
     <rule ref="PSR12">
         <exclude name="PSR1.Methods.CamelCapsMethodName"/>
-        <exclude name="Squiz.Classes.ValidClassName"/>
         <exclude name="Generic.NamingConventions.UpperCaseConstantName"/>
         <!-- core.autocrlf=true olan Windows checkout'larında CRLF; depo LF tutar -->
         <exclude name="Generic.Files.LineEndings"/>
@@ -23,6 +22,11 @@
             <property name="lineLimit" value="160"/>
             <property name="absoluteLineLimit" value="0"/>
         </properties>
+    </rule>
+
+    <!-- Exception sınıfları PascalCase olmalı (#24) -->
+    <rule ref="Squiz.Classes.ValidClassName">
+        <include-pattern>*xception.php</include-pattern>
     </rule>
 
     <rule ref="PSR1.Classes.ClassDeclaration.MultipleClasses">

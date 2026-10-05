@@ -11,21 +11,21 @@ use nsql\database\query_builder;
  *
  * Active Record pattern implementasyonu
  *
- * Mass assignment (constructor, fill(), `$model->alan = ...`) yalnızca `$fillable` içindeki
- * alanları kabul eder; `$fillable` boşsa hiçbir alan atanmaz. `$guarded` listesindeki alanlar
- * her zaman reddedilir; `$fillable` boş ve `$guarded` '*' değilse guarded dışındaki her alan
- * atanabilir. Güvenilir kaynaktan gelen veriler için force_fill() / set_attribute() kullanın.
+ * Mass assignment (constructor, fill(), `$model->alan = ...`) yalnÄ±zca `$fillable` iÃ§indeki
+ * alanlarÄ± kabul eder; `$fillable` boÅŸsa hiÃ§bir alan atanmaz. `$guarded` listesindeki alanlar
+ * her zaman reddedilir; `$fillable` boÅŸ ve `$guarded` '*' deÄŸilse guarded dÄ±ÅŸÄ±ndaki her alan
+ * atanabilir. GÃ¼venilir kaynaktan gelen veriler iÃ§in force_fill() / set_attribute() kullanÄ±n.
  *
  * Casting (`$casts`): int, float, bool, string, array/json (dizi), object (stdClass), datetime, date.
- * Okurken PHP tipine çevrilir; yazarken veritabanı değerine (json metni, 'Y-m-d H:i:s') saklanır.
+ * Okurken PHP tipine Ã§evrilir; yazarken veritabanÄ± deÄŸerine (json metni, 'Y-m-d H:i:s') saklanÄ±r.
  *
- * İlişkiler: alt sınıfta parametresiz public metot olarak tanımlanır ve özellik gibi erişildiğinde
- * bir kez yüklenir (`$post->author`):
+ * Ä°liÅŸkiler: alt sÄ±nÄ±fta parametresiz public metot olarak tanÄ±mlanÄ±r ve Ã¶zellik gibi eriÅŸildiÄŸinde
+ * bir kez yÃ¼klenir (`$post->author`):
  *
  *     public function author(): ?User { return $this->belongs_to(User::class); }
  *     public function comments(): array { return $this->has_many(Comment::class); }
  *
- * Alt sınıflar constructor'ı override ederse imzayı (?nsql $db = null, array $attributes = []) korumalıdır.
+ * Alt sÄ±nÄ±flar constructor'Ä± override ederse imzayÄ± (?nsql $db = null, array $attributes = []) korumalÄ±dÄ±r.
  *
  * @phpstan-consistent-constructor
  */
@@ -47,7 +47,7 @@ abstract class model implements \JsonSerializable
     protected bool $soft_deletes = false;
     protected string $deleted_at_column = 'deleted_at';
 
-    /** @var array<string, mixed> Yüklenmiş ilişkiler */
+    /** @var array<string, mixed> YÃ¼klenmiÅŸ iliÅŸkiler */
     private array $relations = [];
 
     /** @var array<string, array<string, bool>> */
@@ -57,7 +57,7 @@ abstract class model implements \JsonSerializable
     {
         $this->db = $db ?? nsql::connection();
 
-        // Tablo adını sınıf adından türet (eğer belirtilmemişse)
+        // Tablo adÄ±nÄ± sÄ±nÄ±f adÄ±ndan tÃ¼ret (eÄŸer belirtilmemiÅŸse)
         if (empty($this->table)) {
             $this->table = $this->get_table_name_from_class();
         }
@@ -66,10 +66,10 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Sınıf adından tablo adını türetir.
+     * SÄ±nÄ±f adÄ±ndan tablo adÄ±nÄ± tÃ¼retir.
      *
-     * ORM_TABLE_NAMING=inflector: BlogPost → blog_posts, Category → categories, Person → people.
-     * Varsayılan (legacy, 1.x): strtolower(sınıf) . 's' — v2.0'da inflector varsayılan olacak.
+     * ORM_TABLE_NAMING=inflector: BlogPost â†’ blog_posts, Category â†’ categories, Person â†’ people.
+     * VarsayÄ±lan (legacy, 1.x): strtolower(sÄ±nÄ±f) . 's' â€” v2.0'da inflector varsayÄ±lan olacak.
      */
     private function get_table_name_from_class(): string
     {
@@ -103,7 +103,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Yalnızca fillable alanları atar; diğerlerini yok sayar.
+     * YalnÄ±zca fillable alanlarÄ± atar; diÄŸerlerini yok sayar.
      */
     public function fill(array $attributes): static
     {
@@ -117,7 +117,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Fillable kontrolü olmadan atar. Yalnızca güvenilir veriler için kullanın.
+     * Fillable kontrolÃ¼ olmadan atar. YalnÄ±zca gÃ¼venilir veriler iÃ§in kullanÄ±n.
      */
     public function force_fill(array $attributes): static
     {
@@ -129,7 +129,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Tek bir alanı fillable kontrolü olmadan atar. Yalnızca güvenilir veriler için kullanın.
+     * Tek bir alanÄ± fillable kontrolÃ¼ olmadan atar. YalnÄ±zca gÃ¼venilir veriler iÃ§in kullanÄ±n.
      */
     public function set_attribute(string $key, mixed $value): static
     {
@@ -139,7 +139,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Cast uygulanmış değer.
+     * Cast uygulanmÄ±ÅŸ deÄŸer.
      */
     public function get_attribute(string $key): mixed
     {
@@ -151,7 +151,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Veritabanında saklanan (cast uygulanmamış) değer.
+     * VeritabanÄ±nda saklanan (cast uygulanmamÄ±ÅŸ) deÄŸer.
      */
     public function get_raw_attribute(string $key): mixed
     {
@@ -171,7 +171,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Query builder instance döndürür (soft delete açıksa silinmişler hariç)
+     * Query builder instance dÃ¶ndÃ¼rÃ¼r (soft delete aÃ§Ä±ksa silinmiÅŸler hariÃ§)
      */
     public function query(): query_builder
     {
@@ -181,7 +181,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Soft delete ile silinmiş kayıtlar dahil query builder.
+     * Soft delete ile silinmiÅŸ kayÄ±tlar dahil query builder.
      */
     public function query_with_trashed(): query_builder
     {
@@ -189,7 +189,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Tüm kayıtları getirir (satır nesneleri; model örnekleri için get() kullanın)
+     * TÃ¼m kayÄ±tlarÄ± getirir (satÄ±r nesneleri; model Ã¶rnekleri iÃ§in get() kullanÄ±n)
      */
     public static function all(?nsql $db = null): array
     {
@@ -198,9 +198,9 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Kayıtları model örnekleri olarak getirir.
+     * KayÄ±tlarÄ± model Ã¶rnekleri olarak getirir.
      *
-     * @param (callable(query_builder): mixed)|null $scope Sorguyu daraltır: fn ($q) => $q->where(...)
+     * @param (callable(query_builder): mixed)|null $scope Sorguyu daraltÄ±r: fn ($q) => $q->where(...)
      * @return list<static>
      */
     public static function get(?callable $scope = null, ?nsql $db = null): array
@@ -230,7 +230,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * ID'ye göre kayıt getirir
+     * ID'ye gÃ¶re kayÄ±t getirir
      */
     public static function find(int|string $id, ?nsql $db = null): ?static
     {
@@ -248,15 +248,15 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * @throws model_not_found_exception
+     * @throws ModelNotFoundException
      */
     public static function find_or_fail(int|string $id, ?nsql $db = null): static
     {
-        return static::find($id, $db) ?? throw new model_not_found_exception(static::class, $id);
+        return static::find($id, $db) ?? throw new ModelNotFoundException(static::class, $id);
     }
 
     /**
-     * Satırları (veritabanı değerleriyle) model örneklerine çevirir.
+     * SatÄ±rlarÄ± (veritabanÄ± deÄŸerleriyle) model Ã¶rneklerine Ã§evirir.
      *
      * @param iterable<object|array<string, mixed>> $rows
      * @return list<static>
@@ -284,9 +284,9 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Kaydı ekler veya günceller. Hidden alanlar da kaydedilir.
+     * KaydÄ± ekler veya gÃ¼nceller. Hidden alanlar da kaydedilir.
      *
-     * @throws \InvalidArgumentException Tablo veya kolon adı geçersizse
+     * @throws \InvalidArgumentException Tablo veya kolon adÄ± geÃ§ersizse
      */
     public function save(): bool
     {
@@ -355,7 +355,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Kayıt siler. Soft delete açıksa yalnızca deleted_at doldurulur.
+     * KayÄ±t siler. Soft delete aÃ§Ä±ksa yalnÄ±zca deleted_at doldurulur.
      */
     public function delete(): bool
     {
@@ -371,7 +371,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Soft delete açık olsa bile kaydı kalıcı olarak siler.
+     * Soft delete aÃ§Ä±k olsa bile kaydÄ± kalÄ±cÄ± olarak siler.
      */
     public function force_delete(): bool
     {
@@ -387,7 +387,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Soft delete ile silinmiş kaydı geri alır.
+     * Soft delete ile silinmiÅŸ kaydÄ± geri alÄ±r.
      */
     public function restore(): bool
     {
@@ -421,7 +421,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Attribute getter (cast uygulanır); attribute yoksa tanımlı ilişki yüklenir.
+     * Attribute getter (cast uygulanÄ±r); attribute yoksa tanÄ±mlÄ± iliÅŸki yÃ¼klenir.
      */
     public function __get(string $key): mixed
     {
@@ -439,7 +439,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Attribute setter (yalnızca fillable alanlar)
+     * Attribute setter (yalnÄ±zca fillable alanlar)
      */
     public function __set(string $key, mixed $value): void
     {
@@ -454,13 +454,13 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * İlişkileri yükler (veya yeniden yükler).
+     * Ä°liÅŸkileri yÃ¼kler (veya yeniden yÃ¼kler).
      */
     public function load(string ...$relations): static
     {
         foreach ($relations as $relation) {
             if (! self::is_relation_method(static::class, $relation)) {
-                throw new \InvalidArgumentException(static::class . "::{$relation}() bir ilişki metodu değil.");
+                throw new \InvalidArgumentException(static::class . "::{$relation}() bir iliÅŸki metodu deÄŸil.");
             }
             $this->relations[$relation] = $this->{$relation}();
         }
@@ -481,7 +481,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Attribute'ları döndürür (hidden olanları hariç, veritabanı değerleriyle)
+     * Attribute'larÄ± dÃ¶ndÃ¼rÃ¼r (hidden olanlarÄ± hariÃ§, veritabanÄ± deÄŸerleriyle)
      */
     public function get_attributes(): array
     {
@@ -495,8 +495,8 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Cast uygulanmış attribute'lar ve yüklenmiş ilişkiler (hidden hariç).
-     * datetime/date değerleri metin olarak döner.
+     * Cast uygulanmÄ±ÅŸ attribute'lar ve yÃ¼klenmiÅŸ iliÅŸkiler (hidden hariÃ§).
+     * datetime/date deÄŸerleri metin olarak dÃ¶ner.
      */
     public function to_array(): array
     {
@@ -524,7 +524,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Attribute'ları JSON olarak döndürür
+     * Attribute'larÄ± JSON olarak dÃ¶ndÃ¼rÃ¼r
      */
     public function to_json(): string
     {
@@ -537,7 +537,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Relationship: belongsTo. Varsayılan yabancı anahtar: ilişkili sınıfın snake_case adı + '_id'.
+     * Relationship: belongsTo. VarsayÄ±lan yabancÄ± anahtar: iliÅŸkili sÄ±nÄ±fÄ±n snake_case adÄ± + '_id'.
      *
      * @template T of model
      * @param class-string<T> $related_class
@@ -560,7 +560,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Relationship: hasOne. Varsayılan yabancı anahtar: bu sınıfın snake_case adı + '_id'.
+     * Relationship: hasOne. VarsayÄ±lan yabancÄ± anahtar: bu sÄ±nÄ±fÄ±n snake_case adÄ± + '_id'.
      *
      * @template T of model
      * @param class-string<T> $related_class
@@ -579,11 +579,11 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Relationship: hasMany. Varsayılan yabancı anahtar: bu sınıfın snake_case adı + '_id'.
+     * Relationship: hasMany. VarsayÄ±lan yabancÄ± anahtar: bu sÄ±nÄ±fÄ±n snake_case adÄ± + '_id'.
      *
      * @template T of model
      * @param class-string<T> $related_class
-     * @param (callable(query_builder): mixed)|null $scope Sıralama/filtre: fn ($q) => $q->order_by('id')
+     * @param (callable(query_builder): mixed)|null $scope SÄ±ralama/filtre: fn ($q) => $q->order_by('id')
      * @return list<T>
      */
     protected function has_many(string $related_class, ?string $foreign_key = null, ?string $local_key = null, ?callable $scope = null): array
@@ -614,7 +614,7 @@ abstract class model implements \JsonSerializable
     }
 
     /**
-     * Alt sınıfta tanımlı, public, statik olmayan ve parametresiz metotlar ilişki sayılır.
+     * Alt sÄ±nÄ±fta tanÄ±mlÄ±, public, statik olmayan ve parametresiz metotlar iliÅŸki sayÄ±lÄ±r.
      */
     private static function is_relation_method(string $class, string $method): bool
     {

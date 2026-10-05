@@ -4,6 +4,18 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.13.1] - 2026-10-05
+
+### Added
+- `CONTRIBUTING.md` (#24): 1.x isimlendirme politikası (sınıf/metot `snake_case`, exception `PascalCase` + `Exception` son eki, exception metotları `camelCase`), 2.0 PascalCase geçiş planı, sürüm/branch kuralları ve PR kontrol listesi.
+- Zorunluluk: phpcs `Squiz.Classes.ValidClassName` exception dosyalarında; `tests/Unit/NamingPolicyTest.php` exception adlarını ve dosya adı = sınıf adı kuralını denetler.
+
+### Changed
+- `nsql\database\orm\model_not_found_exception` → `ModelNotFoundException` (artık `DatabaseException` alt sınıfı).
+
+### Deprecated
+- `model_not_found_exception`: `class_alias`; 2.0.0'da kaldırılacak.
+
 ## [1.13.0] - 2026-10-05
 
 ### Changed

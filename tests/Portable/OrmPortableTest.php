@@ -4,7 +4,7 @@ namespace Tests\Portable;
 
 use nsql\database\config;
 use nsql\database\orm\model;
-use nsql\database\orm\model_not_found_exception;
+use nsql\database\orm\ModelNotFoundException;
 use Tests\Support\PortableTestCase;
 
 class Author extends model
@@ -84,7 +84,7 @@ class OrmPortableTest extends PortableTestCase
         parent::tearDown();
     }
 
-    private function author(string $name = 'Ayşe'): Author
+    private function author(string $name = 'AyÅŸe'): Author
     {
         $author = new Author($this->db, [
             'name' => $name,
@@ -139,7 +139,7 @@ class OrmPortableTest extends PortableTestCase
         foreach (['ilk', 'ikinci'] as $title) {
             (new Post($this->db, ['author_id' => $author->get_key(), 'title' => $title]))->save();
         }
-        (new Post($this->db, ['author_id' => $other->get_key(), 'title' => 'başka']))->save();
+        (new Post($this->db, ['author_id' => $other->get_key(), 'title' => 'baÅŸka']))->save();
         (new Profile($this->db, ['author_id' => $author->get_key(), 'bio' => 'yazar']))->save();
 
         $posts = $author->posts;
@@ -150,7 +150,7 @@ class OrmPortableTest extends PortableTestCase
 
         $owner = $posts[0]->author;
         $this->assertInstanceOf(Author::class, $owner);
-        $this->assertSame('Ayşe', $owner->name);
+        $this->assertSame('AyÅŸe', $owner->name);
 
         $this->assertSame('yazar', $author->profile->bio);
         $this->assertNull($other->profile);
@@ -211,7 +211,7 @@ class OrmPortableTest extends PortableTestCase
         $hydrated = Author::hydrate([['id' => 9, 'score' => '7']], $this->db);
         $this->assertSame(7, $hydrated[0]->score);
 
-        $this->expectException(model_not_found_exception::class);
+        $this->expectException(ModelNotFoundException::class);
         Author::find_or_fail(999, $this->db);
     }
 
