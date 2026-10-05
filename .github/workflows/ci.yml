@@ -95,6 +95,61 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # Sürücüden bağımsız testler (tests/Portable) PostgreSQL ve SQLite üzerinde; MySQL'de test job'ı koşturur
+  portable:
+    name: Portable (${{ matrix.driver }}, PHP 8.3)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: ['pgsql', 'sqlite']
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: nsql_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      ENV: testing
+      DB_DRIVER: ${{ matrix.driver }}
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: nsql_test_db
+      DB_USER: postgres
+      DB_PASS: postgres
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, pdo_sqlite
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run portable tests
+        run: vendor/bin/phpunit -c phpunit.xml --testsuite portable
+
+      - name: Run portable tests with query cache enabled
+        run: vendor/bin/phpunit -c phpunit.xml --testsuite portable
+        env:
+          NSQL_TEST_QUERY_CACHE: '1'
+
   # Ana gate değil: MySQL service yok; yalnızca unit suite (SQLite/env bağımsız testler)
   windows-smoke:
     name: Windows unit smoke (PHP 8.3)
