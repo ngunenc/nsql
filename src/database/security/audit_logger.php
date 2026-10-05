@@ -10,10 +10,6 @@ class audit_logger
     use log_path_trait;
     
     private string $log_file;
-    private array $sensitive_fields = [
-        'password', 'token', 'secret', 'key', 'auth',
-        'credit_card', 'card_number', 'cvv', 'ssn',
-    ];
 
     public function __construct(?string $log_file = null)
     {
@@ -143,13 +139,7 @@ class audit_logger
      */
     private function sanitize_sensitive_data(array $data): array
     {
-        array_walk_recursive($data, function (&$value, $key) {
-            if (in_array(strtolower($key), $this->sensitive_fields)) {
-                $value = '******';
-            }
-        });
-
-        return $data;
+        return sensitive_data_filter::mask_array($data);
     }
 
     /**

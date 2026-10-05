@@ -176,16 +176,6 @@ parameters:
 			path: src/database/nsql.php
 
 		-
-			message: "#^Cannot call method quote\\(\\) on PDO\\|null\\.$#"
-			count: 1
-			path: src/database/nsql.php
-
-		-
-			message: "#^Method nsql\\\\database\\\\nsql\\:\\:interpolate_query\\(\\) should return string but returns string\\|null\\.$#"
-			count: 1
-			path: src/database/nsql.php
-
-		-
 			message: "#^Negated boolean expression is always false\\.$#"
 			count: 1
 			path: src/database/nsql.php
@@ -206,23 +196,8 @@ parameters:
 			path: src/database/nsql.php
 
 		-
-			message: "#^Parameter \\#2 \\$dsn of class nsql\\\\database\\\\exceptions\\\\ConnectionException constructor expects string\\|null, int given\\.$#"
-			count: 1
-			path: src/database/nsql.php
-
-		-
 			message: "#^Parameter \\#2 \\$offset of function array_splice expects int, int\\|string given\\.$#"
 			count: 2
-			path: src/database/nsql.php
-
-		-
-			message: "#^Parameter \\#3 \\$subject of function preg_replace expects array\\|string, string\\|null given\\.$#"
-			count: 1
-			path: src/database/nsql.php
-
-		-
-			message: "#^Parameter \\#3 \\$subject of function str_replace expects array\\|string, string\\|null given\\.$#"
-			count: 1
 			path: src/database/nsql.php
 
 		-
@@ -279,13 +254,3 @@ parameters:
 			message: "#^Unsafe usage of new static\\(\\)\\.$#"
 			count: 2
 			path: src/database/orm/model.php
-
-		-
-			message: "#^Call to an undefined method nsql\\\\database\\\\security\\\\sensitive_data_filter\\:\\:filterArray\\(\\)\\.$#"
-			count: 1
-			path: src/database/security/sensitive_data_filter.php
-
-		-
-			message: "#^Call to an undefined method nsql\\\\database\\\\security\\\\sensitive_data_filter\\:\\:filterObject\\(\\)\\.$#"
-			count: 1
-			path: src/database/security/sensitive_data_filter.php

@@ -4,6 +4,30 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.29] - 2026-10-05
+
+### Güvenlik (#42)
+- **Debug log'u düz metin parametre yazıyordu**: `debug()` sorguyu parametreler yerleştirilmiş halde ve `json_encode($this->last_params)` ile hem sayfaya hem log dosyasına yazıyordu; şifre ve token'lar açık görünüyordu. Parametreler ve sonuç satırları artık kolon/parametre adına göre maskeleniyor (`********`).
+- **Structured logger** (`logging\logger`) ve **audit log** context'leri aynı filtreden geçiyor.
+- **Bağlantı hatası mesajları**: `connection_pool` ve `connection_trait` PDO mesajını exception'a ekliyordu (`Access denied for user 'root'@'host'`). Uygulamaya dönen `ConnectionException` mesajı artık yalnızca SQLSTATE ve sürücü kodunu içeriyor (`Veritabanı bağlantısı kurulamadı (SQLSTATE HY000, kod 1045).`); sürücü mesajı yalnızca log'a yazılıyor.
+
+### Düzeltmeler
+- **`sensitive_data_filter::filter()` her çağrıda fatal error veriyordu**: var olmayan `filterArray()` / `filterObject()` metodlarını çağırıyordu. Ayrıca nesneleri yerinde değiştiriyordu; artık kopya üzerinde çalışıyor.
+- **`interpolate_query` öneki ortak placeholder'ları bozuyordu**: `str_replace(':id')` `:id2`'yi de değiştiriyordu. Artık tam eşleşmeli regex kullanılıyor; `null` değerler `NULL` olarak gösteriliyor ve değerdeki `$` karakterleri bozulmuyor.
+- `convert_to_database_exception()` `ConnectionException`'ı yanlış argüman sırasıyla oluşturuyordu (hata kodu DSN alanına gidiyordu). `1045` (erişim reddi) de bağlantı hatası olarak sınıflanıyor.
+
+### Yeni
+- `sensitive_data_filter` tek maskeleme kaynağı: `DEFAULT_KEYS`, `configured_keys()`, statik `mask_array()`, `is_sensitive()`, `filter_array()`. Eşleşme büyük/küçük harf duyarsız, alt dize ile ve baştaki `:` yok sayılarak yapılıyor.
+- `SENSITIVE_KEYS` config'i (virgülle ayrılmış veya dizi) varsayılan listeye ekleniyor.
+- `connection_pool::safe_error_message(Throwable)`.
+
+### Davranış değişikliği
+- `security_manager` / `audit_logger` eskiden ayrı ayrı sabit listeler kullanıyordu (`key` gibi çok geniş ifadeler dahil). Artık ortak liste kullanılıyor; `key` yerine `api_key`, `private_key`, `secret_key`, `access_key`, `encryption_key`.
+
+### Testler
+- `tests/Unit/SensitiveDataFilterTest.php`: varsayılan anahtarlar, `:placeholder`, iç içe diziler, `SENSITIVE_KEYS`, nesnenin değiştirilmemesi, `security_manager` log'u, kimlik bilgisi içermeyen bağlantı mesajı.
+- `tests/Integration/DebugLogMaskingTest.php`: debug log ve HTML'de şifre yok, `:id` / `:id2`, yanlış kullanıcıyla bağlantı hatası mesajı.
+
 ## [1.5.28] - 2026-10-05
 
 ### Güvenlik (#41)
