@@ -130,6 +130,7 @@ class config
      */
     public static function set(string $key, mixed $value): void
     {
+        self::ensure_bootstrapped();
         $canonical = self::canonical_key($key);
 
         foreach (self::KEY_ALIASES as $canon => $aliases) {
