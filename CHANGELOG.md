@@ -4,6 +4,27 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.30] - 2026-10-05
+
+### Güvenlik / Düzeltmeler (#43)
+- **Aktif oturum siliniyordu**: `session_manager::start()` oturum zaten açıksa `session_destroy()` çağırıyor, uygulamanın oturum verisini (ör. giriş bilgisi) siliyordu. Artık mevcut oturum kullanılıyor.
+- **HTTP'de çerez gönderilmiyordu**: `secure` varsayılanı `true` idi ve `|| is_https()` ile birleşiyordu; yerel HTTP geliştirmede oturum çalışmıyordu. Varsayılan artık `null` (isteğin HTTPS olup olmadığına göre); açıkça `true` / `false` verilebilir.
+- **Başlıklar**: HSTS HTTP isteklerinde de gönderiliyordu. Artık yalnızca HTTPS'te ve `hsts` seçeneğiyle (opt-in) gönderiliyor. Artık önerilmeyen `X-XSS-Protection` kaldırıldı. Başlıklar `headers_sent()` sonrasında gönderilmeye çalışılmıyor.
+- **Fingerprint**: `REMOTE_ADDR` varsayılan alanlardan çıkarıldı; IP değiştiren (mobil) kullanıcılar "session hijacking" ile atılmıyor. İsteğe bağlı `fingerprint_ip`: `'prefix'` (IPv4 /24, IPv6 /64) veya `'full'`.
+- **ID yenileme**: `_requests % (regenerate_interval / 2)` tek sayılarda float modulo üretiyordu ve istek sayısını saniye gibi kullanıyordu. Yenileme artık zamana dayalı (`regenerate_interval` saniye).
+- **CSRF token** hiç yenilenmiyordu. Artık süreli (`CSRF_TOKEN_TTL`, varsayılan 7200 sn, `0` = süresiz); süresi dolan token reddediliyor ve yenisi üretiliyor. Yeni `session_manager::rotate_csrf_token()`.
+- **Tek session API'si**: `security_manager::secure_session_start()` farklı ayarlarla (Lax, ayrı fixation mantığı) ikinci bir API idi. Artık `@deprecated` ve `nsql::secure_session_start()`'a delege ediyor; `security_manager::generate_csrf_token()` / `validate_csrf_token()` `session_manager`'ı kullanıyor.
+
+### Yeni
+- `session_manager::is_secure()`, `security_headers()`, `ip_prefix()`, `rotate_csrf_token()`; seçenekler: `hsts`, `fingerprint_ip`, `send_headers`.
+
+### Kırıcı olabilecek değişiklik
+- HSTS isteyenler `'hsts' => true` vermeli.
+- Parmak izine IP dahil edilmesine güvenen uygulamalar `'fingerprint_ip' => 'full'` ayarlamalı. Fingerprint formatı değiştiği için yükseltme sonrası açık oturumlar bir kez geçersiz sayılabilir.
+
+### Testler
+- `tests/Unit/SessionManagerTest.php`: önceden açılmış oturumun verisi korunuyor, zamana dayalı ID yenileme, IP değişiminde oturumun düşmemesi, prefix modu, HTTP'de HSTS ve X-XSS-Protection yok, HTTPS + opt-in HSTS, otomatik `secure`, IPv4/IPv6 prefix, CSRF token süresi ve rotation.
+
 ## [1.5.29] - 2026-10-05
 
 ### Güvenlik (#42)
