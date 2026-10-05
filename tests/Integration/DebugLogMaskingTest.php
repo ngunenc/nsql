@@ -1,0 +1,93 @@
+<?php
+
+namespace Tests\Integration;
+
+use nsql\database\config;
+use nsql\database\exceptions\ConnectionException;
+use nsql\database\nsql;
+use Tests\Support\DatabaseTestCase;
+
+/**
+ * #42: debug log'unda hassas parametreler maskeli, interpolasyon tam eşleşmeli,
+ * bağlantı hatası mesajında kimlik bilgisi yok.
+ */
+class DebugLogMaskingTest extends DatabaseTestCase
+{
+    private string $dir;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_debug_' . uniqid('', true);
+        config::set('log_dir', $this->dir);
+        config::set('log_file', 'debug.txt');
+    }
+
+    protected function tearDown(): void
+    {
+        config::set('log_dir', null);
+        config::set('log_file', null);
+        foreach (glob($this->dir . DIRECTORY_SEPARATOR . '*') ?: [] as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->dir);
+        parent::tearDown();
+    }
+
+    private function debug_db(): nsql
+    {
+        return new nsql(
+            host: config::get('db_host', 'localhost'),
+            db: config::get('db_name', 'nsql_test_db'),
+            user: config::get('db_user', 'root'),
+            pass: config::get('db_pass', ''),
+            debug: true
+        );
+    }
+
+    public function test_debug_log_masks_sensitive_params(): void
+    {
+        $db = $this->debug_db();
+        $db->get_row('SELECT :password AS password, :name AS n', ['password' => 'hunter2', 'name' => 'ali']);
+
+        ob_start();
+        $db->debug();
+        $html = (string) ob_get_clean();
+
+        $log = (string) file_get_contents($this->dir . DIRECTORY_SEPARATOR . 'debug.txt');
+        $this->assertStringNotContainsString('hunter2', $log);
+        $this->assertStringContainsString('********', $log);
+        $this->assertStringContainsString("'ali'", $log);
+        $this->assertStringNotContainsString('hunter2', $html);
+    }
+
+    public function test_interpolation_does_not_corrupt_prefixed_placeholders(): void
+    {
+        $db = $this->debug_db();
+        $db->get_row('SELECT :id AS a, :id2 AS b', ['id' => 1, 'id2' => 2]);
+
+        ob_start();
+        $db->debug();
+        $html = (string) ob_get_clean();
+
+        $this->assertStringContainsString(htmlspecialchars("SELECT '1' AS a, '2' AS b"), $html);
+    }
+
+    public function test_connection_error_message_has_no_credentials(): void
+    {
+        try {
+            $db = new nsql(
+                host: config::get('db_host', 'localhost'),
+                db: config::get('db_name', 'nsql_test_db'),
+                user: 'nsql_no_such_user',
+                pass: 'wrong-password'
+            );
+            $db->get_row('SELECT 1');
+            $this->fail('ConnectionException bekleniyordu');
+        } catch (ConnectionException $e) {
+            $this->assertStringNotContainsString('nsql_no_such_user', $e->getMessage());
+            $this->assertStringNotContainsString('wrong-password', $e->getMessage());
+            $this->assertStringContainsString('1045', $e->getMessage());
+        }
+    }
+}

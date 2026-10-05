@@ -200,17 +200,7 @@ class security_manager
      */
     private static function mask_sensitive_data(array $data): array
     {
-        $sensitive_keys = ['password', 'pass', 'secret', 'key', 'token', 'auth'];
-
-        array_walk_recursive($data, function (&$value, $key) use ($sensitive_keys) {
-            foreach ($sensitive_keys as $sensitive) {
-                if (stripos($key, $sensitive) !== false) {
-                    $value = '********';
-                }
-            }
-        });
-
-        return $data;
+        return sensitive_data_filter::mask_array($data);
     }
 
     /**

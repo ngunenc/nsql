@@ -249,6 +249,29 @@ class connection_pool
         return $key;
     }
 
+    /**
+     * Kimlik bilgisi (kullanıcı adı, host, DSN) içermeyen bağlantı hatası mesajı.
+     */
+    public static function safe_error_message(\Throwable $e): string
+    {
+        $sql_state = $e instanceof PDOException ? (string) ($e->errorInfo[0] ?? $e->getCode()) : '';
+        $driver_code = $e instanceof PDOException ? (int) ($e->errorInfo[1] ?? 0) : 0;
+        if ($driver_code === 0 && preg_match('/SQLSTATE\[(\w+)\]\s*\[(\d+)\]/', $e->getMessage(), $m)) {
+            $sql_state = $m[1];
+            $driver_code = (int) $m[2];
+        }
+
+        $suffix = [];
+        if ($sql_state !== '' && $sql_state !== '0') {
+            $suffix[] = 'SQLSTATE ' . $sql_state;
+        }
+        if ($driver_code !== 0) {
+            $suffix[] = 'kod ' . $driver_code;
+        }
+
+        return 'Veritabanı bağlantısı kurulamadı' . ($suffix !== [] ? ' (' . implode(', ', $suffix) . ')' : '') . '.';
+    }
+
     private static function create_connection(string $key): PDO
     {
         $config = self::$pools[$key]['config'];
@@ -263,7 +286,7 @@ class connection_pool
         } catch (PDOException $e) {
             self::$stats['connection_errors']++;
 
-            throw new RuntimeException('Veritabanı bağlantısı oluşturulamadı: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException(self::safe_error_message($e), 0, $e);
         }
 
         if ($conn->getAttribute(PDO::ATTR_ERRMODE) !== PDO::ERRMODE_EXCEPTION) {

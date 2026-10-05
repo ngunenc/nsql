@@ -44,12 +44,16 @@ trait connection_trait
         try {
             $this->pdo = connection_pool::get_connection($this->pool_key);
         } catch (PDOException | RuntimeException $e) {
-            $this->log_error('Veritabanı bağlantı hatası: ' . $e->getMessage());
+            $driver_error = $e instanceof PDOException ? $e : $e->getPrevious();
+            $detail = $driver_error instanceof PDOException ? $driver_error : $e;
+            $this->log_error('Veritabanı bağlantı hatası: ' . $detail->getMessage());
 
+            // Sürücü mesajı (kullanıcı adı, host) yalnızca log'a yazılır; uygulamaya genel mesaj döner.
             throw new ConnectionException(
-                'Veritabanı bağlantı hatası: ' . $e->getMessage(),
-                code: error_codes::CONNECTION_FAILED,
-                previous: $e
+                $driver_error instanceof PDOException
+                    ? connection_pool::safe_error_message($driver_error)
+                    : $e->getMessage(),
+                code: error_codes::CONNECTION_FAILED
             );
         }
     }

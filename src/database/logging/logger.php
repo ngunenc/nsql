@@ -103,7 +103,7 @@ class logger
             'level' => self::$level_names[$level] ?? 'UNKNOWN',
             'level_code' => $level,
             'message' => $message,
-            'context' => $context,
+            'context' => \nsql\database\security\sensitive_data_filter::mask_array($context),
             'environment' => config::get_environment(),
             'memory_usage' => memory_get_usage(true),
             'peak_memory' => memory_get_peak_usage(true),

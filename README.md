@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.28
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v1.5.29
 
 **nsql**, PHP 8.0+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -59,6 +59,8 @@
 > **v1.5.27**: Test altyapısı: entegrasyon testleri cache açık modda da koşuyor (`composer test:cache`, CI), query builder testleri gerçek sorgu çalıştırıyor; `config::set()` bootstrap öncesi çağrıda `.env` tarafından ezilmiyor (#40).
 >
 > **v1.5.28**: Monitoring token'ı `?token=` URL parametresiyle varsayılan olarak kabul edilmiyor; yalnızca başlık. Gerekirse `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true` (#41).
+>
+> **v1.5.29**: Hassas veri maskeleme tek kaynakta (`sensitive_data_filter`, `SENSITIVE_KEYS`); debug log/çıktı, logger context ve audit log maskeli; `interpolate_query` `:id`/`:id2` çakışması yok; bağlantı hatası mesajında kullanıcı adı/host yok (#42).
 
 ## 🌟 Özellikler
 
@@ -111,7 +113,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^1.5.28 --prefer-dist
+composer require ngunenc/nsql:^1.5.29 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -131,13 +133,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^1.5.28"
+        "ngunenc/nsql": "^1.5.29"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^1.5.28 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^1.5.29 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1266,6 +1268,8 @@ Debug çıktısı şunları içerir:
 - Sonuç verisi (tablo formatında)
 - Query execution detayları
 
+> v1.5.29+: Debug çıktısı, debug log'u, structured logger context'i ve audit log aynı filtreden (`sensitive_data_filter`) geçer. Adı `password`, `token`, `secret`, `api_key`, `auth_`, `credit_card` vb. içeren parametre ve kolonlar `********` olarak yazılır. Listeyi genişletmek için: `SENSITIVE_KEYS=phone,national_id`. Bağlantı hatalarında uygulamaya dönen exception mesajı kullanıcı adı/host içermez (`Veritabanı bağlantısı kurulamadı (SQLSTATE HY000, kod 1045).`); sürücü mesajı yalnızca log'a yazılır.
+
 #### Güvenli Hata Yönetimi
 
 ```php
@@ -1601,6 +1605,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v1.5.29 (2026-10-05)
+  - Tek maskeleme yolu ve SENSITIVE_KEYS, maskeli debug/log, tam eşleşmeli interpolasyon, kimlik bilgisiz bağlantı hataları (#42)
 
 - v1.5.28 (2026-10-05)
   - Monitoring ?token= varsayılan kapalı, NSQL_MONITORING_ALLOW_QUERY_TOKEN opt-in (#41)

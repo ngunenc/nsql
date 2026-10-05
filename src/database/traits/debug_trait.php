@@ -2,6 +2,7 @@
 
 namespace nsql\database\traits;
 
+use nsql\database\security\sensitive_data_filter;
 use RuntimeException;
 use Throwable;
 
@@ -39,8 +40,9 @@ trait debug_trait
         }
 
         try {
-            $query = $this->interpolate_query($this->last_query, $this->last_params);
-            $params_json = json_encode($this->last_params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $params = sensitive_data_filter::mask_array($this->last_params);
+            $query = $this->interpolate_query($this->last_query, $params);
+            $params_json = json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         } catch (Throwable $e) {
             $query = $this->last_query . ' [Parametre dönüştürme hatası]';
             $params_json = 'Parametreler görüntülenemedi: ' . $e->getMessage();
@@ -163,8 +165,11 @@ HTML;
             echo "<div class='query-section'>";
             echo "<h4>📊 Sonuç Verisi:</h4>";
 
-            if (is_array($this->last_results) && count($this->last_results) > 0) {
-                $first_row = is_object($this->last_results[0]) ? (array)$this->last_results[0] : $this->last_results[0];
+            $results = is_array($this->last_results)
+                ? (new sensitive_data_filter())->filter($this->last_results)
+                : $this->last_results;
+            if (is_array($results) && count($results) > 0) {
+                $first_row = is_object($results[0]) ? (array)$results[0] : $results[0];
 
                 echo "<table><thead><tr>";
                 foreach ($first_row as $key => $_) {
@@ -172,7 +177,7 @@ HTML;
                 }
                 echo "</tr></thead><tbody>";
 
-                foreach ($this->last_results as $row) {
+                foreach ($results as $row) {
                     echo "<tr>";
                     foreach ((array)$row as $value) {
                         $display_value = is_null($value) ? '-' :
@@ -183,7 +188,7 @@ HTML;
                 }
                 echo "</tbody></table>";
 
-                echo "<div class='info'>✓ Toplam " . count($this->last_results) . " kayıt bulundu.</div>";
+                echo "<div class='info'>✓ Toplam " . count($results) . " kayıt bulundu.</div>";
             } else {
                 echo "<div class='info'>ℹ️ Sonuç bulunamadı.</div>";
             }
@@ -213,12 +218,24 @@ HTML;
                 $actual_value = $value;
             }
 
-            $escaped = $this->pdo->quote(is_bool($actual_value) ? ($actual_value ? '1' : '0') : (string) $actual_value);
+            if ($actual_value === null) {
+                $escaped = 'NULL';
+            } else {
+                $text = is_bool($actual_value) ? ($actual_value ? '1' : '0') : (string) $actual_value;
+                $escaped = $this->pdo !== null
+                    ? (string) $this->pdo->quote($text)
+                    : "'" . str_replace("'", "''", $text) . "'";
+            }
 
             if (is_string($key)) {
-                $query = str_replace(":$key", $escaped, $query);
+                $name = preg_quote(ltrim($key, ':'), '/');
+                $query = (string) preg_replace_callback(
+                    '/:' . $name . '(?![A-Za-z0-9_])/',
+                    static fn () => $escaped,
+                    $query
+                );
             } else {
-                $query = preg_replace('/\?/', $escaped, $query, 1);
+                $query = (string) preg_replace_callback('/\?/', static fn () => $escaped, $query, 1);
             }
         }
 

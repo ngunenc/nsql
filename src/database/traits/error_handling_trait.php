@@ -223,11 +223,12 @@ trait error_handling_trait
         $error_message = $error_info[2] ?? $e->getMessage();
         
         // Connection hatası mı?
-        if (in_array($error_code, [2002, 2003, 2006, 2013, 1040], true)) {
+        if (in_array($error_code, [1045, 2002, 2003, 2006, 2013, 1040], true)) {
             return new \nsql\database\exceptions\ConnectionException(
-                $error_message,
-                $error_code,
-                $e
+                \nsql\database\connection_pool::safe_error_message($e),
+                code: in_array($error_code, [2006, 2013], true)
+                    ? \nsql\database\exceptions\error_codes::CONNECTION_LOST
+                    : \nsql\database\exceptions\error_codes::CONNECTION_FAILED
             );
         }
         
