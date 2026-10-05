@@ -4,7 +4,8 @@
  * Metrics Endpoint
  *
  * Kullanım: GET /metrics.php
- * Auth: Authorization: Bearer <token> | X-NSQL-Monitoring-Token | ?token=
+ * Auth: Authorization: Bearer <token> | X-NSQL-Monitoring-Token
+ *       (?token= yalnızca NSQL_MONITORING_ALLOW_QUERY_TOKEN=true ile)
  * Env: NSQL_MONITORING_TOKEN (zorunlu), NSQL_MONITORING_ENABLED=false ile kapatılabilir
  */
 

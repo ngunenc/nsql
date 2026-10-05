@@ -4,6 +4,25 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.28] - 2026-10-05
+
+### Güvenlik (#41)
+- **URL'de gizli bilgi**: `endpoint_guard` monitoring token'ını `?token=` parametresinden de kabul ediyordu. URL'deki token web sunucusu erişim loglarına, proxy/CDN loglarına, tarayıcı geçmişine ve `Referer` başlığına sızar. `?token=` artık varsayılan olarak yok sayılıyor (doğru token ile bile `401`).
+- Başlık gönderemeyen araçlar için açık opt-in: `NSQL_MONITORING_ALLOW_QUERY_TOKEN=true`.
+
+### Kırıcı olabilecek değişiklik
+- Monitoring endpoint'lerini `?token=` ile çağıran izleme araçları `Authorization: Bearer <token>` veya `X-NSQL-Monitoring-Token` başlığına geçmeli ya da opt-in'i açmalı.
+
+### Yeni
+- `endpoint_guard::authorize()`: isteği doğrular, yetkisizse `['status' => ..., 'body' => ...]` döner (`protect()` bunu kullanıyor; test edilebilir).
+- `endpoint_guard::allows_query_token()`.
+
+### Dokümantasyon
+- README, `.env.example` ve `examples/monitoring/*.php` docblock'ları güncellendi.
+
+### Testler
+- `EndpointGuardTest`: varsayılanda `?token=` ile 401, opt-in ile kabul, başlıkla erişim, yanlış token / yapılandırılmamış token / kapalı endpoint durum kodları.
+
 ## [1.5.27] - 2026-10-05
 
 ### Testler (#40, altyapı)
