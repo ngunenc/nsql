@@ -2,8 +2,8 @@
 
 namespace Tests\Integration;
 
-use nsql\database\security\rate_limiter;
-use nsql\database\security\security_manager;
+use nsql\security\rate_limiter;
+use nsql\security\security_manager;
 use Tests\Support\DatabaseTestCase;
 
 class RateLimiterTest extends DatabaseTestCase

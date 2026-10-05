@@ -552,7 +552,7 @@ $users = $builder
 ### Security Kullanımı
 
 ```php
-use nsql\database\security\security_manager;
+use nsql\security\security_manager;
 
 // XSS koruması
 $safe_html = security_manager::escape_html('<script>alert("xss")</script>');

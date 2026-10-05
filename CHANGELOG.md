@@ -4,6 +4,15 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.13.0] - 2026-10-05
+
+### Changed
+- **Opsiyonel web güvenlik katmanı** (#25): `security_manager`, `session_manager`, `rate_limiter`, `ip_resolver`, `encryption`, `key_manager`, `audit_logger` → `nsql\security\` (`src/security/`). Çekirdekteki `query_analyzer` ve `sensitive_data_filter` `nsql\database\security` altında kalır.
+- README: çekirdek / opsiyonel katman ayrımı; UPGRADE.md: eski → yeni ad tablosu.
+
+### Deprecated
+- `nsql\database\security\{security_manager, session_manager, rate_limiter, ip_resolver, encryption, key_manager, audit_logger}`: `class_alias` ile aynı sınıfı gösterir (`instanceof` ve statik çağrılar çalışır); 2.0.0'da kaldırılacak.
+
 ## [1.12.0] - 2026-10-05
 
 ### Added

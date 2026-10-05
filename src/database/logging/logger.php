@@ -110,7 +110,7 @@ class logger
         ];
 
         // IP, user agent gibi ek bilgiler (eğer mevcutsa)
-        $client_ip = \nsql\database\security\security_manager::get_client_ip();
+        $client_ip = \nsql\security\security_manager::get_client_ip();
         if ($client_ip !== 'unknown') {
             $log_entry['ip_address'] = $client_ip;
         }

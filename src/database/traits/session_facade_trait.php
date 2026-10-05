@@ -2,7 +2,7 @@
 
 namespace nsql\database\traits;
 
-use nsql\database\security\session_manager;
+use nsql\security\session_manager;
 
 /**
  * nsql üzerindeki statik session / CSRF / XSS kısayolları.

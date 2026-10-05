@@ -4,7 +4,7 @@ namespace Tests\Unit;
 
 use nsql\database\config;
 use nsql\database\connection_pool;
-use nsql\database\security\security_manager;
+use nsql\security\security_manager;
 use nsql\database\security\sensitive_data_filter;
 use PHPUnit\Framework\TestCase;
 

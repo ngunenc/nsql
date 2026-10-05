@@ -3,8 +3,8 @@
 namespace Tests\Unit;
 
 use nsql\database\config;
-use nsql\database\security\ip_resolver;
-use nsql\database\security\security_manager;
+use nsql\security\ip_resolver;
+use nsql\security\security_manager;
 use PHPUnit\Framework\TestCase;
 
 class IpResolverTest extends TestCase
