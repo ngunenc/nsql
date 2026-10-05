@@ -105,10 +105,20 @@ get_results(string $query, array $params = []): array
 // Örnek: $users = $db->get_results("SELECT * FROM users WHERE active = ?", [1]);
 
 // Generator ile sonuçları alma (bellek dostu)
-get_yield(string $query, array $params = []): Generator
-// Örnek: foreach ($db->get_yield("SELECT * FROM users") as $user) { ... }
+get_yield(string $query, array $params = [], ?bool $unbuffered = null): Generator
+// unbuffered=true (veya YIELD_UNBUFFERED=true): tek sorgu, MySQL unbuffered, sabit bellek;
+// akış sürerken aynı örnekte başka sorgu RuntimeException verir.
+// unbuffered=false (1.x varsayılanı): LIMIT/OFFSET ile parça parça okuma.
+// En dış seviyede LIMIT/OFFSET içeren sorgu kabul edilmez (subquery'deki LIMIT serbest).
+// Örnek: foreach ($db->get_yield("SELECT * FROM users", [], true) as $user) { ... }
 
-// Chunked fetch (büyük veri setleri için)
+// Keyset chunk (v1.6.0+): OFFSET yok, satır atlama/tekrar yok, döngü içinde yazma serbest
+chunk_by_id(string $query, array $params = [], string $column = 'id', int $size = 1000): Generator
+// Sorgu türetilmiş tabloya sarılır: SELECT * FROM (<sorgu>) nsql_chunk WHERE id > ? ORDER BY id LIMIT n
+// Kolon sonuç kümesinde olmalı ve benzersiz olmalı. Sorgunun kendi ORDER BY / LIMIT'i olmamalı.
+// Örnek: foreach ($db->chunk_by_id("SELECT id, name FROM users", [], 'id', 500) as $rows) { ... }
+
+// Chunked fetch (LIMIT/OFFSET; birincil anahtar varsa chunk_by_id tercih edin)
 get_chunk(string $query, array $params = [], ?int $chunk_size = null): Generator
 // Örnek: foreach ($db->get_chunk("SELECT * FROM users", [], 1000) as $chunk) { ... }
 ```
@@ -525,6 +535,9 @@ Pool anahtarları: `DB_MIN_CONNECTIONS` ile `MIN_CONNECTIONS` (ve benzer `DB_*` 
 | `MAX_CONNECTIONS` / `DB_MAX_CONNECTIONS` | `15` |
 | `HEALTH_CHECK_INTERVAL` | `60` |
 | `CONNECTION_IDLE_TIMEOUT` | `600` |
+| `YIELD_UNBUFFERED` | `false` (`true`: `get_yield()` streaming; v2.0.0'da varsayılan `true`) |
+| `MEMORY_WARNING_RATIO` / `MEMORY_CRITICAL_RATIO` | `0.75` / `0.9` (`memory_limit` oranı) |
+| `MEMORY_LIMIT_WARNING` / `MEMORY_LIMIT_CRITICAL` | ayarsız (ayarlanırsa oran yerine mutlak byte) |
 | `CONNECTION_PING_IDLE_SECONDS` | `30` (bağlantı bu kadar saniye boşta kaldıysa sorgudan önce `SELECT 1`; aksi halde kopma 2006/2013 ile yakalanıp yeniden bağlanılır; negatif = hiç ping yok) |
 | `CONNECTION_TIMEOUT` | `5` |
 | `QUERY_CACHE_TIMEOUT` | `1800` |

@@ -4,6 +4,26 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.6.0] - 2026-10-05
+
+### Yeni (#45)
+- **Streaming `get_yield()`**: `get_yield($sql, $params, unbuffered: true)` veya `YIELD_UNBUFFERED=true` ile sorgu tek seferde çalışır, MySQL'de `PDO::MYSQL_ATTR_USE_BUFFERED_QUERY=false` ile satırlar sunucudan okundukça döner. OFFSET yok, sabit bellek. Akış sürerken aynı nsql örneğinde başka sorgu çalıştırmak açık bir `RuntimeException` verir (MySQL kısıtı); akış bitince/bırakılınca buffered mod geri yüklenir. 1.x'te varsayılan `false` (eski davranış), v2.0.0'da `true` olacak.
+- **`chunk_by_id($sql, $params, $column = 'id', $size = 1000)`**: Keyset (seek) tabanlı parça okuma. Sorgu türetilmiş tabloya sarılır (`WHERE id > ? ORDER BY id LIMIT n`); OFFSET maliyeti yok, satır atlama/tekrar yok, döngü içinde aynı bağlantıda yazma yapılabilir. Named ve positional parametrelerle çalışır; kolon adı doğrulanır.
+- **Bellek eşikleri `memory_limit`'e oranlanıyor**: uyarı `MEMORY_WARNING_RATIO` (0.75), kritik `MEMORY_CRITICAL_RATIO` (0.9). Önceden sabit 384 MB'ta (class constant, `.env` ile değiştirilemiyordu) `memory_limit=2G` olsa bile exception fırlatılıyordu. Mutlak değer için `MEMORY_LIMIT_WARNING` / `MEMORY_LIMIT_CRITICAL` hâlâ kullanılabilir; `memory_limit=-1` ise kritik eşik yok. `get_memory_stats()` eşikleri de döndürüyor.
+- `benchmarks/yield_streaming.php` (1M satır, yerel MariaDB): unbuffered `get_yield` 1,05 sn / ~47 KB tepe bellek, `chunk_by_id(5000)` 1,06 sn, LIMIT/OFFSET `get_yield` 95 sn.
+
+### Düzeltmeler
+- `LIMIT` / `OFFSET` kelimesi sorgunun herhangi bir yerinde (subquery, string literal) görülünce `get_yield()` / `get_chunk()` exception veriyordu. Artık yalnızca en dış seviyedeki LIMIT/OFFSET reddediliyor.
+- `get_chunk()` hiç kullanılmayan bir `prepare()` yapıyor ve chunk sonuçlarını query cache'e yazıyordu (her chunk ayrı SQL olduğundan cache dolup boşalıyordu); ikisi de kaldırıldı.
+- `get_results()` büyük sonuç uyarısı için SELECT'te güvenilmez `rowCount()` kullanıyordu; artık gerçek satır sayısı.
+- Performans ayarları (`MAX_RESULT_SET_SIZE`, `MEMORY_CHECK_INTERVAL`, `DEFAULT_CHUNK_SIZE`, `MIN/MAX_CHUNK_SIZE`, `AUTO_ADJUST_CHUNK_SIZE`, `LARGE_RESULT_WARNING`) class constant yerine `config::get()` ile okunuyor; `.env` değerleri artık etkili.
+
+### Davranış değişikliği
+- `MEMORY_LIMIT_WARNING` / `MEMORY_LIMIT_CRITICAL` artık varsayılan değere sahip değil; ayarlanmadıklarında eşikler `memory_limit`'e oranla hesaplanır. Eski sabit eşikleri isteyenler `.env`'e bu iki değeri yazabilir.
+
+### Testler
+- `StreamingIntegrationTest`: unbuffered sıra/sayı, buffered modun geri yüklenmesi, akış sırasında sorgu hatası, yarıda bırakılan akış, `chunk_by_id` (tekrarsız, named/positional, döngüde yazma, kolon doğrulama), subquery LIMIT, `get_chunk`'ın cache'e yazmaması, oranlı/mutlak bellek eşikleri.
+
 ## [1.5.33] - 2026-10-05
 
 ### Performans (#44)
