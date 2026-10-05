@@ -1,11 +1,11 @@
 <?php
 
-require_once __DIR__ . '/vendor/autoload.php';
+require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use nsql\database\config;
 use nsql\database\nsql;
 
-config::set_project_root(__DIR__);
+config::set_project_root(dirname(__DIR__));
 
 try {
 
@@ -52,7 +52,7 @@ try {
     // Tüm kullanıcıları getir
     $sorgu = "SELECT * FROM sayfalar";
     $kullanicilar = $db->get_results($sorgu, []);
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
@@ -61,14 +61,14 @@ try {
     foreach ($buyuk as $row) {
         // Büyük veri setleri işlenirken çıktı verilmez; gerektiğinde burada kullanılır
     }
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 
     //Tek Satır Veri getirme
     $sorgu = "select * from kullanicilar where id = :id";
     $veri = $db->get_row($sorgu, ['id' => 1]);
-    if (Config::get('DEBUG_MODE', false)) {
+    if (config::get('DEBUG_MODE', false)) {
         $db->debug();
     }
 

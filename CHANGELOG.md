@@ -4,6 +4,26 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.26] - 2026-10-05
+
+### Yapı (#22)
+- Kökteki `index.php` demosu `examples/basic.php` olarak taşındı.
+- `public/health.php` ve `public/metrics.php` `examples/monitoring/` altına taşındı (örnek oldukları açık; kendi `public/` dizininize kopyalayın).
+- Çift storage kaldırıldı: `src/storage/` silindi, tek kök `storage/` (`logs/`, `keys/`).
+- `.gitattributes` / `composer.json` archive listeleri güncellendi: `examples/`, `.cursor/`, `phpstan-baseline.neon` dışarıda.
+
+### Düzeltmeler
+- **`vendor/bin/nsql` dist kurulumda oluşmuyordu**: `.gitattributes` içinde `/bin export-ignore` vardı; GitHub zip'inden kurulan pakette `bin/nsql` yoktu ve Composer `bin` kaydı boşa düşüyordu. `bin/` artık pakete dahil.
+- **`debug()` log'u CWD'ye yazıyordu**: `debug_trait::log_error()` `error_log.txt` dosyasını çalışma dizinine (ör. `public/`) yazıyordu. Artık `LOG_DIR` / `storage/logs` altına, `LOCK_EX` ile yazıyor.
+- `security_manager::log_debug_info()` aynı şekilde göreli yolu CWD'ye yazıyordu; artık log dizinine yazıyor.
+- Göreli `LOG_DIR` değeri (ör. `.env.example`'daki `storage/logs`) CWD yerine proje köküne göre çözülüyor.
+
+### Yeni
+- `config::resolve_log_path(string $file)`: tüm log yolları için tek çözümleyici (`log_path_trait` buna delege ediyor).
+
+### Testler
+- `tests/Unit/LogPathTest.php`: göreli/mutlak yol, göreli `LOG_DIR`, `security_manager` log'unun CWD'ye yazmaması.
+
 ## [1.5.25] - 2026-10-05
 
 ### Temizlik (#8)
