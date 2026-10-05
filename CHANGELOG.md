@@ -4,6 +4,24 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [1.5.33] - 2026-10-05
+
+### Performans (#44)
+- **Her sorgu iki gidiş-dönüştü**: `ensure_connection()` her sorgudan önce `SELECT 1` atıyordu. Artık sorgu doğrudan çalıştırılıyor; bağlantı koptuysa 2006/2013 hatası yakalanıp yeniden bağlanılıyor ve sorgu tekrar deneniyor (mevcut `run_with_reconnect`). Ping yalnızca bağlantı `CONNECTION_PING_IDLE_SECONDS` (varsayılan 30) saniyeden uzun süre boşta kaldıysa atılıyor; negatif değer ping'i tamamen kapatır.
+- **`debug_backtrace()` her public çağrıda çalışıyordu**: Artık yalnızca debug modunda.
+- `benchmarks/select_small_vs_large.php` (yerel MariaDB): small_1k nsql 2.39 ms / PDO 1.84 ms, medium_10k 16.91 ms / 15.95 ms.
+
+### Düzeltmeler
+- Debug çıktısında "Çalıştırılan Metod" her zaman `execute_query` görünüyordu; artık kullanıcının çağırdığı public metot (`get_results`, `insert` …) yazılıyor.
+- `begin()`: bağlantı boşta koptuysa (ping atılmadığı için) `beginTransaction()` 2006/2013 verdiğinde bir kez yeniden bağlanıp tekrar deniyor. Transaction henüz başlamadığı için güvenli.
+
+### Yeni ayar
+- `CONNECTION_PING_IDLE_SECONDS` / `DB_CONNECTION_PING_IDLE_SECONDS` (varsayılan `30`).
+
+### Testler
+- `ConnectionPoolIntegrationTest`: sunucu `Questions` sayacıyla sorgu başına ek ping olmadığı, eşik ayarı, bağlantı öldürüldükten sonra `begin()`.
+- `DebugLogMaskingTest`: debug log'da doğru metot adı; debug kapalıyken metot takibi yapılmıyor.
+
 ## [1.5.32] - 2026-10-05
 
 ### Düzeltmeler (#46)

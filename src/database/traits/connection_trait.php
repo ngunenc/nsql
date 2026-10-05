@@ -18,6 +18,7 @@ trait connection_trait
     private int $retry_limit = 2;
     private ?PDO $pdo = null;
     private ?string $pool_key = null;
+    private float $last_activity_at = 0.0;
 
     /**
      * Bu örneğin DSN/kullanıcı bilgisine ait havuzu kaydeder.
@@ -70,7 +71,12 @@ trait connection_trait
     }
 
     /**
-     * Bağlantının canlı olduğunu doğrular; kopmuşsa yeniden bağlanır.
+     * Bağlantının kullanılabilir olduğunu sağlar.
+     *
+     * Her sorgudan önce ping atılmaz: kopan bağlantı sorgu sırasında 2006/2013 ile yakalanıp
+     * yeniden bağlanılır (run_with_reconnect). Ping yalnızca bağlantı CONNECTION_PING_IDLE_SECONDS
+     * (varsayılan 30) saniyeden uzun süre boşta kaldıysa atılır; transaction içinde
+     * sessiz yeniden bağlanmanın önüne geçmek için transaction başında da bu kontrol yapılır.
      *
      * @throws ConnectionException Transaction sırasında bağlantı koptuysa veya yeniden bağlanılamazsa
      */
@@ -78,7 +84,13 @@ trait connection_trait
     {
         if ($this->pdo === null) {
             $this->initialize_connection();
+            $this->touch_connection();
 
+            return;
+        }
+
+        $idle_limit = (int) config::get('connection_ping_idle_seconds', config::connection_ping_idle_seconds);
+        if ($idle_limit < 0 || (microtime(true) - $this->last_activity_at) < $idle_limit) {
             return;
         }
 
@@ -87,6 +99,15 @@ trait connection_trait
         } catch (PDOException $e) {
             $this->reconnect($e);
         }
+        $this->touch_connection();
+    }
+
+    /**
+     * Bağlantının son kullanım zamanını günceller (idle ping hesabı için).
+     */
+    private function touch_connection(): void
+    {
+        $this->last_activity_at = microtime(true);
     }
 
     /**
@@ -123,6 +144,7 @@ trait connection_trait
         }
 
         $this->initialize_connection();
+        $this->touch_connection();
     }
 
     /**

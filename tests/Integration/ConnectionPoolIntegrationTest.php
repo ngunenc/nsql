@@ -132,6 +132,52 @@ class ConnectionPoolIntegrationTest extends DatabaseTestCase
         $this->assertNotSame($old_id, $this->connection_id($this->db));
     }
 
+    private function questions(nsql $db): int
+    {
+        return (int) $db->get_row("SHOW SESSION STATUS LIKE 'Questions'")->Value;
+    }
+
+    public function testQueriesDoNotPingBeforeEachExecution(): void
+    {
+        $before = $this->questions($this->db);
+        for ($i = 0; $i < 3; $i++) {
+            $this->db->get_row('SELECT 1 AS x');
+        }
+        $after = $this->questions($this->db);
+
+        // 3 SELECT + sondaki SHOW; her sorgudan önce SELECT 1 atılsaydı fark 7 olurdu
+        $this->assertSame(4, $after - $before);
+    }
+
+    public function testIdlePingThresholdIsConfigurable(): void
+    {
+        config::set('connection_ping_idle_seconds', 0);
+        try {
+            $before = $this->questions($this->db);
+            $this->db->get_row('SELECT 1 AS x');
+            $after = $this->questions($this->db);
+
+            // SELECT 1 ping + SELECT + ping + SHOW
+            $this->assertSame(4, $after - $before);
+        } finally {
+            config::set('connection_ping_idle_seconds', 30);
+        }
+    }
+
+    public function testBeginReconnectsAfterConnectionIsKilled(): void
+    {
+        $this->db->get_row('SELECT 1 AS x');
+        $old_id = $this->connection_id($this->db);
+        $this->kill($old_id);
+
+        $this->db->begin();
+        $this->db->insert('INSERT INTO test_table (name) VALUES (:name)', ['name' => 'after_kill']);
+        $this->db->commit();
+
+        $this->assertNotSame($old_id, $this->connection_id($this->db));
+        $this->assertNotNull($this->db->get_row('SELECT id FROM test_table WHERE name = :name', ['name' => 'after_kill']));
+    }
+
     public function testExplicitReconnectReplacesConnection(): void
     {
         $old_pdo = $this->db->get_pdo();

@@ -525,6 +525,7 @@ Pool anahtarları: `DB_MIN_CONNECTIONS` ile `MIN_CONNECTIONS` (ve benzer `DB_*` 
 | `MAX_CONNECTIONS` / `DB_MAX_CONNECTIONS` | `15` |
 | `HEALTH_CHECK_INTERVAL` | `60` |
 | `CONNECTION_IDLE_TIMEOUT` | `600` |
+| `CONNECTION_PING_IDLE_SECONDS` | `30` (bağlantı bu kadar saniye boşta kaldıysa sorgudan önce `SELECT 1`; aksi halde kopma 2006/2013 ile yakalanıp yeniden bağlanılır; negatif = hiç ping yok) |
 | `CONNECTION_TIMEOUT` | `5` |
 | `QUERY_CACHE_TIMEOUT` | `1800` |
 | `STATEMENT_CACHE_LIMIT` | `150` |

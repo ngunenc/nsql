@@ -28,7 +28,15 @@ trait transaction_trait
         $pdo = $this->require_pdo();
 
         if ($this->transaction_level === 0) {
-            $pdo->beginTransaction();
+            try {
+                $pdo->beginTransaction();
+            } catch (\PDOException $e) {
+                if (! method_exists($this, 'is_connection_lost_error') || ! $this->is_connection_lost_error($e)) {
+                    throw $e;
+                }
+                $this->reconnect($e);
+                $this->require_pdo()->beginTransaction();
+            }
         } else {
             $pdo->exec("SAVEPOINT trans{$this->transaction_level}");
         }

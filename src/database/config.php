@@ -32,6 +32,7 @@ class config
     // Connection Pool sabitleri (optimize edilmiş)
     public const health_check_interval = 60; // 30s → 60s (performans artışı)
     public const connection_idle_timeout = 600; // 300s → 600s (daha uzun idle timeout)
+    public const connection_ping_idle_seconds = 30; // Bu süreden uzun boşta kalan bağlantı sorgudan önce ping'lenir (<0: hiç)
     public const min_connections = 2; // 1 → 2 (daha iyi başlangıç)
     public const max_connections = 15; // 10 → 15 (daha yüksek kapasite)
     public const max_retry_attempts = 2; // 3 → 2 (daha hızlı hata yönetimi)
@@ -73,6 +74,7 @@ class config
         'HEALTH_CHECK_INTERVAL' => ['DB_HEALTH_CHECK_INTERVAL'],
         'CONNECTION_TIMEOUT' => ['DB_CONNECTION_TIMEOUT'],
         'CONNECTION_IDLE_TIMEOUT' => ['DB_CONNECTION_IDLE_TIMEOUT'],
+        'CONNECTION_PING_IDLE_SECONDS' => ['DB_CONNECTION_PING_IDLE_SECONDS'],
         'POOL_LOG_FILE' => ['DB_POOL_LOG_FILE'],
         'READ_WRITE_SPLIT' => ['DB_READ_WRITE_SPLIT'],
         'MAX_RETRY_ATTEMPTS' => ['DB_MAX_RETRY_ATTEMPTS'],
@@ -449,6 +451,7 @@ class config
             // Connection pool
             'HEALTH_CHECK_INTERVAL' => self::health_check_interval,
             'CONNECTION_IDLE_TIMEOUT' => self::connection_idle_timeout,
+            'CONNECTION_PING_IDLE_SECONDS' => self::connection_ping_idle_seconds,
             'MIN_CONNECTIONS' => self::min_connections,
             'MAX_CONNECTIONS' => self::max_connections,
             'MAX_RETRY_ATTEMPTS' => self::max_retry_attempts,

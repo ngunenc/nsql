@@ -21,12 +21,25 @@ trait debug_trait
     }
 
     /**
-     * Son çağrılan metodu kaydeder
+     * Debug çıktısı için kullanıcının çağırdığı public metodu kaydeder.
+     * debug_backtrace maliyetli olduğundan yalnızca debug modunda çalışır.
      */
     private function set_last_called_method(): void
     {
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2);
-        $this->last_called_method = $trace[1]['function'] ?? 'unknown';
+        if (! $this->debug_mode) {
+            return;
+        }
+
+        // En dıştaki (kullanıcının çağırdığı) public metot kazanır
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+            $method = $frame['function'];
+            if (! isset($frame['class']) || ! $this instanceof $frame['class'] || ! method_exists($this, $method)) {
+                continue;
+            }
+            if ((new \ReflectionMethod($this, $method))->isPublic()) {
+                $this->last_called_method = $method;
+            }
+        }
     }
 
     /**
