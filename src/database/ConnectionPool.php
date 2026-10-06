@@ -4,6 +4,7 @@ namespace nsql\database;
 
 use PDO;
 use PDOException;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 
 /**
@@ -17,6 +18,9 @@ use RuntimeException;
  */
 class ConnectionPool
 {
+    /** Havuz doluluğu bu orana ulaşınca (havuz başına bir kez) uyarı loglanır */
+    public const usage_warning_ratio = 0.8;
+
     /**
      * @var array<string, array{
      *     config: array{dsn: string, username: string, password: string, options: array<int|string, mixed>},
@@ -24,10 +28,13 @@ class ConnectionPool
      *     max: int,
      *     connections: array<int, PDO>,
      *     in_use: array<int, true>,
-     *     idle_since: array<int, int>
+     *     idle_since: array<int, int>,
+     *     warned: bool
      * }>
      */
     private static array $pools = [];
+
+    private static ?LoggerInterface $logger = null;
 
     private static ?string $default_key = null;
 
@@ -74,6 +81,7 @@ class ConnectionPool
                 'connections' => [],
                 'in_use' => [],
                 'idle_since' => [],
+                'warned' => false,
             ];
         }
 
@@ -300,8 +308,43 @@ class ConnectionPool
 
         self::$stats['created_connections']++;
         self::$stats['peak_connections'] = max(self::$stats['peak_connections'], self::count_all());
+        self::warn_if_near_capacity($key);
 
         return $conn;
+    }
+
+    /**
+     * Doluluk uyarısı için logger (null: error_log).
+     */
+    public static function set_logger(?LoggerInterface $logger): void
+    {
+        self::$logger = $logger;
+    }
+
+    private static function warn_if_near_capacity(string $key): void
+    {
+        $pool = self::$pools[$key];
+        $total = count($pool['connections']);
+        if ($pool['warned'] || $total < (int) ceil($pool['max'] * self::usage_warning_ratio)) {
+            return;
+        }
+        self::$pools[$key]['warned'] = true;
+
+        $message = sprintf(
+            'nsql bağlantı havuzu %%%d dolu (%d/%d). Her Nsql örneği ömrü boyunca bir bağlantı tutar; '
+            . 'örnekleri yeniden kullanın (Nsql::connection()) veya MAX_CONNECTIONS değerini artırın.',
+            (int) round($total / $pool['max'] * 100),
+            $total,
+            $pool['max']
+        );
+        $context = ['connections' => $total, 'max' => $pool['max'], 'in_use' => count($pool['in_use'])];
+
+        if (self::$logger !== null) {
+            self::$logger->warning($message, $context);
+
+            return;
+        }
+        error_log($message);
     }
 
     /**
