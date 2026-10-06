@@ -2,6 +2,7 @@
 
 namespace nsql\database\traits;
 
+use nsql\database\drivers\InsertId;
 use nsql\database\exceptions\QueryException;
 
 /**
@@ -9,22 +10,29 @@ use nsql\database\exceptions\QueryException;
  */
 trait WriteOperationsTrait
 {
-    private int $last_insert_id = 0;
+    private int|string $last_insert_id = 0;
 
-    public function insert(string $sql, array $params = []): int|false
+    /** INSERT ... RETURNING ile alınan id; insert_id() bunu lastval()'e tercih eder */
+    private int|string|null $returned_insert_id = null;
+
+    /**
+     * INSERT çalıştırır ve eklenen kaydın id'sini döndürür (hata: false).
+     *
+     * @param string|null $sequence PostgreSQL'de id'nin okunacağı sequence (ör. users_id_seq);
+     *                              verilmezse lastval() kullanılır
+     */
+    public function insert(string $sql, array $params = [], ?string $sequence = null): int|string|false
     {
         $this->set_last_called_method();
         $this->last_results = [];
         $this->last_insert_id = 0;
+        $this->returned_insert_id = null;
 
         $stmt = $this->execute_query($sql, $params);
         if ($stmt !== false && $this->pdo !== null) {
-            // Driver'a göre last insert ID al
-            if ($this->driver) {
-                $this->last_insert_id = $this->driver->get_last_insert_id($this->pdo);
-            } else {
-                $this->last_insert_id = (int)$this->pdo->lastInsertId();
-            }
+            $this->last_insert_id = $this->driver
+                ? $this->driver->get_last_insert_id($this->pdo, $sequence)
+                : InsertId::normalize($this->pdo->lastInsertId());
 
             $this->invalidate_cache_for_write($sql);
 
@@ -32,6 +40,39 @@ trait WriteOperationsTrait
         }
 
         return false;
+    }
+
+    /**
+     * `INSERT ... RETURNING` sorgusunu çalıştırır ve dönen satırdaki `$column` değerini id
+     * olarak döndürür. Kolon dönmezse sürücünün son id yöntemine düşer. Hata → QueryException.
+     *
+     * @internal QueryBuilder ve ORM PostgreSQL'de kullanır
+     */
+    public function insert_returning(string $sql, array $params, string $column): int|string
+    {
+        $this->set_last_called_method();
+        $this->last_results = [];
+        $this->returned_insert_id = null;
+
+        $stmt = $this->execute_query($sql, $params);
+        if ($stmt === false) {
+            throw $this->make_query_exception($sql, $params);
+        }
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        $stmt->closeCursor();
+
+        $this->invalidate_cache_for_write($sql);
+
+        if (is_array($row) && array_key_exists($column, $row)) {
+            $this->last_insert_id = InsertId::normalize($row[$column]);
+            $this->returned_insert_id = $this->last_insert_id;
+        } else {
+            $this->last_insert_id = $this->driver && $this->pdo
+                ? $this->driver->get_last_insert_id($this->pdo)
+                : 0;
+        }
+
+        return $this->last_insert_id;
     }
 
     /**
@@ -192,6 +233,7 @@ trait WriteOperationsTrait
     {
         $this->set_last_called_method();
         $this->last_results = [];
+        $this->returned_insert_id = null;
 
         $stmt = $this->execute_query($sql, $params);
         if ($stmt === false) {
@@ -243,14 +285,18 @@ trait WriteOperationsTrait
     /**
      * Son eklenen kaydın ID değerini döndürür.
      *
-     * @return int Son eklenen kaydın ID değeri.
+     * @param string|null $sequence PostgreSQL sequence adı (bkz. insert())
+     * @return int|string Son eklenen kaydın ID değeri (int aralığı dışındaki / UUID id'ler string)
      */
-    public function insert_id(): int|string
+    public function insert_id(?string $sequence = null): int|string
     {
-        if ($this->driver && $this->pdo) {
-            // Driver'a göre last insert ID al
-            return $this->driver->get_last_insert_id($this->pdo);
+        if ($this->returned_insert_id !== null && $sequence === null) {
+            return $this->returned_insert_id;
         }
+        if ($this->driver && $this->pdo) {
+            return $this->driver->get_last_insert_id($this->pdo, $sequence);
+        }
+
         return $this->last_insert_id;
     }
 }

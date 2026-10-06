@@ -80,7 +80,7 @@ class MysqlDriver implements DriverInterface
 
     public function get_last_insert_id(\PDO $pdo, ?string $sequence = null): int|string
     {
-        return (int)$pdo->lastInsertId();
+        return InsertId::normalize($pdo->lastInsertId());
     }
 
     public function get_limit_clause(int $limit, int $offset = 0): string

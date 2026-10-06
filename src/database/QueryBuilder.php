@@ -671,12 +671,20 @@ class QueryBuilder
     /**
      * Tek satır ekler, eklenen kaydın ID'sini döndürür. Hata → QueryException.
      *
+     * PostgreSQL'de id `INSERT ... RETURNING *` ile `$primary_key` kolonundan okunur (trigger'ların
+     * ilerlettiği başka sequence'ler sonucu etkilemez); kolon yoksa lastval()'e düşülür.
+     *
      * @param array<string, mixed> $data kolon => değer (değer QueryBuilder::raw() olabilir)
      */
-    public function insert(array $data): int|string
+    public function insert(array $data, string $primary_key = 'id'): int|string
     {
         $this->assert_writable('insert');
         [$sql, $params] = $this->compile_insert([$data]);
+
+        if ($this->db->get_driver_name() === 'pgsql') {
+            return $this->db->insert_returning($sql . ' RETURNING *', $params, $primary_key);
+        }
+
         $this->db->statement($sql, $params);
 
         return $this->db->insert_id();
