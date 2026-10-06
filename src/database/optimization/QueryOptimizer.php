@@ -5,148 +5,66 @@ namespace nsql\database\optimization;
 /**
  * Query Optimizer
  *
- * SQL sorgularını optimize eder:
- * - Index hint ekleme
- * - Query rewriting
- * - Subquery optimization
- * - Join optimization
+ * Sorgu analizi ve index önerileri (suggest_indexes, analyze_performance) ile isteğe bağlı
+ * MySQL index hint ekleme. SQL metni yeniden yazılmaz: regex tabanlı yeniden yazma string
+ * literal'leri ve fonksiyon çağrılarını bozduğu için v2.1.1'de kaldırıldı.
  */
 class QueryOptimizer
 {
+    private const IDENTIFIER = '/^[A-Za-z_][A-Za-z0-9_]*$/';
+
     /**
-     * Sorguyu optimize eder
+     * Sorguya istenirse MySQL index hint'leri ekler; başka bir değişiklik yapmaz.
+     *
+     * Seçenekler: `add_index_hints` (bool), `index_hints` (tablo => index adı veya adları).
+     * `rewrite`, `optimize_subqueries`, `optimize_joins` seçenekleri yok sayılır (deprecated).
      *
      * @param string $query SQL sorgusu
      * @param array $options Optimizasyon seçenekleri
-     * @return string Optimize edilmiş sorgu
+     * @return string Sorgu
+     * @throws \InvalidArgumentException Tablo veya index adı geçersizse
      */
     public static function optimize(string $query, array $options = []): string
     {
-        $optimized = $query;
-
-        // Query rewriting
-        if ($options['rewrite'] ?? true) {
-            $optimized = self::rewrite_query($optimized);
-        }
-
-        // Index hint ekleme
         if ($options['add_index_hints'] ?? false) {
-            $optimized = self::add_index_hints($optimized, $options['index_hints'] ?? []);
+            return self::add_index_hints($query, $options['index_hints'] ?? []);
         }
 
-        // Subquery optimization
-        if ($options['optimize_subqueries'] ?? true) {
-            $optimized = self::optimize_subqueries($optimized);
-        }
-
-        // Join optimization
-        if ($options['optimize_joins'] ?? true) {
-            $optimized = self::optimize_joins($optimized);
-        }
-
-        return $optimized;
-    }
-
-    /**
-     * Query rewriting yapar
-     *
-     * @param string $query SQL sorgusu
-     * @return string Rewrite edilmiş sorgu
-     */
-    private static function rewrite_query(string $query): string
-    {
-        $rewritten = $query;
-
-        // SELECT * → belirli sütunlar (basit durumlar için)
-        // Not: Bu genel bir kural değil, sadece örnek
-
-        // WHERE 1=1 kaldırma
-        $rewritten = preg_replace('/\bWHERE\s+1\s*=\s*1\s*(AND|$)/i', 'WHERE $1', $rewritten);
-        $rewritten = preg_replace('/\bWHERE\s+1\s*=\s*1\s*$/i', '', $rewritten);
-
-        // Gereksiz parantezleri temizle
-        $rewritten = preg_replace('/\(\s*([a-zA-Z0-9_\.]+)\s*\)/i', '$1', $rewritten);
-
-        // Çoklu boşlukları temizle
-        $rewritten = preg_replace('/\s+/', ' ', $rewritten);
-        $rewritten = trim($rewritten);
-
-        return $rewritten;
+        return $query;
     }
 
     /**
      * Index hint'leri ekler
      *
      * @param string $query SQL sorgusu
-     * @param array $index_hints Tablo => index mapping
+     * @param array<string, string|list<string>> $index_hints Tablo => index adı (virgüllü liste veya dizi)
      * @return string Index hint'li sorgu
      */
     private static function add_index_hints(string $query, array $index_hints): string
     {
-        if (empty($index_hints)) {
-            return $query;
-        }
-
-        $optimized = $query;
-
         foreach ($index_hints as $table => $index) {
-            // USE INDEX hint ekle
-            $pattern = '/\bFROM\s+([`"]?)' . preg_quote($table, '/') . '\1/i';
-            $replacement = "FROM $1$table$1 USE INDEX ($index)";
-
-            if (preg_match($pattern, $optimized)) {
-                $optimized = preg_replace($pattern, $replacement, $optimized, 1);
+            $table = (string) $table;
+            if (! preg_match(self::IDENTIFIER, $table)) {
+                throw new \InvalidArgumentException('Geçersiz tablo adı (index hint): ' . substr($table, 0, 64));
             }
 
-            // JOIN'lerde de index hint ekle
-            $pattern = '/\bJOIN\s+([`"]?)' . preg_quote($table, '/') . '\1/i';
-            $replacement = "JOIN $1$table$1 USE INDEX ($index)";
-
-            if (preg_match($pattern, $optimized)) {
-                $optimized = preg_replace($pattern, $replacement, $optimized);
+            $indexes = is_array($index) ? $index : explode(',', (string) $index);
+            $indexes = array_map(static fn ($name) => trim((string) $name), $indexes);
+            foreach ($indexes as $name) {
+                if (! preg_match(self::IDENTIFIER, $name)) {
+                    throw new \InvalidArgumentException('Geçersiz index adı: ' . substr($name, 0, 64));
+                }
             }
+            $hint = 'USE INDEX (' . implode(', ', $indexes) . ')';
+
+            $query = (string) preg_replace(
+                '/\b(FROM|JOIN)\s+([`"]?)' . $table . '\2(?![A-Za-z0-9_])/i',
+                '$1 $2' . $table . '$2 ' . $hint,
+                $query
+            );
         }
 
-        return $optimized;
-    }
-
-    /**
-     * Subquery'leri optimize eder
-     *
-     * @param string $query SQL sorgusu
-     * @return string Optimize edilmiş sorgu
-     */
-    private static function optimize_subqueries(string $query): string
-    {
-        $optimized = $query;
-
-        // EXISTS subquery'leri optimize et
-        // SELECT * FROM table1 WHERE EXISTS (SELECT 1 FROM table2 WHERE ...)
-        // → JOIN kullanılabilir (basit durumlar için)
-
-        // IN subquery'leri için index kullanımını öner
-        // Bu genellikle veritabanı tarafında yapılır, burada sadece pattern tespiti
-
-        return $optimized;
-    }
-
-    /**
-     * JOIN'leri optimize eder
-     *
-     * @param string $query SQL sorgusu
-     * @return string Optimize edilmiş sorgu
-     */
-    private static function optimize_joins(string $query): string
-    {
-        $optimized = $query;
-
-        // JOIN sıralamasını optimize et (küçük tabloları önce)
-        // Bu karmaşık bir optimizasyon, burada sadece temel pattern tespiti
-
-        // INNER JOIN'leri optimize et
-        // WHERE koşullarını JOIN ON'a taşı (bazı durumlarda daha hızlı)
-
-        return $optimized;
+        return $query;
     }
 
     /**

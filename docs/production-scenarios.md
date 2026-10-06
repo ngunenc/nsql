@@ -134,26 +134,24 @@ $db->warm_cache(true);
 <?php
 // Statement cache otomatik çalışır
 // Sık kullanılan sorgular için prepared statement'lar cache'lenir
-$db->query("SELECT * FROM users WHERE id = ?", [1]);
-$db->query("SELECT * FROM users WHERE id = ?", [2]); // Cache'den gelecek
+$db->get_row("SELECT * FROM users WHERE id = ?", [1]);
+$db->get_row("SELECT * FROM users WHERE id = ?", [2]); // Hazırlanmış statement yeniden kullanılır
 ```
 
 ### 4. Index Optimization
 
 ```php
 <?php
-// Query optimizer ile index önerileri
+// Query optimizer ile index önerileri (tablo önekli kolonlardan çıkarılır)
 use nsql\database\optimization\QueryOptimizer;
 
 $suggestions = QueryOptimizer::suggest_indexes(
-    "SELECT * FROM users WHERE email = ? AND active = ?"
+    'SELECT * FROM users JOIN orders ON orders.user_id = users.id WHERE users.email = ?'
 );
-
-// Önerilen index'leri oluştur
-foreach ($suggestions as $suggestion) {
-    $db->query($suggestion['sql']);
-}
+// ['users' => ['email', 'id'], 'orders' => ['user_id']]
 ```
+
+Öneriler yalnızca bir başlangıç noktasıdır; index'leri `EXPLAIN` ile doğrulayıp migration içinde oluşturun. `QueryOptimizer::optimize()` v2.1.1'den itibaren SQL metnini yeniden yazmaz; yalnızca `add_index_hints` ile doğrulanmış MySQL `USE INDEX` ipuçları ekler.
 
 ## 📈 Yüksek Trafik Senaryoları
 
