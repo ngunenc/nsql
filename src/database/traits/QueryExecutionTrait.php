@@ -103,19 +103,22 @@ trait QueryExecutionTrait
     {
         $cache_key = $this->get_statement_cache_key($sql, $params);
 
-        if (!isset($this->statement_cache[$cache_key])) {
-            try {
-                $stmt = $this->pdo->prepare($sql);
-                $this->add_to_statement_cache($cache_key, $stmt);
-            } catch (PDOException $e) {
-                $this->handle_prepare_error($e);
-                return false;
-            }
-        } else {
-            $stmt = $this->statement_cache[$cache_key];
+        $stmt = $this->get_from_statement_cache($cache_key);
+        if ($stmt !== null) {
+            return $stmt;
         }
 
-        $this->statement_cache_usage[$cache_key] = microtime(true);
+        try {
+            $stmt = $this->pdo->prepare($sql);
+        } catch (PDOException $e) {
+            $this->handle_prepare_error($e);
+            return false;
+        }
+        if ($stmt === false) {
+            return false;
+        }
+        $this->add_to_statement_cache($cache_key, $stmt);
+
         return $stmt;
     }
 
