@@ -60,6 +60,23 @@ class SchemaPortableTest extends PortableTestCase
         $this->assertSame(['p_schema'], $report->tables);
     }
 
+    public function test_integer_definition_accepts_mysql_tinyint1(): void
+    {
+        $schema = new Schema();
+        $schema->table('p_schema', fn (TableDefinition $t) => $t->integer('active')->default(1));
+        $report = (new SchemaValidator($this->db))->validate($schema);
+        $kinds = array_map(
+            fn ($d) => $d->kind,
+            array_values(array_filter($report->differences(), fn ($d) => $d->severity === SchemaDifference::ERROR))
+        );
+
+        if (self::driver() === 'mysql') {
+            $this->assertSame([], $kinds);
+        } else {
+            $this->assertSame([SchemaDifference::TYPE_MISMATCH], $kinds);
+        }
+    }
+
     public function test_inspector_reports_normalized_columns(): void
     {
         $columns = (new SchemaInspector($this->db))->columns('p_schema');

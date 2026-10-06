@@ -459,7 +459,7 @@ vendor/bin/nsql schema:check --schema=db/schema.php --strict --json
 
 | Sürücü | Kaynak | Not |
 |--------|--------|-----|
-| MySQL / MariaDB | `information_schema.COLUMNS` | `tinyint(1)` → boolean; MariaDB JSON → `json` veya `text` kabul edilir |
+| MySQL / MariaDB | `information_schema.COLUMNS` | `tinyint(1)` → boolean; `integer` tanımı da `tinyint(1)`'i kabul eder (v2.2.0+); MariaDB JSON → `json` veya `text` kabul edilir |
 | PostgreSQL | `information_schema.columns` (`current_schema()`) | `::tip` cast'leri default'tan temizlenir |
 | SQLite | `PRAGMA table_info` | Tip ailesi bildirilen tipten çıkarılır |
 
