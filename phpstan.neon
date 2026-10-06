@@ -9,7 +9,6 @@ parameters:
         - src
     excludePaths:
         - src/database/migrations
-        - src/database/seeds
         - src/database/templates
     ignoreErrors:
         - '#Call to an undefined method PDO::#'

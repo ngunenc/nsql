@@ -43,7 +43,6 @@ return [
     'nsql\\database\\raw_expression' => \nsql\database\RawExpression::class,
     'nsql\\database\\security\\query_analyzer' => \nsql\database\security\QueryAnalyzer::class,
     'nsql\\database\\security\\sensitive_data_filter' => \nsql\database\security\SensitiveDataFilter::class,
-    'nsql\\database\\seeds\\user_seeder' => \nsql\database\seeds\UserSeeder::class,
     'nsql\\database\\traits\\cache_trait' => \nsql\database\traits\CacheTrait::class,
     'nsql\\database\\traits\\connection_trait' => \nsql\database\traits\ConnectionTrait::class,
     'nsql\\database\\traits\\debug_trait' => \nsql\database\traits\DebugTrait::class,
