@@ -481,7 +481,7 @@ nsql/
 #### Güvenlik Bileşenleri
 
 **Çekirdek** (`nsql\database\security`) — veritabanı katmanının parçası, her zaman kullanılır:
-- **query_analyzer**: SQL güvenlik analizi
+- **query_analyzer**: Regex tabanlı SQL denetim / tanı aracı (`$db->analyze_sql($sql)`). SQL injection koruması **değildir**; koruma parametre bağlama ve tanımlayıcı doğrulamasıdır (`QueryBuilder`, `quote_identifier()`)
 - **sensitive_data_filter**: Log, exception ve sorgu olaylarında hassas veri maskeleme
 
 **Opsiyonel web katmanı** (`nsql\security`, v1.13.0+) — veritabanı API'sinden bağımsızdır; kullanmıyorsanız yüklenmez:
