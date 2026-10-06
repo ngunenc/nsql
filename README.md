@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.1.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.1.1
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -105,6 +105,8 @@
 > **v2.0.0**: Major sürüm: sınıf adları PascalCase (eski adlar 2.x boyunca çalışır), THROW_ON_ERROR / YIELD_UNBUFFERED / inflector varsayılan, 1.x takma adları kaldırıldı. Geçiş: [UPGRADE.md](UPGRADE.md)
 >
 > **v2.1.0**: Şema doğrulama MVP: PHP ile tanımlanan tablo/kolon yapısı canlı veritabanıyla karşılaştırılır; `nsql schema:check` CLI komutu (#54).
+>
+> **v2.1.1**: Güvenlik ve kararlılık düzeltmeleri: session fixation, production'da anahtar üretimi kapalı, Redis/Memcached `clear()` yalnızca kendi önekini siler, PostgreSQL `INSERT ... RETURNING`, statement cache LRU. Davranış değişiklikleri: [UPGRADE.md](UPGRADE.md#210--211)
 >
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
@@ -1736,6 +1738,10 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v2.1.1 (2026-10-06)
+  - Güvenlik: session fixation koruması (#55), production'da `ENCRYPTION_KEY` zorunlu (#56), Redis/Memcached `clear()` önek kapsamlı (#57), paylaşılan query cache store bağlantı kapsamlı (#58), `QueryOptimizer` SQL yeniden yazmıyor (#59), `HealthCheck` hata ayrıntısı sızdırmıyor (#68), `RateLimiter` şema tablo adı doğrulaması (#69), demo seeder paketten çıkarıldı (#67), `QueryAnalyzer` tanı aracı olarak belgelendi (#66).
+  - Düzeltmeler: PostgreSQL insert id `RETURNING` ile (#60), `DatabaseException::get_details()` (#61), `closeCursor()` (#62), statement cache LRU (#63), `chunk_by_id()` satır yorumu (#64), `SELECT ... INTO` primary'ye (#65), PHPStan baseline temizliği (#75).
 
 - v2.1.0 (2026-10-05)
   - Şema doğrulama MVP (#54): `Schema` / `TableDefinition` / `ColumnDefinition` ile tip, nullable, default, uzunluk ve precision tanımı; `SchemaValidator` canlı DB (MySQL/MariaDB `information_schema`, PostgreSQL `information_schema`, SQLite `PRAGMA table_info`) ile farkları raporlar; `vendor/bin/nsql schema:check [--schema] [--strict] [--json]`.

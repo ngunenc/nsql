@@ -4,6 +4,35 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.1.1] - 2026-10-06
+
+Güvenlik, kararlılık ve performans düzeltmeleri. Davranış değişiklikleri için: [UPGRADE.md](UPGRADE.md#210--211).
+
+### Security
+- `SessionManager`: güvenli oturum ilk kez kurulurken session ID yenilenir (session fixation); mevcut oturum verisi korunur (#55).
+- `KeyManager`: production ortamında `ENCRYPTION_KEY` yoksa anahtar otomatik üretilmez, `RuntimeException` fırlatılır; `ENCRYPTION_KEY_AUTO_GENERATE=true` ile bilerek açılabilir (#56).
+- `RedisAdapter::clear()` artık `FLUSHDB` yerine yalnızca kendi önekli anahtarlarını `SCAN` + `DEL` ile siler; `MemcachedAdapter::clear()` `flush()` yerine namespace nesil token'ını yeniler. Her iki adaptör `prefix` parametresi alır (varsayılan `nsql_`); Memcached değerleri `SafeSerializer` ile yazılır (#57).
+- Paylaşılan PSR-16 query cache store öneki bağlantıya (DSN + kullanıcı) göre kapsamlanır; aynı store'u kullanan farklı veritabanları birbirinin sonucunu okumaz (#58).
+- `QueryOptimizer::optimize()` SQL metnini yeniden yazmaz (regex yeniden yazma literal ve fonksiyon çağrılarını bozuyordu); `add_index_hints` tablo ve index adlarını doğrular (#59).
+- `QueryAnalyzer` bir tanı aracı olarak belgelendi (injection koruması değildir); `Nsql::analyze_sql()` eklendi, kritik bulguda `QueryException` (#66).
+- Sabit şifreli demo `UserSeeder` paketten çıkarıldı, `examples/database/seeds/` altına taşındı (#67).
+- `HealthCheck` yanıtı exception mesajı / sınıfı içermez; ayrıntı opsiyonel PSR-3 logger'a veya `error_log`'a yazılır (#68).
+- `RateLimiter::schema_statements()` / `schema_sql()` tablo adını doğrular (#69).
+
+### Fixed
+- PostgreSQL: `QueryBuilder::insert()` ve ORM id'yi `INSERT ... RETURNING` ile alır (trigger'ın ilerlettiği başka sequence'ler sonucu bozmaz); `Nsql::insert()` / `insert_id()` opsiyonel `?string $sequence` alır. Id tipi `int|string` (bigint/UUID korunur, `false` → `0`) (#60).
+- `DatabaseException::get_details()` taban sınıfta tanımlı; taban sınıf veya `ModelNotFoundException` loglanırken oluşan fatal error giderildi (#61).
+- `get_results()` ve `preload_query()` `fetchAll()` sonrası `closeCursor()` çağırır (#62).
+- `chunk_by_id()` sonu `-- yorum` ile biten sorguları doğru sarar (#64).
+- `SELECT ... INTO` (OUTFILE, `@var`, PostgreSQL tablo oluşturma) replikaya değil primary'ye gider (#65).
+
+### Performance
+- Statement cache gerçek LRU: isabetler sona taşınır, sık kullanılan ifadeler atılmaz; hit/miss istatistikleri sayılır (#63).
+
+### Changed
+- PHPStan baseline'dan düzeltilen hataların girdileri kaldırıldı (50 → 19) (#75).
+- `QueryOptimizer::optimize()` seçeneklerinden `rewrite`, `optimize_subqueries`, `optimize_joins` yok sayılır (deprecated).
+
 ## [2.1.0] - 2026-10-05
 
 ### Added
