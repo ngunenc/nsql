@@ -438,7 +438,6 @@ nsql/
 │       ├── security/             # Çekirdek: SQL analizi ve log maskeleme
 │       │   ├── query_analyzer.php
 │       │   └── sensitive_data_filter.php # Hassas veri filtresi
-│       ├── seeds/                # Seed dosyaları
 │       ├── templates/            # View şablonları
 │       └── traits/               # Trait sınıfları
 │           ├── cache_trait.php    # Önbellekleme işlemleri
@@ -733,14 +732,17 @@ $executed = $manager->migrate();
 
 #### Seed Kullanımı
 
-Test ve demo verisi eklemek için seed modülünü kullanabilirsiniz:
+Seed dosyaları uygulamanızın seeds dizininde durur (`SEEDS_PATH`, varsayılan `database/seeds`). Yeni seeder iskeleti için `vendor/bin/nsql seed:create UserSeeder` veya `$manager->create_seeder('UserSeeder')`; örnek için repodaki `examples/database/seeds/UserSeeder.php`'ye bakın (paketle dağıtılmaz).
 
 ```php
-use nsql\database\seeds\UserSeeder;
+use nsql\database\MigrationManager;
 
-$seeder = new UserSeeder();
-$seeder->run(); // Örnek kullanıcı verilerini ekler
+$manager = new MigrationManager($db);
+$manager->seed('UserSeeder'); // database/seeds/UserSeeder.php
+$manager->seed();             // dizindeki tüm seeder'lar
 ```
+
+> v2.1.1: `nsql\database\seeds\UserSeeder` (sabit şifreli demo seeder) paketten kaldırıldı.
 
 #### Güvenlik Modülleri
 

@@ -527,14 +527,11 @@ $manager->rollback(2); // Son 2 migration'ı geri al
 
 ```php
 <?php
-// src/database/seeds/user_seeder.php
-
-namespace nsql\database\seeds;
+// database/seeds/UserSeeder.php (uygulamanızın SEEDS_PATH dizini)
 
 use nsql\database\Nsql;
 
-class user_seeder
-{
+return new class () {
     public function run(Nsql $db): void
     {
         $users = [
@@ -559,8 +556,7 @@ class user_seeder
             );
         }
     }
-}
-?>
+};
 ```
 
 ### Seed Çalıştırma
@@ -575,7 +571,7 @@ $manager = new MigrationManager($db);
 $manager->seed();
 
 // Belirli seed'i çalıştır
-$manager->seed('user_seeder');
+$manager->seed('UserSeeder');
 ?>
 ```
 
