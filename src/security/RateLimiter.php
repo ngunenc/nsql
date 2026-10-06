@@ -38,14 +38,20 @@ class RateLimiter
         $this->db = $db;
         $this->clock = $clock ?? static fn (): int => time();
 
-        $this->table = (string) ($options['table'] ?? 'rate_limits');
-        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $this->table)) {
-            throw new \InvalidArgumentException("Geçersiz rate limit tablo adı: {$this->table}");
-        }
+        $this->table = self::assert_table_name((string) ($options['table'] ?? 'rate_limits'));
 
         $this->capacity = max(1, (int) ($options['max_requests'] ?? Config::get('RATE_LIMIT_MAX_REQUESTS', Config::rate_limit_max_requests)));
         $this->window = max(1, (int) ($options['window'] ?? Config::get('RATE_LIMIT_WINDOW', Config::rate_limit_window)));
         $this->burst_limit = max(1, (int) ($options['burst'] ?? Config::get('RATE_LIMIT_BURST', Config::rate_limit_burst)));
+    }
+
+    private static function assert_table_name(string $table): string
+    {
+        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table)) {
+            throw new \InvalidArgumentException('Geçersiz rate limit tablo adı: ' . substr($table, 0, 64));
+        }
+
+        return $table;
     }
 
     /**
@@ -62,6 +68,7 @@ class RateLimiter
      */
     public static function schema_statements(string $table = 'rate_limits', string $driver = 'mysql'): array
     {
+        self::assert_table_name($table);
         $columns = "identifier VARCHAR(255) NOT NULL,
             request_type VARCHAR(50) NOT NULL DEFAULT 'default',
             tokens %s NOT NULL DEFAULT 0,
