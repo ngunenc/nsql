@@ -24,7 +24,7 @@ class SessionManagerTest extends TestCase
     }
 
     #[RunInSeparateProcess]
-    public function test_existing_session_data_is_preserved(): void
+    public function test_existing_session_data_is_preserved_and_id_regenerated(): void
     {
         $this->prepare_session_ini();
         session_start();
@@ -34,9 +34,36 @@ class SessionManagerTest extends TestCase
         (new SessionManager(['send_headers' => false]))->start();
 
         $this->assertSame(PHP_SESSION_ACTIVE, session_status());
-        $this->assertSame($id, session_id());
+        $this->assertNotSame($id, session_id());
         $this->assertSame(42, $_SESSION['user_id']);
         $this->assertArrayHasKey('_fingerprint', $_SESSION);
+        session_destroy();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_planted_session_id_is_not_kept(): void
+    {
+        $this->prepare_session_ini();
+        session_id('attackerchosenid0123456789abcdef');
+
+        (new SessionManager(['send_headers' => false]))->start();
+
+        $this->assertNotSame('attackerchosenid0123456789abcdef', session_id());
+        session_destroy();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_established_session_keeps_id_on_next_start(): void
+    {
+        $this->prepare_session_ini();
+        (new SessionManager(['send_headers' => false]))->start();
+        $id = session_id();
+        session_write_close();
+
+        session_id($id);
+        (new SessionManager(['send_headers' => false]))->start();
+
+        $this->assertSame($id, session_id());
         session_destroy();
     }
 

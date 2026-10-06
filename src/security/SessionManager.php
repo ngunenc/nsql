@@ -91,6 +91,12 @@ class SessionManager
         }
 
         if (! $this->validate_session()) {
+            // Session fixation: istemcinin getirdiği ID ile güvenli oturum kurulmaz (veri korunur)
+            $uses_cookies = filter_var(ini_get('session.use_cookies'), FILTER_VALIDATE_BOOLEAN);
+            if (! $uses_cookies || ! headers_sent()) {
+                session_regenerate_id(true);
+            }
+
             $now = time();
             $_SESSION['_created'] = $now;
             $_SESSION['_last_activity'] = $now;
