@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.1.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.2.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -108,6 +108,8 @@
 >
 > **v2.1.1**: Güvenlik ve kararlılık düzeltmeleri: session fixation, production'da anahtar üretimi kapalı, Redis/Memcached `clear()` yalnızca kendi önekini siler, PostgreSQL `INSERT ... RETURNING`, statement cache LRU. Davranış değişiklikleri: [UPGRADE.md](UPGRADE.md#210--211)
 >
+> **v2.2.0**: ORM eager loading (`with: ['author']`, `eager_load()`), tek kullanımlık CSRF doğrulama (`consume: true`), bağlantı havuzu %80 doluluk uyarısı, `schema:check` `tinyint(1)` ↔ `integer` uyumu. Geçiş: [UPGRADE.md](UPGRADE.md#211--220)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -173,7 +175,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.1.0 --prefer-dist
+composer require ngunenc/nsql:^2.2.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -193,13 +195,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.1.0"
+        "ngunenc/nsql": "^2.2.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.1.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.2.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1763,6 +1765,12 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v2.2.0 (2026-10-06)
+  - ORM eager loading: `Model::get(..., with: [...])`, `first(..., with: [...])`, `Model::eager_load()`; ilişki başına tek `IN` sorgusu (#72).
+  - CSRF: tek token kaynağı (`csrf_token`), `validate_csrf_token($token, consume: true)` ile tek kullanımlık doğrulama (#70).
+  - Bağlantı havuzu %80 doluluk uyarısı (`ConnectionPool::set_logger()`) ve README bağlantı yaşam döngüsü bölümü (#71).
+  - Şema doğrulama: `integer` tanımı MySQL `tinyint(1)`'i kabul eder (#73).
 
 - v2.1.1 (2026-10-06)
   - Güvenlik: session fixation koruması (#55), production'da `ENCRYPTION_KEY` zorunlu (#56), Redis/Memcached `clear()` önek kapsamlı (#57), paylaşılan query cache store bağlantı kapsamlı (#58), `QueryOptimizer` SQL yeniden yazmıyor (#59), `HealthCheck` hata ayrıntısı sızdırmıyor (#68), `RateLimiter` şema tablo adı doğrulaması (#69), demo seeder paketten çıkarıldı (#67), `QueryAnalyzer` tanı aracı olarak belgelendi (#66).

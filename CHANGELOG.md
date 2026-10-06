@@ -4,6 +4,22 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.2.0] - 2026-10-06
+
+Geçiş notları: [UPGRADE.md](UPGRADE.md#211--220).
+
+### Added
+- ORM eager loading (#72): `Model::get(..., with: ['author'])`, `Model::first(..., with: [...])`, `Model::eager_load($models, ...$relations)`. `belongs_to` / `has_one` / `has_many` için ilişki başına tek `WHERE ... IN (...)` sorgusu (1000'lik parçalar); ilişki tanımı mevcut ilişki metodundan alınır.
+- CSRF tek kullanımlık doğrulama (#70): `SessionManager::validate_csrf_token($token, consume: true)` başarılı doğrulamadan sonra token'ı yeniler; `SecurityManager::validate_csrf_token()` ve `Nsql::validate_csrf()` parametreyi aktarır.
+- Bağlantı havuzu doluluk uyarısı (#71): havuz %80 dolduğunda havuz başına bir kez WARNING; `ConnectionPool::set_logger()` (varsayılan `error_log`). README'ye "Bağlantı yaşam döngüsü" bölümü.
+
+### Changed
+- `SessionManager` oturum meta verisindeki ayrı `_token` artık üretilmez ve oturum doğrulamasında aranmaz; tek CSRF kaynağı `csrf_token` (#70).
+- `validate_csrf_token()` string olmayan token'ı (dizi vb.) doğrudan reddeder.
+
+### Fixed
+- Şema doğrulama: `integer` tanımı MySQL/MariaDB `tinyint(1)` kolonunu kabul eder (yanlış tip farkı alarmı giderildi) (#73).
+
 ## [2.1.1] - 2026-10-06
 
 Güvenlik, kararlılık ve performans düzeltmeleri. Davranış değişiklikleri için: [UPGRADE.md](UPGRADE.md#210--211).
