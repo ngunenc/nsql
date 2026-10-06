@@ -1,5 +1,16 @@
 # Yükseltme Rehberi
 
+## 2.1.1 → 2.2.0
+
+Minor sürüm; yeni özellikler isteğe bağlıdır. Kontrol edilecekler:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `$_SESSION['_token']` artık yok (#70) | Bu anahtarı CSRF veya başka amaçla okuyan kod | `SessionManager::get_csrf_token()` kullanın. Eski oturumlardaki `_token` değeri zararsızdır, kendiliğinden temizlenmez |
+| `validate_csrf_token()` dizi / sayı token'ı reddeder | Token'ı string dışında gönderen istemciler | Token'ı form/başlıktan string olarak iletin |
+| Havuz doluluk uyarısı (#71) | Aynı süreçte çok sayıda `Nsql` örneği açan uygulamalar | Log'da uyarı görürseniz örnekleri yeniden kullanın (`Nsql::connection()`); README "Bağlantı yaşam döngüsü" |
+| `schema:check` `integer` ↔ `tinyint(1)` (#73) | MySQL'de durum kodu için `tinyint(1)` kullanan şemalar | İşlem gerekmez; önceki yanlış alarm kalkar |
+
 ## 2.1.0 → 2.1.1
 
 Patch sürümü; public API kırılmadı. Aşağıdaki davranış değişikliklerini kontrol edin:
