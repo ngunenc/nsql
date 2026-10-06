@@ -8,6 +8,7 @@
 - [Query Builder](#-query-builder)
 - [Security Sınıfları](#-security-sınıfları)
 - [Migration Manager](#-migration-manager)
+- [ORM: İlişkiler ve Eager Loading](#-orm-i̇lişkiler-ve-eager-loading)
 - [Traits](#-traits)
 - [Loglama, Sorgu Olayları ve Paylaşılan Cache](#-loglama-sorgu-olayları-ve-paylaşılan-cache-v1100)
 - [Çoklu Bağlantı ve Okuma/Yazma Ayrımı](#-çoklu-bağlantı-ve-okumayazma-ayrımı-v1110)
@@ -463,6 +464,50 @@ vendor/bin/nsql schema:check --schema=db/schema.php --strict --json
 | SQLite | `PRAGMA table_info` | Tip ailesi bildirilen tipten çıkarılır |
 
 Kapsam dışı: index, foreign key, unique, auto-increment, charset/collation, enum değerleri.
+
+## 🧩 ORM: İlişkiler ve Eager Loading
+
+İlişkiler alt sınıfta parametresiz public metot olarak tanımlanır; özellik gibi erişildiğinde bir kez yüklenir (lazy).
+
+```php
+class Post extends Model
+{
+    public function author(): ?Author { return $this->belongs_to(Author::class); }   // posts.author_id → authors.id
+}
+
+class Author extends Model
+{
+    public function posts(): array { return $this->has_many(Post::class, scope: fn ($q) => $q->order_by('id')); }
+    public function profile(): ?Profile { return $this->has_one(Profile::class); }  // profiles.author_id
+}
+```
+
+### Eager loading (v2.2.0+)
+
+Liste üzerinde ilişkiye erişmek her model için ayrı sorgu çalıştırır (N+1). `with` / `eager_load()` ilişki başına **tek** `WHERE anahtar IN (...)` sorgusu çalıştırır ve sonuçları modellere dağıtır (`relation_loaded()` true olur):
+
+```php
+// 100 gönderi + yazarları: 2 sorgu
+$posts = Post::get(fn ($q) => $q->order_by('id'), $db, with: ['author']);
+
+// Birden fazla ilişki: ilişki başına 1 sorgu
+$authors = Author::get(null, $db, with: ['posts', 'profile']);
+$author = Author::first(fn ($q) => $q->where('id', '=', 5), $db, with: ['posts']);
+
+// Elde olan modeller için
+Post::eager_load($posts, 'author');
+```
+
+```php
+Model::get(?callable $scope = null, ?Nsql $db = null, array $with = []): array
+Model::first(?callable $scope = null, ?Nsql $db = null, array $with = []): ?static
+Model::eager_load(array $models, string ...$relations): array
+```
+
+- `belongs_to`, `has_one`, `has_many` desteklenir; ilişki metodu bu yardımcılardan birini döndürmüyorsa `InvalidArgumentException`.
+- `has_many` scope'u (sıralama, filtre) toplu sorguya uygulanır; scope içindeki `limit()` ebeveyn başına değil toplam sonuca uygulanır.
+- 1000'den fazla anahtar parçalara bölünür (parça başına bir sorgu). Soft delete'li ilişkili modellerde silinmişler hariç tutulur.
+- Aynı yazara ait gönderiler aynı `Author` örneğini paylaşır.
 
 ## 🧩 Traits
 

@@ -1626,11 +1626,13 @@ foreach ($author->posts as $post) {        // ilk erişimde yüklenir, sonra ön
 }
 $author->load('posts');                    // yeniden yükle
 $active = Author::get(fn ($q) => $q->where('is_active', '=', true)->order_by('name'));
+$posts = Post::get(null, $db, with: ['author']);   // eager loading (v2.2.0+): 2 sorgu, N+1 yok
 echo json_encode($author);                 // cast'li alanlar + yüklenmiş ilişkiler
 ```
 
 - İlişki metotları: `belongs_to($class, $foreign_key = '<ilişkili>_id', $owner_key = pk)`, `has_one` / `has_many($class, $foreign_key = '<bu_model>_id', $local_key = pk)`. Anahtar adları sınıfın snake_case adından türetilir (`BlogPost` → `blog_post_id`). İlişki metotları model örnekleri döndürür (v1.12.0 öncesi `has_many()` satır nesneleri döndürüyordu; özellik erişimi aynı çalışır).
 - Cast tipleri: `int`, `float`/`decimal`, `bool`, `string`, `array`/`json`, `object`, `datetime`, `date`. Ham değer: `get_raw_attribute()`.
+- Eager loading: `get(..., with: ['author'])`, `first(..., with: [...])`, `Model::eager_load($models, 'author')`; ilişki başına tek `WHERE ... IN (...)` sorgusu ([ayrıntı](docs/api-reference.md#eager-loading-v220)).
 - Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find()`, `find_or_fail()` (`ModelNotFoundException`, `DatabaseException` alt sınıfı), `hydrate($rows)`. `all()` geriye uyumluluk için satır nesneleri döndürmeye devam eder.
 - Tablo adı: `$table` verilmezse `Inflector` ile türetilir: `BlogPost` → `blog_posts`, `Category` → `categories`, `Person` → `people` (2.0 varsayılanı). 1.x davranışı (`strtolower(Sınıf) . 's'`): `ORM_TABLE_NAMING=legacy`.
 

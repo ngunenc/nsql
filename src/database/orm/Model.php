@@ -54,6 +54,14 @@ abstract class Model implements \JsonSerializable
     /** @var array<string, array<string, bool>> */
     private static array $relation_methods = [];
 
+    /** eager_load(): ilişki metodu sorgu çalıştırmak yerine tanımını kaydeder */
+    private bool $capturing_relation = false;
+
+    /** @var array{type: string, related: class-string<Model>, foreign_key: string, key: ?string, scope: ?callable}|null */
+    private ?array $captured_relation = null;
+
+    private const eager_chunk_size = 1000;
+
     public function __construct(?Nsql $db = null, array $attributes = [])
     {
         $this->db = $db ?? Nsql::connection();
@@ -202,9 +210,10 @@ abstract class Model implements \JsonSerializable
      * Kayıtları model örnekleri olarak getirir.
      *
      * @param (callable(QueryBuilder): mixed)|null $scope Sorguyu daraltır: fn ($q) => $q->where(...)
+     * @param list<string> $with Toplu yüklenecek ilişkiler (bkz. eager_load())
      * @return list<static>
      */
-    public static function get(?callable $scope = null, ?Nsql $db = null): array
+    public static function get(?callable $scope = null, ?Nsql $db = null, array $with = []): array
     {
         $instance = new static($db);
         $builder = $instance->query();
@@ -212,13 +221,16 @@ abstract class Model implements \JsonSerializable
             $scope($builder);
         }
 
-        return static::hydrate($builder->get(), $instance->db);
+        $models = static::hydrate($builder->get(), $instance->db);
+
+        return $with === [] ? $models : static::eager_load($models, ...$with);
     }
 
     /**
      * @param (callable(QueryBuilder): mixed)|null $scope
+     * @param list<string> $with Yüklenecek ilişkiler
      */
-    public static function first(?callable $scope = null, ?Nsql $db = null): ?static
+    public static function first(?callable $scope = null, ?Nsql $db = null, array $with = []): ?static
     {
         $instance = new static($db);
         $builder = $instance->query();
@@ -226,8 +238,126 @@ abstract class Model implements \JsonSerializable
             $scope($builder);
         }
         $row = $builder->first();
+        if ($row === null) {
+            return null;
+        }
 
-        return $row === null ? null : $instance->new_from_row($row);
+        $model = $instance->new_from_row($row);
+
+        return $with === [] ? $model : static::eager_load([$model], ...$with)[0];
+    }
+
+    /**
+     * İlişkileri model listesine toplu yükler: ilişki başına tek `WHERE anahtar IN (...)` sorgusu
+     * (N+1 yerine; 1000'den fazla anahtar parçalara bölünür). `belongs_to`, `has_one`, `has_many`
+     * desteklenir; has_many scope'u (sıralama, filtre) toplu sorguya uygulanır, scope içindeki
+     * LIMIT ise ebeveyn başına değil toplam sonuca uygulanır.
+     *
+     * @param list<static> $models
+     * @return list<static>
+     * @throws \InvalidArgumentException İlişki metodu yoksa veya bu yardımcılarla tanımlanmamışsa
+     */
+    public static function eager_load(array $models, string ...$relations): array
+    {
+        if ($models === []) {
+            return $models;
+        }
+        foreach ($models as $model) {
+            if (! $model instanceof static) {
+                throw new \InvalidArgumentException('eager_load(): tüm modeller ' . static::class . ' olmalıdır.');
+            }
+        }
+
+        $db = $models[0]->db;
+        foreach ($relations as $relation) {
+            $definition = $models[0]->relation_definition($relation);
+            $related = new $definition['related']($db);
+
+            if ($definition['type'] === 'belongs_to') {
+                $owner_key = $definition['key'] ?? $related->primary_key;
+                $by_key = [];
+                foreach (self::fetch_related($related, $owner_key, self::key_values($models, $definition['foreign_key']), null) as $row) {
+                    $by_key[(string) $row->{$owner_key}] ??= $related->new_from_row($row);
+                }
+                foreach ($models as $model) {
+                    $value = $model->attributes[$definition['foreign_key']] ?? null;
+                    $model->relations[$relation] = $value === null ? null : ($by_key[(string) $value] ?? null);
+                }
+
+                continue;
+            }
+
+            $local_key = $definition['key'] ?? $models[0]->primary_key;
+            $foreign_key = $definition['foreign_key'];
+            $groups = [];
+            foreach (self::fetch_related($related, $foreign_key, self::key_values($models, $local_key), $definition['scope']) as $row) {
+                $groups[(string) $row->{$foreign_key}][] = $related->new_from_row($row);
+            }
+            foreach ($models as $model) {
+                $value = $model->attributes[$local_key] ?? null;
+                $group = $value === null ? [] : ($groups[(string) $value] ?? []);
+                $model->relations[$relation] = $definition['type'] === 'has_one' ? ($group[0] ?? null) : $group;
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * @return array{type: string, related: class-string<Model>, foreign_key: string, key: ?string, scope: ?callable}
+     */
+    private function relation_definition(string $relation): array
+    {
+        if (! self::is_relation_method(static::class, $relation)) {
+            throw new \InvalidArgumentException(static::class . "::{$relation}() bir ilişki metodu değil.");
+        }
+
+        $probe = new static($this->db);
+        $probe->capturing_relation = true;
+        try {
+            $probe->{$relation}();
+        } finally {
+            $probe->capturing_relation = false;
+        }
+
+        return $probe->captured_relation ?? throw new \InvalidArgumentException(
+            static::class . "::{$relation}() belongs_to/has_one/has_many ile tanımlanmadığı için toplu yüklenemez."
+        );
+    }
+
+    /**
+     * @param list<Model> $models
+     * @return list<mixed>
+     */
+    private static function key_values(array $models, string $key): array
+    {
+        $values = [];
+        foreach ($models as $model) {
+            $value = $model->attributes[$key] ?? null;
+            if ($value !== null) {
+                $values[(string) $value] = $value;
+            }
+        }
+
+        return array_values($values);
+    }
+
+    /**
+     * @param list<mixed> $values
+     * @return list<object>
+     */
+    private static function fetch_related(Model $related, string $column, array $values, ?callable $scope): array
+    {
+        $rows = [];
+        foreach (array_chunk($values, self::eager_chunk_size) as $chunk) {
+            $builder = $related->query()->where_in($column, $chunk);
+            if ($scope !== null) {
+                $scope($builder);
+            }
+            array_push($rows, ...$builder->get());
+        }
+
+        return $rows;
     }
 
     /**
@@ -563,6 +693,17 @@ abstract class Model implements \JsonSerializable
     protected function belongs_to(string $related_class, ?string $foreign_key = null, ?string $owner_key = null): ?Model
     {
         $foreign_key ??= Inflector::snake(self::short_name($related_class)) . '_id';
+        if ($this->capturing_relation) {
+            $this->captured_relation = [
+                'type' => 'belongs_to',
+                'related' => $related_class,
+                'foreign_key' => $foreign_key,
+                'key' => $owner_key,
+                'scope' => null,
+            ];
+
+            return null;
+        }
         $foreign_value = $this->attributes[$foreign_key] ?? null;
 
         if ($foreign_value === null) {
@@ -585,6 +726,9 @@ abstract class Model implements \JsonSerializable
      */
     protected function has_one(string $related_class, ?string $foreign_key = null, ?string $local_key = null): ?Model
     {
+        if ($this->capture_relation('has_one', $related_class, $foreign_key, $local_key, null)) {
+            return null;
+        }
         $related = new $related_class($this->db);
         $builder = $this->related_query($related, $foreign_key, $local_key);
         if ($builder === null) {
@@ -605,6 +749,9 @@ abstract class Model implements \JsonSerializable
      */
     protected function has_many(string $related_class, ?string $foreign_key = null, ?string $local_key = null, ?callable $scope = null): array
     {
+        if ($this->capture_relation('has_many', $related_class, $foreign_key, $local_key, $scope)) {
+            return [];
+        }
         $related = new $related_class($this->db);
         $builder = $this->related_query($related, $foreign_key, $local_key);
         if ($builder === null) {
@@ -617,9 +764,33 @@ abstract class Model implements \JsonSerializable
         return $related::hydrate($builder->get(), $this->db);
     }
 
+    /**
+     * @param class-string<Model> $related_class
+     */
+    private function capture_relation(string $type, string $related_class, ?string $foreign_key, ?string $local_key, ?callable $scope): bool
+    {
+        if (! $this->capturing_relation) {
+            return false;
+        }
+        $this->captured_relation = [
+            'type' => $type,
+            'related' => $related_class,
+            'foreign_key' => $foreign_key ?? $this->default_foreign_key(),
+            'key' => $local_key,
+            'scope' => $scope,
+        ];
+
+        return true;
+    }
+
+    private function default_foreign_key(): string
+    {
+        return Inflector::snake(self::short_name(static::class)) . '_id';
+    }
+
     private function related_query(Model $related, ?string $foreign_key, ?string $local_key): ?QueryBuilder
     {
-        $foreign_key ??= Inflector::snake(self::short_name(static::class)) . '_id';
+        $foreign_key ??= $this->default_foreign_key();
         $local_value = $this->attributes[$local_key ?? $this->primary_key] ?? null;
 
         return $local_value === null ? null : $related->query()->where($foreign_key, '=', $local_value);

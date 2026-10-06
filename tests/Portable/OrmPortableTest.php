@@ -225,6 +225,61 @@ class OrmPortableTest extends PortableTestCase
         $this->assertFalse($profile->is_fillable('id'));
     }
 
+    public function test_eager_loading_uses_one_query_per_relation(): void
+    {
+        $authors = [$this->author('A'), $this->author('B'), $this->author('C')];
+        foreach ($authors as $i => $author) {
+            for ($j = 0; $j <= $i; $j++) {
+                (new Post($this->db, ['author_id' => $author->get_key(), 'title' => "p{$i}{$j}"]))->save();
+            }
+        }
+        (new Profile($this->db, ['author_id' => $authors[1]->get_key(), 'bio' => 'B bio']))->save();
+
+        $queries = [];
+        $this->db->on_query(function (...$args) use (&$queries) {
+            $queries[] = $args;
+        });
+
+        $posts = Post::get(fn ($q) => $q->order_by('id'), $this->db, with: ['author']);
+        $this->assertCount(6, $posts);
+        $this->assertCount(2, $queries, 'gönderiler + yazarlar');
+        foreach ($posts as $post) {
+            $this->assertTrue($post->relation_loaded('author'));
+            $this->assertSame((int) $post->author_id, (int) $post->author->get_key());
+        }
+        $this->assertSame('C', $posts[5]->author->name);
+        $this->assertCount(2, $queries, 'erişim ek sorgu çalıştırmaz');
+
+        $queries = [];
+        $loaded = Author::get(fn ($q) => $q->order_by('id'), $this->db, with: ['posts', 'profile']);
+        $this->assertCount(3, $queries, 'yazarlar + gönderiler + profiller');
+        $this->assertSame([1, 2, 3], array_map(fn (Author $a) => count($a->posts), $loaded));
+        $this->assertSame(['p20', 'p21', 'p22'], array_map(fn (Post $p) => $p->title, $loaded[2]->posts));
+        $this->assertNull($loaded[0]->profile);
+        $this->assertSame('B bio', $loaded[1]->profile->bio);
+        $this->assertCount(3, $queries);
+
+        $this->db->clear_query_listeners();
+    }
+
+    public function test_eager_load_on_existing_models_and_errors(): void
+    {
+        $author = $this->author();
+        $orphan = new Post($this->db);
+        $orphan->force_fill(['id' => 99, 'author_id' => 12345, 'title' => 'yetim']);
+
+        Post::eager_load([$orphan], 'author');
+        $this->assertTrue($orphan->relation_loaded('author'));
+        $this->assertNull($orphan->author);
+
+        $first = Author::first(fn ($q) => $q->where('id', '=', $author->get_key()), $this->db, with: ['posts']);
+        $this->assertSame([], $first->posts);
+        $this->assertTrue($first->relation_loaded('posts'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        Author::eager_load([$author], 'save');
+    }
+
     public function test_table_name_resolution_modes(): void
     {
         $this->assertSame('blog_categories', (new BlogCategory($this->db))->get_table());
