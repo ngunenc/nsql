@@ -1,5 +1,22 @@
 # Yükseltme Rehberi
 
+## 2.1.0 → 2.1.1
+
+Patch sürümü; public API kırılmadı. Aşağıdaki davranış değişikliklerini kontrol edin:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `KeyManager` production'da anahtar üretmez (#56) | `ENCRYPTION_KEY` tanımlamadan `Encryption` kullanan kurulumlar. `ENV` tanımlı değilse ortam **production** sayılır | `ENCRYPTION_KEY` tanımlayın; geliştirmede `ENV=development` veya bilerek `ENCRYPTION_KEY_AUTO_GENERATE=true`. Daha önce `storage/keys` altında üretilmiş anahtar dosyası varsa okunmaya devam eder |
+| Session ID ilk güvenli kurulumda yenilenir (#55) | Session ID'yi kendisi saklayan / karşılaştıran kod | `secure_session_start()` sonrasında `session_id()` değerini yeniden okuyun |
+| Memcached kayıt formatı ve anahtar öneki (#57) | `MemcachedAdapter` | Eski kayıtlar bir kez cache miss olur; işlem gerekmez. Aynı sunucuyu paylaşan uygulamalar için `prefix` parametresi verin |
+| Redis `clear()` yalnızca önekli anahtarları siler (#57) | `clear()` ile tüm veritabanını boşalttığını varsayan kod | Gerekirse `FLUSHDB`'yi kendiniz çağırın |
+| Query cache store öneki bağlantıya göre (#58) | `set_query_cache_store()` / `QUERY_CACHE_STORE` | Yükseltme sonrası paylaşılan store'daki eski kayıtlar bir kez miss olur |
+| `QueryOptimizer::optimize()` SQL'i yeniden yazmaz (#59) | `rewrite` çıktısına güvenen kod | Sorgu artık olduğu gibi döner; index hint'lerde tablo/index adı geçersizse `InvalidArgumentException` |
+| `nsql\database\seeds\UserSeeder` kaldırıldı (#67) | Demo seeder'ı doğrudan kullanan kod | `examples/database/seeds/UserSeeder.php`'yi kendi seeds dizininize kopyalayın; şifreleri değiştirin |
+| `HealthCheck` yanıtında hata ayrıntısı yok (#68) | Yanıttaki `message` / `error` alanını okuyan izleme | Ayrıntı için `new HealthCheck($db, $logger)` ile PSR-3 logger verin |
+| `insert()` / `insert_id()` dönüş tipi `int\|string` (#60) | Sonucu `int` tip ipucuyla karşılayan kod | PHP int aralığı dışındaki ve sayısal olmayan id'ler `string` döner; `(int)` dönüşümü gerekiyorsa açıkça yapın |
+| `SELECT ... INTO` primary'de çalışır (#65) | Read/write split | İşlem gerekmez |
+
 ## 1.x → 2.0.0
 
 2.0.0, 1.x boyunca bayrak ve takma adlarla duyurulan kırıcı değişiklikleri varsayılan yapar. Metot adları ve
