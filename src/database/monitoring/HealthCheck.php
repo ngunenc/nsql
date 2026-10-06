@@ -3,19 +3,34 @@
 namespace nsql\database\monitoring;
 
 use nsql\database\Nsql;
+use Psr\Log\LoggerInterface;
 
 /**
  * Health Check
  *
- * Veritabanı ve sistem sağlık kontrolü
+ * Veritabanı ve sistem sağlık kontrolü. Yanıt dışarı açılabileceği için hata ayrıntısı
+ * (exception mesajı / sınıfı) yanıta konmaz; logger'a veya error_log'a yazılır.
  */
 class HealthCheck
 {
     private Nsql $db;
+    private ?LoggerInterface $logger;
 
-    public function __construct(Nsql $db)
+    public function __construct(Nsql $db, ?LoggerInterface $logger = null)
     {
         $this->db = $db;
+        $this->logger = $logger;
+    }
+
+    private function report(string $check, \Throwable $e): void
+    {
+        $message = "nsql health check '{$check}' failed: " . get_class($e) . ': ' . $e->getMessage();
+        if ($this->logger !== null) {
+            $this->logger->error($message, ['check' => $check, 'exception' => $e]);
+
+            return;
+        }
+        error_log($message);
     }
 
     /**
@@ -77,11 +92,12 @@ class HealthCheck
                 'status' => 'unhealthy',
                 'message' => 'Database query failed',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            $this->report('database', $e);
+
             return [
                 'status' => 'unhealthy',
-                'message' => $e->getMessage(),
-                'error' => get_class($e),
+                'message' => 'Database check failed',
             ];
         }
     }
@@ -101,10 +117,12 @@ class HealthCheck
                 'size' => $cache_stats['size'],
                 'message' => $cache_stats['enabled'] ? 'Cache is operational' : 'Cache is disabled',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            $this->report('cache', $e);
+
             return [
                 'status' => 'unhealthy',
-                'message' => $e->getMessage(),
+                'message' => 'Cache check failed',
             ];
         }
     }
@@ -133,10 +151,12 @@ class HealthCheck
                 'usage_percent' => round($usage_percent, 2) . '%',
                 'message' => 'Memory usage is ' . $status,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            $this->report('memory', $e);
+
             return [
                 'status' => 'unknown',
-                'message' => $e->getMessage(),
+                'message' => 'Memory check failed',
             ];
         }
     }
