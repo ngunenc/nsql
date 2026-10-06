@@ -44,4 +44,22 @@ class DatabaseException extends RuntimeException
     {
         return $this->execution_time;
     }
+
+    /**
+     * Loglama için hata ayrıntıları; alt sınıflar kendi alanlarıyla ezer.
+     *
+     * @return array<string, mixed>
+     */
+    public function get_details(): array
+    {
+        return [
+            'message' => $this->getMessage(),
+            'code' => $this->getCode(),
+            'query' => $this->query,
+            'params' => $this->params,
+            'context' => $this->context,
+            'file' => $this->getFile(),
+            'line' => $this->getLine(),
+        ];
+    }
 }
