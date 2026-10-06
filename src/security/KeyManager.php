@@ -47,10 +47,31 @@ class KeyManager
         }
 
         // 4. Yeni key oluştur ve sakla
+        if (! self::auto_generate_allowed()) {
+            throw new RuntimeException(
+                'Encryption key bulunamadı. Production ortamında anahtar otomatik üretilmez: '
+                . 'ENCRYPTION_KEY ortam değişkenini tanımlayın (veya bilerek ENCRYPTION_KEY_AUTO_GENERATE=true).'
+            );
+        }
+
         $key = self::generate_key();
         self::save_key_to_storage($key);
 
         return $key;
+    }
+
+    /**
+     * Anahtar yokken dosyaya yeni anahtar üretilebilir mi? ENCRYPTION_KEY_AUTO_GENERATE verilmezse
+     * production dışındaki ortamlarda evet.
+     */
+    public static function auto_generate_allowed(): bool
+    {
+        $flag = \nsql\database\Config::get('encryption_key_auto_generate');
+        if ($flag === null || $flag === '') {
+            return \nsql\database\Config::get_environment() !== 'production';
+        }
+
+        return filter_var($flag, FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
