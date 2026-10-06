@@ -176,4 +176,35 @@ class SessionManagerTest extends TestCase
         Config::set('csrf_token_ttl', null);
         $_SESSION = [];
     }
+
+    public function test_consumed_csrf_token_is_single_use(): void
+    {
+        $_SESSION = [];
+
+        $token = SessionManager::get_csrf_token();
+        $this->assertTrue(SessionManager::validate_csrf_token($token));
+        $this->assertTrue(SessionManager::validate_csrf_token($token), 'varsayılan: TTL boyunca tekrar kullanılabilir');
+
+        $this->assertTrue(SessionManager::validate_csrf_token($token, consume: true));
+        $this->assertFalse(SessionManager::validate_csrf_token($token, consume: true));
+        $this->assertFalse(SessionManager::validate_csrf_token($token));
+
+        $next = SessionManager::get_csrf_token();
+        $this->assertNotSame($token, $next);
+        $this->assertTrue(SessionManager::validate_csrf_token($next));
+
+        $_SESSION = [];
+    }
+
+    public function test_failed_consume_does_not_rotate(): void
+    {
+        $_SESSION = [];
+        $token = SessionManager::get_csrf_token();
+
+        $this->assertFalse(SessionManager::validate_csrf_token('yanlis', consume: true));
+        $this->assertFalse(SessionManager::validate_csrf_token(['dizi'], consume: true));
+        $this->assertSame($token, SessionManager::get_csrf_token());
+
+        $_SESSION = [];
+    }
 }

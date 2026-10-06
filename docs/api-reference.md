@@ -331,8 +331,8 @@ SecurityManager::escape_html(mixed $string): string
 // CSRF token oluşturma
 SecurityManager::generate_csrf_token(): string
 
-// CSRF token doğrulama
-SecurityManager::validate_csrf_token(mixed $token): bool
+// CSRF token doğrulama; $consume = true başarılı doğrulamadan sonra token'ı yeniler (tek kullanımlık, v2.2.0+)
+SecurityManager::validate_csrf_token(mixed $token, bool $consume = false): bool
 
 // SQL parametrelerini doğrulama
 SecurityManager::validate_sql_params(array $params): bool
@@ -607,7 +607,12 @@ $safe_html = SecurityManager::escape_html('<script>alert("xss")</script>');
 // CSRF koruması
 $token = SecurityManager::generate_csrf_token();
 $is_valid = SecurityManager::validate_csrf_token($token);
+
+// Hassas işlem (şifre değişikliği, ödeme): token tek kullanımlık
+$is_valid = SecurityManager::validate_csrf_token($_POST['csrf_token'] ?? '', consume: true);
 ```
+
+Tek CSRF kaynağı `$_SESSION['csrf_token']`'dır (`SessionManager::get_csrf_token()`); v2.2.0'da oturum meta verisindeki ayrı `_token` kaldırıldı.
 
 ### Migration Kullanımı
 
