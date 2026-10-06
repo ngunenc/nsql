@@ -86,7 +86,9 @@ class PgsqlDriver implements DriverInterface
     public function get_last_insert_id(\PDO $pdo, ?string $sequence = null): int|string
     {
         if ($sequence === null) {
-            // lastval(): oturumda sequence kullanılmadıysa (SERIAL'sız tablo) hata verir → 0
+            // lastval() oturumdaki son sequence değeridir (trigger başka sequence'i ilerletirse
+            // yanlış olabilir); QueryBuilder/ORM bu yüzden INSERT ... RETURNING kullanır.
+            // Oturumda sequence kullanılmadıysa hata verir → 0
             try {
                 $stmt = $pdo->query('SELECT lastval()');
                 $id = $stmt === false ? false : $stmt->fetchColumn();
@@ -94,9 +96,14 @@ class PgsqlDriver implements DriverInterface
                 return 0;
             }
 
-            return is_numeric($id) ? (int) $id : 0;
+            return InsertId::normalize($id);
         }
-        return $pdo->lastInsertId($sequence);
+
+        try {
+            return InsertId::normalize($pdo->lastInsertId($sequence));
+        } catch (\PDOException) {
+            return 0;
+        }
     }
 
     public function get_limit_clause(int $limit, int $offset = 0): string

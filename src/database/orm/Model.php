@@ -3,6 +3,7 @@
 namespace nsql\database\orm;
 
 use nsql\database\Config;
+use nsql\database\exceptions\QueryException;
 use nsql\database\Nsql;
 use nsql\database\QueryBuilder;
 
@@ -339,13 +340,29 @@ abstract class Model implements \JsonSerializable
         $placeholders = implode(', ', array_fill(0, count($columns), '?'));
 
         $sql = "INSERT INTO {$table} (" . implode(', ', $columns) . ") VALUES ({$placeholders})";
-        $result = $this->db->insert($sql, array_values($data));
 
-        if ($result === false) {
-            return false;
+        if ($this->db->get_driver_name() === 'pgsql') {
+            try {
+                $id = $this->db->insert_returning(
+                    $sql . ' RETURNING ' . $this->db->quote_identifier($this->primary_key),
+                    array_values($data),
+                    $this->primary_key
+                );
+            } catch (QueryException $e) {
+                if ($this->db->throw_on_error()) {
+                    throw $e;
+                }
+
+                return false;
+            }
+        } else {
+            $id = $this->db->insert($sql, array_values($data));
+            if ($id === false) {
+                return false;
+            }
         }
 
-        $this->attributes[$this->primary_key] = $this->db->insert_id();
+        $this->attributes[$this->primary_key] = $id;
         if ($this->timestamps) {
             $this->attributes[$this->created_at_column] = $data[$this->created_at_column];
             $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
