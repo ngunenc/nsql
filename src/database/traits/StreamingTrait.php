@@ -251,7 +251,8 @@ trait StreamingTrait
         $quoted = $this->get_driver_name() === 'mysql' ? "`{$column}`" : "\"{$column}\"";
         $positional = $params !== [] && array_is_list($params);
         $placeholder = $positional ? '?' : ':nsql_chunk_last';
-        $base = 'SELECT * FROM (' . rtrim(trim($query), ';') . ') nsql_chunk';
+        // Satır sonları: sorgu `-- yorum` ile biterse sarmalayıcının devamı yorumda kalmasın
+        $base = "SELECT * FROM (\n" . rtrim(trim($query), ';') . "\n) nsql_chunk";
 
         $last = null;
         while (true) {

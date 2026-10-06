@@ -49,4 +49,14 @@ class StreamingPortableTest extends PortableTestCase
 
         $this->assertSame(range(1, 25), $seen);
     }
+
+    public function test_chunk_by_id_with_trailing_line_comment(): void
+    {
+        $sizes = [];
+        foreach ($this->db->chunk_by_id("SELECT id, label FROM p_events WHERE id > ? -- son yorum", [5], 'id', 10) as $chunk) {
+            $sizes[] = count($chunk);
+        }
+
+        $this->assertSame([10, 10], $sizes);
+    }
 }
