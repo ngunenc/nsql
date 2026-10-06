@@ -73,7 +73,9 @@ trait ReadWriteSplitTrait
         if (! preg_match('/^\s*(SELECT|WITH|SHOW|DESCRIBE|DESC|EXPLAIN)\b/i', $sql, $m)) {
             return false;
         }
-        if (preg_match('/\bFOR\s+(UPDATE|SHARE)\b|\bLOCK\s+IN\s+SHARE\s+MODE\b/i', $sql)) {
+        // SELECT ... INTO (OUTFILE, @var, PostgreSQL'de yeni tablo) yan etkilidir; literal'de geçen
+        // "into" da primary'ye gider (güvenli yön)
+        if (preg_match('/\bFOR\s+(UPDATE|SHARE)\b|\bLOCK\s+IN\s+SHARE\s+MODE\b|\bINTO\b/i', $sql)) {
             return false;
         }
 
