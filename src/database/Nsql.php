@@ -387,6 +387,7 @@ class Nsql
         }
 
         $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+        $stmt->closeCursor();
 
         // rowCount() SELECT için sürücüler arası güvenilir değil; gerçek satır sayısı kullanılır
         $result_count = count($results);
@@ -461,6 +462,7 @@ class Nsql
 
             // Sonuçları al
             $results = $stmt->fetchAll(\PDO::FETCH_OBJ);
+            $stmt->closeCursor();
 
             // Tabloları otomatik çıkar (eğer belirtilmemişse)
             if (empty($tables)) {
