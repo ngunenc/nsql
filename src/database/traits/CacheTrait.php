@@ -201,9 +201,20 @@ trait CacheTrait
      */
     public function set_query_cache_store(?CacheInterface $cache, string $prefix = 'nsql_qc_'): static
     {
-        $this->query_cache_store = $cache !== null ? new QueryCacheStore($cache, $prefix) : null;
+        $this->query_cache_store = $cache !== null
+            ? new QueryCacheStore($cache, $prefix . $this->query_cache_scope() . '_')
+            : null;
 
         return $this;
+    }
+
+    /**
+     * Paylaşılan store'da kayıtları ve sürüm token'larını bağlantıya göre ayıran kısa kimlik
+     * (DSN + kullanıcı); farklı veritabanları aynı SQL için birbirinin sonucunu okumaz.
+     */
+    private function query_cache_scope(): string
+    {
+        return substr(hash('sha256', $this->dsn . "\0" . (string) $this->user), 0, 12);
     }
 
     /**
