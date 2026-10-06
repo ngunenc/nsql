@@ -848,6 +848,14 @@ echo "Statement Cache Hit Rate: " . $statementCacheStats['hit_rate'] . "%\n";
 
 ### Query Analyzer İstatistikleri
 
+Query analyzer regex kalıplarıyla riskli (WHERE'siz DELETE, DROP …), yavaş ve şüpheli sorguları raporlayan bir **tanı aracıdır**; sorgu yürütmeye otomatik bağlı değildir ve SQL injection'ı engellemez. Kullanıcı girdisini her zaman parametre olarak bağlayın.
+
+```php
+// Sorguyu çalıştırmadan denetle
+$report = $db->analyze_sql('DELETE FROM users');
+// ['issues' => [['type' => 'delete_without_where', 'risk_level' => 'critical', ...]], 'risk_score' => ..., 'recommendations' => [...]]
+```
+
 ```php
 // Query analyzer istatistikleri
 $analyzerStats = $db->get_query_analyzer_stats();

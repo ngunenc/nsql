@@ -2,8 +2,13 @@
 
 namespace nsql\database\traits;
 
+use nsql\database\exceptions\QueryException;
 use nsql\database\security\QueryAnalyzer;
 
+/**
+ * Regex tabanlı sorgu denetimi (tanı aracı). Sorgu yürütmeye otomatik bağlı değildir ve SQL
+ * injection koruması sağlamaz; koruma parametre bağlama ve quote_identifier() doğrulamasıdır.
+ */
 trait QueryAnalyzerTrait
 {
     private ?QueryAnalyzer $query_analyzer = null;
@@ -32,7 +37,19 @@ trait QueryAnalyzerTrait
     }
 
     /**
-     * Sorguyu analiz eder ve riskli ise exception fırlatır (optimize edilmiş)
+     * Sorguyu çalıştırmadan analiz eder (risk, performans ve şüpheli kalıp bulguları).
+     *
+     * @return array{query: string, issues: list<array<string, mixed>>, risk_score: int|float, recommendations: list<string>}
+     */
+    public function analyze_sql(string $query): array
+    {
+        $this->query_analyzer ??= new QueryAnalyzer();
+
+        return $this->query_analyzer->analyze_query($query);
+    }
+
+    /**
+     * Analiz açıksa sorguyu denetler; kritik bulguda QueryException fırlatır.
      */
     protected function analyze_query(string $query): void
     {
@@ -58,9 +75,10 @@ trait QueryAnalyzerTrait
         // Kritik risk varsa exception fırlat
         foreach ($analysis['issues'] as $issue) {
             if ($issue['risk_level'] === 'critical') {
-                throw new \Exception(
+                throw new QueryException(
                     "Kritik risk tespit edildi: {$issue['message']}\n" .
-                    "Öneriler:\n" . implode("\n", $analysis['recommendations'])
+                    "Öneriler:\n" . implode("\n", $analysis['recommendations']),
+                    $query
                 );
             }
         }
