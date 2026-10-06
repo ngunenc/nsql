@@ -25,7 +25,7 @@ ENCRYPTION_KEY=üretilen-base64-değer
 
 ### Dosya tabanlı (geliştirme)
 
-`ENCRYPTION_KEY` tanımlı değilse kütüphane ilk kullanımda `encryption.key` oluşturur:
+`ENCRYPTION_KEY` tanımlı değilse kütüphane ilk kullanımda `encryption.key` oluşturur. v2.1.1'den itibaren bu yalnızca production dışındaki ortamlarda (`ENV=development`, `testing` …) yapılır; `ENV` tanımlı değilse ortam `production` sayılır ve anahtar yoksa `RuntimeException` fırlatılır. Bilerek dosya tabanlı anahtar istiyorsanız `ENCRYPTION_KEY_AUTO_GENERATE=true` verin ve dosyayı web kökünün dışında tutun (`ENCRYPTION_KEY_STORAGE` ile mutlak yol). Windows'ta dosya izinleri (`0600`) uygulanmaz.
 
 ```php
 use nsql\security\KeyManager;
