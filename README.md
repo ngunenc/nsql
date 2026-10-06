@@ -1003,6 +1003,10 @@ $token = \nsql\security\SessionManager::get_csrf_token();
 if (Nsql::validate_csrf($_POST['token'] ?? '')) {
     // Form işleme
 }
+// Hassas işlemlerde tek kullanımlık token (v2.2.0+): doğrulamadan sonra yenilenir
+if (Nsql::validate_csrf($_POST['token'] ?? '', consume: true)) {
+    // Şifre değişikliği vb.
+}
 
 // XSS koruması
 echo Nsql::escape_html($userInput);

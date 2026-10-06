@@ -85,14 +85,16 @@ class SecurityManager
 
     /**
      * CSRF token doğrulaması yapar
+     *
+     * @param bool $consume true ise başarılı doğrulamadan sonra token yenilenir (tek kullanımlık)
      */
-    public static function validate_csrf_token(mixed $token): bool
+    public static function validate_csrf_token(mixed $token, bool $consume = false): bool
     {
         if (session_status() !== PHP_SESSION_ACTIVE) {
             session_start();
         }
 
-        return SessionManager::validate_csrf_token($token);
+        return SessionManager::validate_csrf_token($token, $consume);
     }
 
     /**

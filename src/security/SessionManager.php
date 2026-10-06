@@ -103,7 +103,6 @@ class SessionManager
             $_SESSION['_regenerated_at'] = $now;
             $_SESSION['_requests'] = 0;
             $_SESSION['_fingerprint'] = $this->generate_fingerprint();
-            $_SESSION['_token'] = $this->generate_token();
         }
 
         $this->initialized = true;
@@ -209,7 +208,6 @@ class SessionManager
         }
 
         $_SESSION = $old_session;
-        $_SESSION['_token'] = $this->generate_token();
         $_SESSION['_regenerated_at'] = time();
 
         return true;
@@ -258,19 +256,13 @@ class SessionManager
         return $ip;
     }
 
-    private function generate_token(): string
-    {
-        return bin2hex(random_bytes(32));
-    }
-
     private function validate_session(): bool
     {
         return isset(
             $_SESSION['_created'],
             $_SESSION['_last_activity'],
             $_SESSION['_requests'],
-            $_SESSION['_fingerprint'],
-            $_SESSION['_token']
+            $_SESSION['_fingerprint']
         );
     }
 
@@ -368,8 +360,11 @@ class SessionManager
 
     /**
      * CSRF token'ı doğrular (süresi dolmuş token reddedilir).
+     *
+     * @param bool $consume true ise başarılı doğrulamadan sonra token yenilenir (tek kullanımlık;
+     *                      hassas işlemler için). Aynı sayfadaki diğer formlar yeni token almalıdır.
      */
-    public static function validate_csrf_token(mixed $token): bool
+    public static function validate_csrf_token(mixed $token, bool $consume = false): bool
     {
         if (! isset($_SESSION['csrf_token']) || ! is_string($_SESSION['csrf_token'])) {
             return false;
@@ -380,6 +375,14 @@ class SessionManager
             return false;
         }
 
-        return hash_equals($_SESSION['csrf_token'], (string) $token);
+        if (! is_string($token) || ! hash_equals($_SESSION['csrf_token'], $token)) {
+            return false;
+        }
+
+        if ($consume) {
+            self::rotate_csrf_token();
+        }
+
+        return true;
     }
 }

@@ -60,9 +60,11 @@ trait SessionFacadeTrait
 
     /**
      * CSRF token doğrulaması yap
+     *
+     * @param bool $consume true ise başarılı doğrulamadan sonra token yenilenir (tek kullanımlık)
      */
-    public static function validate_csrf(mixed $token): bool
+    public static function validate_csrf(mixed $token, bool $consume = false): bool
     {
-        return self::session()->validate_csrf_token((string)$token);
+        return self::session()->validate_csrf_token($token, $consume);
     }
 }
