@@ -39,7 +39,7 @@ trait QueryAnalyzerTrait
     /**
      * Sorguyu çalıştırmadan analiz eder (risk, performans ve şüpheli kalıp bulguları).
      *
-     * @return array{query: string, issues: list<array<string, mixed>>, risk_score: int|float, recommendations: list<string>}
+     * @return array<string, mixed> query, issues, risk_score, recommendations
      */
     public function analyze_sql(string $query): array
     {
