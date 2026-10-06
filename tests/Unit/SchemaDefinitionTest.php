@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use nsql\database\schema\ColumnInfo;
 use nsql\database\schema\Schema;
 use nsql\database\schema\SchemaDifference;
 use nsql\database\schema\SchemaInspector;
@@ -145,6 +146,31 @@ class SchemaDefinitionTest extends TestCase
     public function test_defaults_match(mixed $expected, ?string $actual, string $type, bool $match): void
     {
         $this->assertSame($match, SchemaValidator::defaults_match($expected, $actual, $type));
+    }
+
+    /**
+     * @return array<string, array{string, string, string, bool}>
+     */
+    public static function type_compatibility(): array
+    {
+        return [
+            'integer vs mysql tinyint(1)' => ['integer', 'tinyint(1)', 'boolean', true],
+            'integer vs mysql tinyint(1) unsigned' => ['integer', 'tinyint(1) unsigned', 'boolean', true],
+            'boolean vs mysql tinyint(1)' => ['boolean', 'tinyint(1)', 'boolean', true],
+            'integer vs pgsql boolean' => ['integer', 'boolean', 'boolean', false],
+            'string vs mysql tinyint(1)' => ['string', 'tinyint(1)', 'boolean', false],
+            'boolean vs int' => ['boolean', 'int(11)', 'integer', false],
+            'json vs mariadb longtext' => ['json', 'longtext', 'text', true],
+        ];
+    }
+
+    #[DataProvider('type_compatibility')]
+    public function test_type_compatibility(string $expected, string $raw_type, string $family, bool $compatible): void
+    {
+        $actual = new ColumnInfo('c', $raw_type, $family, false, null);
+        $method = new \ReflectionMethod(SchemaValidator::class, 'type_compatible');
+
+        $this->assertSame($compatible, $method->invoke(null, $expected, $actual));
     }
 
     public function test_report_formats_errors_and_warnings(): void

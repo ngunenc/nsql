@@ -81,7 +81,7 @@ final class SchemaValidator
         $diff = static fn (string $kind, mixed $e, mixed $a): SchemaDifference => new SchemaDifference($kind, $table, $expected->name, $e, $a);
         $differences = [];
 
-        if (! in_array($actual->type, self::COMPATIBLE[$expected->type] ?? [$expected->type], true)) {
+        if (! self::type_compatible($expected->type, $actual)) {
             return [$diff(SchemaDifference::TYPE_MISMATCH, $expected->type, $actual->raw_type)];
         }
 
@@ -109,6 +109,16 @@ final class SchemaValidator
         }
 
         return $differences;
+    }
+
+    private static function type_compatible(string $expected, ColumnInfo $actual): bool
+    {
+        if (in_array($actual->type, self::COMPATIBLE[$expected] ?? [$expected], true)) {
+            return true;
+        }
+
+        // MySQL/MariaDB tinyint(1) boolean ailesine eşlenir ama küçük tam sayı (durum kodu vb.) da olabilir
+        return $expected === 'integer' && $actual->type === 'boolean' && str_starts_with($actual->raw_type, 'tinyint(1)');
     }
 
     /**
