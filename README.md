@@ -1467,6 +1467,7 @@ Nsql::secure_session_start();
 Bu fonksiyon (`SessionManager`);
 - Oturum çerezini `HttpOnly` ve `SameSite=Strict` olarak ayarlar; `secure` verilmezse isteğin HTTPS olup olmadığına göre belirlenir (yerel HTTP geliştirmede çerez çalışır).
 - Uygulama oturumu zaten başlattıysa oturumu **yok etmez**; mevcut oturumu kullanır.
+- Güvenli oturum ilk kez kurulurken session ID yenilenir (session fixation koruması, v2.1.1); oturum verisi korunur. Yetki değişikliğinden (login) sonra `regenerate_id()` çağırmaya devam edin.
 - `X-Frame-Options` ve `X-Content-Type-Options` gönderir. HSTS yalnızca HTTPS'te ve `hsts` açıkça verilirse gönderilir; artık önerilmeyen `X-XSS-Protection` gönderilmez.
 - Parmak izi varsayılan olarak IP içermez (mobil kullanıcılar atılmaz). İsteğe bağlı: `'fingerprint_ip' => 'prefix'` (IPv4 /24, IPv6 /64) veya `'full'`.
 - `validate()` session ID'yi `regenerate_interval` saniyede bir yeniler.
