@@ -950,6 +950,25 @@ Connection Pool, veritabanı bağlantılarını yönetir ve performansı artır�
 
 > **v1.5.15+**: Havuz her DSN + kullanıcı için ayrıdır ve yalnızca PHP sürecinin belleğinde tutulur (PHP-FPM worker'ları arasında paylaşılmaz, kilit dosyası kullanılmaz). Her `nsql` örneği tek bir fiziksel bağlantı kullanır; örnek yok edildiğinde bağlantı havuza döner ve aynı süreçteki sonraki örnekler tarafından yeniden kullanılır.
 
+#### Bağlantı yaşam döngüsü
+
+- Her `Nsql` örneği ömrü boyunca **bir** bağlantı tutar. Aynı süreçte aynı anda yaşayan örnek sayısı `MAX_CONNECTIONS`'ı (varsayılan 15) aşarsa `Kullanılabilir bağlantı yok (havuz dolu)` hatası alınır.
+- Önerilen kullanım, süreç başına tek örnektir: `Nsql::connection()` (veya `Nsql::connection('reporting')`) ilk çağrıda bağlantıyı açar, sonraki çağrılarda aynı örneği döndürür. Döngü içinde `new Nsql()` yapmayın; servis/DI container'da tek örnek paylaşın.
+- Uzun ömürlü süreçlerde (worker, daemon, Swoole/RoadRunner) örnekleri saklamak yerine `Nsql::connection()` kullanın; iş bitince örneğe referans tutmayın.
+- Havuz doluluğu %80'e ulaştığında havuz başına bir kez uyarı loglanır (v2.2.0+). Uyarı varsayılan olarak `error_log`'a gider; kendi logger'ınızı verebilirsiniz: `ConnectionPool::set_logger($psr3_logger)`.
+- Veritabanı tarafında gereken bağlantı sayısı ≈ **FPM worker sayısı × worker başına aynı anda açık örnek sayısı** (genelde 1; replica ve isimlendirilmiş bağlantılar her biri +1). Örneğin `pm.max_children = 50` ve tek bağlantı → en fazla 50 bağlantı; MySQL `max_connections` değerini buna göre ayarlayın.
+
+```php
+use nsql\database\Nsql;
+
+// Uygulama genelinde tek örnek
+$db = Nsql::connection();
+$users = $db->get_results('SELECT id, name FROM users WHERE active = ?', [1]);
+
+// Raporlama veritabanı (DB_REPORTING_HOST / DB_REPORTING_NAME ... veya ConnectionManager::add())
+$report = Nsql::connection('reporting');
+```
+
 ```php
 // Süreçteki tüm havuzların toplam istatistikleri
 $stats = Nsql::get_pool_stats();
