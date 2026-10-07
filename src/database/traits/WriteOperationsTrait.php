@@ -123,9 +123,6 @@ trait WriteOperationsTrait
             $stmt = $this->execute_query($sql, $values);
 
             if ($stmt === false) {
-                if ($use_transaction) {
-                    $this->rollback();
-                }
                 throw new QueryException('Batch insert başarısız oldu.', $sql, $values);
             }
 
