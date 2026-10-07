@@ -49,6 +49,30 @@ class ConnectionLossRetryTest extends TestCase
         $this->assertFalse(self::should_retry(self::pdo_error('HY000', 2006), 'SELECT 1', 3));
     }
 
+    /**
+     * @return array<string, array{string, int, bool}>
+     */
+    public static function connection_errors(): array
+    {
+        return [
+            'mysql gone away' => ['HY000', 2006, true],
+            'mysql lost during query' => ['HY000', 2013, true],
+            'pgsql connection failure' => ['08006', 7, true],
+            'pgsql connection does not exist' => ['08003', 7, true],
+            'pgsql admin shutdown' => ['57P01', 7, true],
+            'pgsql syntax error' => ['42601', 7, false],
+            'mysql duplicate key' => ['23000', 1062, false],
+        ];
+    }
+
+    #[DataProvider('connection_errors')]
+    public function test_connection_lost_detection(string $sql_state, int $driver_code, bool $expected): void
+    {
+        $method = new \ReflectionMethod(Nsql::class, 'is_connection_lost_error');
+
+        $this->assertSame($expected, $method->invoke(null, self::pdo_error($sql_state, $driver_code)));
+    }
+
     public function test_non_connection_errors_are_not_retried(): void
     {
         $this->assertFalse(self::should_retry(self::pdo_error('42S02', 1146), 'SELECT * FROM missing'));
