@@ -114,6 +114,49 @@ class SessionManagerTest extends TestCase
         $manager->validate();
     }
 
+    #[RunInSeparateProcess]
+    public function test_accept_language_change_does_not_kill_session_by_default(): void
+    {
+        $this->prepare_session_ini();
+        $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'tr-TR,tr;q=0.9';
+        $manager = new SessionManager(['send_headers' => false]);
+        $manager->start();
+
+        $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'en-US,en;q=0.8';
+        $manager->validate();
+
+        $this->assertSame(PHP_SESSION_ACTIVE, session_status());
+        session_destroy();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_accept_language_can_be_added_to_fingerprint_fields(): void
+    {
+        $this->prepare_session_ini();
+        $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'tr-TR,tr;q=0.9';
+        $manager = new SessionManager([
+            'send_headers' => false,
+            'fingerprint_fields' => ['HTTP_USER_AGENT', 'HTTP_ACCEPT_LANGUAGE'],
+        ]);
+        $manager->start();
+
+        $_SERVER['HTTP_ACCEPT_LANGUAGE'] = 'en-US,en;q=0.8';
+        $this->expectExceptionMessage('Session hijacking');
+        $manager->validate();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_user_agent_change_still_kills_session(): void
+    {
+        $this->prepare_session_ini();
+        $manager = new SessionManager(['send_headers' => false]);
+        $manager->start();
+
+        $_SERVER['HTTP_USER_AGENT'] = 'other-agent';
+        $this->expectExceptionMessage('Session hijacking');
+        $manager->validate();
+    }
+
     public function test_http_request_gets_no_hsts_and_no_xss_header(): void
     {
         $headers = (new SessionManager(['hsts' => true]))->security_headers();

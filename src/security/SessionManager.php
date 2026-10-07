@@ -16,9 +16,9 @@ class SessionManager
     private const max_requests = 5000;
     private const max_lifetime = 43200; // 12 saat
     public const csrf_token_ttl = 7200; // saniye
+    /** Accept-Language dahil edilmez: tarayıcı/istek türüne göre değişir, meşru oturumları düşürür */
     private const fingerprint_fields = [
         'HTTP_USER_AGENT',
-        'HTTP_ACCEPT_LANGUAGE',
         'HTTP_SEC_CH_UA',
         'HTTP_SEC_CH_UA_PLATFORM',
     ];
