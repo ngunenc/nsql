@@ -130,7 +130,7 @@ class Config
 
             $env_value = getenv($candidate);
             if ($env_value !== false) {
-                $value = self::cast_value($env_value);
+                $value = self::cast_value($env_value, $candidate);
                 self::$config[$candidate] = $value;
 
                 return $value;
@@ -403,15 +403,19 @@ class Config
                 $key = strtoupper(trim(substr($line, 0, $pos)));
                 $value = trim(substr($line, $pos + 1));
 
-                // Çift tırnak/tek tırnakları temizle
+                // Tırnaklı değer olduğu gibi string kalır (ör. DB_PASS="0123")
                 if (
-                    (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
-                    (str_starts_with($value, "'") && str_ends_with($value, "'"))
+                    strlen($value) >= 2 && (
+                        (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+                        (str_starts_with($value, "'") && str_ends_with($value, "'"))
+                    )
                 ) {
-                    $value = substr($value, 1, -1);
+                    self::$config[$key] = substr($value, 1, -1);
+
+                    continue;
                 }
 
-                self::$config[$key] = self::cast_value($value);
+                self::$config[$key] = self::cast_value($value, $key);
             }
 
             // Maksimum satır sayısı aşıldıysa uyar
@@ -591,11 +595,20 @@ class Config
     }
 
     /**
+     * Kimlik bilgisi taşıyan anahtar mı? Bu değerler tip dönüşümüne uğramaz
+     * (`DB_PASS=0123` → `"0123"`, `DB_PASS=yes` → `"yes"`).
+     */
+    public static function is_credential_key(string $key): bool
+    {
+        return preg_match('/(?:^|_)(?:PASS|PASSWORD|USER|USERNAME|NAME|TOKEN|SECRET|KEY)$/', self::canonical_key($key)) === 1;
+    }
+
+    /**
      * Dizge tabanlı değerleri uygun tipe dönüştürür
      */
-    private static function cast_value(mixed $value): mixed
+    private static function cast_value(mixed $value, string $key = ''): mixed
     {
-        if (! is_string($value)) {
+        if (! is_string($value) || ($key !== '' && self::is_credential_key($key))) {
             return $value;
         }
 
