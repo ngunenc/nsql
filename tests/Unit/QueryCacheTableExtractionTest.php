@@ -18,6 +18,11 @@ class QueryCacheTableExtractionTest extends TestCase
             {
                 return $this->extract_tables_from_query($sql);
             }
+
+            public function get_transaction_level(): int
+            {
+                return 0;
+            }
         };
 
         $tables = $subject->extract($sql);

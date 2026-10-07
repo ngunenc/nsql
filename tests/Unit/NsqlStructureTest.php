@@ -25,7 +25,10 @@ class NsqlStructureTest extends TestCase
                 $trait_properties[$property->getName()][] = $trait->getShortName();
             }
             foreach ($trait->getMethods() as $method) {
-                $trait_methods[$method->getName()][] = $trait->getShortName();
+                // abstract bildirim başka trait'e bağımlılık sözleşmesidir, kopya tanım değil
+                if (! $method->isAbstract()) {
+                    $trait_methods[$method->getName()][] = $trait->getShortName();
+                }
             }
         }
 

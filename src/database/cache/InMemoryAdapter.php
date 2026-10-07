@@ -48,7 +48,7 @@ class InMemoryAdapter implements CacheAdapterInterface
             // En eski entry'yi sil (basit LRU)
             $oldest_key = array_key_first($this->cache);
             if ($oldest_key !== null) {
-                $this->delete($oldest_key);
+                $this->delete((string) $oldest_key);
             }
         }
 

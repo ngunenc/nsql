@@ -42,6 +42,9 @@ trait CacheTrait
     private array $table_ttl_overrides = [];
     private array $cache_warming_strategies = []; // table_name => strategy_config
 
+    /** Transaction içinde cache bypass edilir; host sınıf (TransactionTrait) sağlar */
+    abstract public function get_transaction_level(): int;
+
     /**
      * Sorgudan benzersiz önbellek anahtarı oluşturur
      */
@@ -102,7 +105,7 @@ trait CacheTrait
             return false;
         }
 
-        return ! (method_exists($this, 'get_transaction_level') && $this->get_transaction_level() > 0);
+        return $this->get_transaction_level() === 0;
     }
 
     /**
@@ -424,7 +427,7 @@ trait CacheTrait
 
     private function in_cache_transaction(): bool
     {
-        return method_exists($this, 'get_transaction_level') && $this->get_transaction_level() > 0;
+        return $this->get_transaction_level() > 0;
     }
 
     /**

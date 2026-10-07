@@ -116,17 +116,15 @@ trait ErrorHandlingTrait
         mixed $default_value,
         bool $throw_exception
     ): mixed {
-        if (method_exists($this, 'log_error')) {
-            $this->log_error(
-                "PDO Exception: " . $e->getMessage(),
-                [
-                    'code' => $e->getCode(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ],
-                \nsql\database\logging\Logger::ERROR
-            );
-        }
+        $this->log_error(
+            "PDO Exception: " . $e->getMessage(),
+            [
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ],
+            \nsql\database\logging\Logger::ERROR
+        );
 
         if ($throw_exception) {
             throw $this->convert_to_database_exception($e);
@@ -143,13 +141,11 @@ trait ErrorHandlingTrait
         mixed $default_value,
         bool $throw_exception
     ): mixed {
-        if (method_exists($this, 'log_error')) {
-            $this->log_error(
-                "Database Exception: " . $e->getMessage(),
-                $e->get_details(),
-                \nsql\database\logging\Logger::ERROR
-            );
-        }
+        $this->log_error(
+            "Database Exception: " . $e->getMessage(),
+            $e->get_details(),
+            \nsql\database\logging\Logger::ERROR
+        );
 
         if ($throw_exception) {
             throw $e;
@@ -166,17 +162,15 @@ trait ErrorHandlingTrait
         mixed $default_value,
         bool $throw_exception
     ): mixed {
-        if (method_exists($this, 'log_error')) {
-            $this->log_error(
-                "Exception: " . $e->getMessage(),
-                [
-                    'code' => $e->getCode(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ],
-                \nsql\database\logging\Logger::ERROR
-            );
-        }
+        $this->log_error(
+            "Exception: " . $e->getMessage(),
+            [
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ],
+            \nsql\database\logging\Logger::ERROR
+        );
 
         if ($throw_exception) {
             throw $e;
@@ -193,17 +187,15 @@ trait ErrorHandlingTrait
         mixed $default_value,
         bool $throw_exception
     ): mixed {
-        if (method_exists($this, 'log_error')) {
-            $this->log_error(
-                "Throwable: " . $e->getMessage(),
-                [
-                    'code' => $e->getCode(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ],
-                \nsql\database\logging\Logger::CRITICAL
-            );
-        }
+        $this->log_error(
+            "Throwable: " . $e->getMessage(),
+            [
+                'code' => $e->getCode(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ],
+            \nsql\database\logging\Logger::CRITICAL
+        );
 
         if ($throw_exception) {
             throw $e;

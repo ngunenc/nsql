@@ -890,14 +890,6 @@ PHP;
         );
     }
 
-    private function remove_migration(string $name): void
-    {
-        $this->db->delete(
-            "DELETE FROM {$this->migrations_table} WHERE migration_name = :name",
-            ['name' => $name]
-        );
-    }
-
     /**
      * Migration status API'si
      */
@@ -919,17 +911,18 @@ PHP;
         if (! $result) {
             return null;
         }
+        $row = get_object_vars($result);
 
         return [
-            'migration_name' => $result->migration_name,
-            'status' => $result->status,
-            'batch' => (int)$result->batch,
-            'executed_at' => $result->executed_at,
-            'rolled_back_at' => $result->rolled_back_at,
-            'rolled_back_by' => $result->rolled_back_by,
-            'rollback_batch' => $result->rollback_batch ? (int)$result->rollback_batch : null,
-            'duration' => $result->duration ? (float)$result->duration : null,
-            'error_message' => $result->error_message,
+            'migration_name' => $row['migration_name'],
+            'status' => $row['status'],
+            'batch' => (int) $row['batch'],
+            'executed_at' => $row['executed_at'],
+            'rolled_back_at' => $row['rolled_back_at'],
+            'rolled_back_by' => $row['rolled_back_by'],
+            'rollback_batch' => $row['rollback_batch'] ? (int) $row['rollback_batch'] : null,
+            'duration' => $row['duration'] ? (float) $row['duration'] : null,
+            'error_message' => $row['error_message'],
         ];
     }
 

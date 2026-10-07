@@ -41,6 +41,10 @@ use PDOStatement;
  * - cache_trait / statement_cache_trait: sorgu ve statement cache
  * - error_model_trait: loglama, safe_execute, THROW_ON_ERROR
  * - session_facade_trait: statik session/CSRF kısayolları
+ *
+ * Alt sınıflar connect() içindeki `new static(...)` için constructor imzasını korumalıdır.
+ *
+ * @phpstan-consistent-constructor
  */
 class Nsql
 {
@@ -271,7 +275,7 @@ class Nsql
             throw $this->make_query_exception($query, []);
         }
 
-        if ($result !== false && ! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
+        if (! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
             $this->invalidate_cache_for_write($query);
         }
 

@@ -155,9 +155,7 @@ trait StatementCacheTrait
         }
 
         $memory_usage = memory_get_usage(true);
-        $memory_limit = method_exists($this, 'memory_thresholds')
-            ? $this->memory_thresholds()['warning']
-            : (int) \nsql\database\Config::get('memory_limit_warning', \nsql\database\Config::memory_limit_warning);
+        $memory_limit = $this->memory_thresholds()['warning'];
         $usage_ratio = $memory_usage / $memory_limit;
 
         // Memory kullanımı yüksekse cache limit'i azalt

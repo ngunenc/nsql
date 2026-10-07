@@ -33,6 +33,11 @@ class QueryCacheInternalsTest extends TestCase
                 $this->query_cache_timeout = $timeout;
             }
 
+            public function get_transaction_level(): int
+            {
+                return 0;
+            }
+
             public function put(string $key, mixed $data, array $tables, array $tags = []): bool
             {
                 return $this->add_to_query_cache($key, $data, $tags, $tables);

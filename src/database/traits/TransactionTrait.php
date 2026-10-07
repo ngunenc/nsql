@@ -21,7 +21,7 @@ trait TransactionTrait
      */
     public function begin(): void
     {
-        if ($this->transaction_level === 0 && method_exists($this, 'ensure_connection')) {
+        if ($this->transaction_level === 0) {
             $this->ensure_connection();
         }
 
@@ -31,7 +31,7 @@ trait TransactionTrait
             try {
                 $pdo->beginTransaction();
             } catch (\PDOException $e) {
-                if (! method_exists($this, 'is_connection_lost_error') || ! $this->is_connection_lost_error($e)) {
+                if (! self::is_connection_lost_error($e)) {
                     throw $e;
                 }
                 $this->reconnect($e);
@@ -220,7 +220,7 @@ trait TransactionTrait
      */
     private function require_pdo(): PDO
     {
-        if (! isset($this->pdo) || $this->pdo === null) {
+        if ($this->pdo === null) {
             throw new RuntimeException('PDO bağlantısı kurulamadı');
         }
 

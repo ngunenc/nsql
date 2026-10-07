@@ -59,9 +59,7 @@ trait ErrorModelTrait
             'line' => $e->getLine(),
         ];
 
-        if (method_exists($e, 'getTraceAsString')) {
-            $context['trace'] = $e->getTraceAsString();
-        }
+        $context['trace'] = $e->getTraceAsString();
 
         $this->log_error($e->getMessage(), $context, Logger::ERROR);
 
