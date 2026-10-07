@@ -11,7 +11,8 @@
          beStrictAboutCoverageMetadata="false"
          beStrictAboutOutputDuringTests="true"
          failOnRisky="true"
-         failOnWarning="true">
+         failOnWarning="true"
+         displayDetailsOnSkippedTests="true">
     <testsuites>
         <testsuite name="unit">
             <directory suffix="Test.php">tests/Unit</directory>
