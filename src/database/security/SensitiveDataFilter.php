@@ -15,6 +15,9 @@ class SensitiveDataFilter
 {
     public const MASK = '********';
 
+    /** Placeholder'dan hemen önceki `kolon <op>` (IN listesindeki önceki placeholder'lar dahil) */
+    private const COMPARED_COLUMN = '/[`"]?(\w+)[`"]?\s*(?:=|<>|!=|<=|>=|<|>|\bNOT\s+LIKE|\bLIKE|\bNOT\s+IN\s*\(|\bIN\s*\()(?:\s*(?:\?|:\w+)\s*,)*\s*$/i';
+
     /** @var list<string> */
     public const DEFAULT_KEYS = [
         'password',
@@ -84,6 +87,112 @@ class SensitiveDataFilter
     public static function mask_array(array $data): array
     {
         return (new self())->filter_array($data);
+    }
+
+    /**
+     * Sorgu parametrelerini maskeler: isimli anahtarların yanı sıra, SQL'de hassas bir kolona
+     * bağlanan placeholder'ların (`?`, `:ad`) değerleri de maskelenir. Kolon eşlemesi
+     * `INSERT ... (kolonlar) VALUES (...)` ve `kolon <op> placeholder` (IN listeleri dahil) için yapılır.
+     */
+    public static function mask_params(string $sql, array $params): array
+    {
+        $filter = new self();
+        $masked = $filter->filter_array($params);
+        if ($params === []) {
+            return $masked;
+        }
+
+        $positional = array_is_list($params);
+        $index = 0;
+        foreach (self::placeholder_columns($sql) as [$placeholder, $column]) {
+            if ($placeholder === '?') {
+                $key = $index++;
+                if (! $positional) {
+                    continue;
+                }
+            } else {
+                $key = array_key_exists($placeholder, $masked) ? $placeholder : substr($placeholder, 1);
+            }
+
+            if ($column === null || ! array_key_exists($key, $masked) || ! $filter->is_sensitive($column)) {
+                continue;
+            }
+
+            $masked[$key] = is_array($masked[$key]) && array_key_exists('value', $masked[$key])
+                ? ['value' => self::MASK] + $masked[$key]
+                : self::MASK;
+        }
+
+        return $masked;
+    }
+
+    /**
+     * SQL'deki placeholder'ları sırasıyla ve bağlandıkları kolon adıyla döndürür (kolon bilinmiyorsa null).
+     * String literal'ler ve yorumlar atlanır.
+     *
+     * @return list<array{0: string, 1: ?string}>
+     */
+    private static function placeholder_columns(string $sql): array
+    {
+        $masked_sql = (string) preg_replace_callback(
+            '/\'(?:[^\'\\\\]|\\\\.|\'\')*\'|"(?:[^"\\\\]|\\\\.)*"|--[^\n]*|\/\*.*?\*\//s',
+            static fn (array $m) => $m[0][0] === '"' ? $m[0] : str_repeat(' ', strlen($m[0])),
+            $sql
+        );
+
+        $insert_columns = [];
+        $values_start = null;
+        if (preg_match('/\bINSERT\b.*?\bINTO\s+\S+?\s*\(([^)]*)\)\s*VALUES\s*/is', $masked_sql, $m, PREG_OFFSET_CAPTURE)) {
+            $insert_columns = array_map(
+                static fn (string $c) => trim($c, " \t\n\r`\"[]"),
+                explode(',', $m[1][0])
+            );
+            $values_start = $m[0][1] + strlen($m[0][0]);
+        }
+
+        preg_match_all('/(?<![:\w])(\?|:[A-Za-z_]\w*)/', $masked_sql, $matches, PREG_OFFSET_CAPTURE);
+
+        $result = [];
+        foreach ($matches[1] as [$placeholder, $offset]) {
+            $column = null;
+            if ($values_start !== null && $offset >= $values_start) {
+                $column = self::insert_value_column($masked_sql, $values_start, $offset, $insert_columns);
+            }
+            if ($column === null && preg_match(self::COMPARED_COLUMN, substr($masked_sql, 0, $offset), $cm)) {
+                $column = $cm[1];
+            }
+            $result[] = [$placeholder, $column];
+        }
+
+        return $result;
+    }
+
+    /**
+     * VALUES listesindeki konumdan kolon adını bulur; VALUES bölümünün dışındaysa null.
+     *
+     * @param list<string> $columns
+     */
+    private static function insert_value_column(string $sql, int $start, int $offset, array $columns): ?string
+    {
+        $depth = 0;
+        $position = 0;
+        for ($i = $start; $i < $offset; $i++) {
+            $char = $sql[$i];
+            if ($char === '(') {
+                if ($depth === 0) {
+                    $position = 0;
+                }
+                $depth++;
+            } elseif ($char === ')') {
+                $depth--;
+            } elseif ($char === ',' && $depth === 1) {
+                $position++;
+            } elseif ($depth === 0 && $char !== ',' && ! ctype_space($char)) {
+                return null;
+            }
+        }
+
+        return $depth >= 1 ? ($columns[$position] ?? null) : null;
     }
 
     public function is_sensitive(int|string $key): bool

@@ -155,7 +155,7 @@ trait ErrorModelTrait
         return new QueryException(
             $this->last_error ?? 'Sorgu çalıştırılamadı',
             $sql,
-            SensitiveDataFilter::mask_array($params),
+            SensitiveDataFilter::mask_params($sql, $params),
             $code,
             $previous
         );

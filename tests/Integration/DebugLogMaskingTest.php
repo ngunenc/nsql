@@ -4,6 +4,7 @@ namespace Tests\Integration;
 
 use nsql\database\Config;
 use nsql\database\exceptions\ConnectionException;
+use nsql\database\exceptions\QueryException;
 use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 
@@ -59,6 +60,24 @@ class DebugLogMaskingTest extends DatabaseTestCase
         $this->assertStringContainsString('********', $log);
         $this->assertStringContainsString("'ali'", $log);
         $this->assertStringNotContainsString('hunter2', $html);
+    }
+
+    public function test_positional_sensitive_params_are_masked_in_exception_and_events(): void
+    {
+        $db = $this->debug_db();
+        $events = [];
+        $db->on_query(function ($event) use (&$events) {
+            $events[] = $event->params;
+        });
+
+        try {
+            $db->statement('INSERT INTO test_table (name, password) VALUES (?, ?)', ['ali', 'hunter2']);
+            $this->fail('QueryException bekleniyordu');
+        } catch (QueryException $e) {
+            $this->assertSame(['ali', '********'], $e->get_params());
+        }
+
+        $this->assertSame([['ali', '********']], $events);
     }
 
     public function test_debug_log_records_public_method_name(): void

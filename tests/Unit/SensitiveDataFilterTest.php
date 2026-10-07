@@ -49,6 +49,67 @@ class SensitiveDataFilterTest extends TestCase
         $this->assertSame(['a', 'b'], SensitiveDataFilter::mask_array(['a', 'b']));
     }
 
+    public function test_positional_insert_values_are_masked_by_column(): void
+    {
+        $masked = SensitiveDataFilter::mask_params(
+            'INSERT INTO `users` (`email`, password, created_at) VALUES (?, ?, NOW())',
+            ['a@b.c', 'hash']
+        );
+
+        $this->assertSame(['a@b.c', '********'], $masked);
+    }
+
+    public function test_multi_row_insert_maps_each_tuple(): void
+    {
+        $masked = SensitiveDataFilter::mask_params(
+            "INSERT INTO users (name, api_token, note) VALUES (?, ?, COALESCE(?, 'x')), (?, ?, ?)",
+            ['a', 't1', 'n1', 'b', 't2', 'n2']
+        );
+
+        $this->assertSame(['a', '********', 'n1', 'b', '********', 'n2'], $masked);
+    }
+
+    public function test_positional_update_and_where_are_masked_by_column(): void
+    {
+        $masked = SensitiveDataFilter::mask_params(
+            "UPDATE users SET name = ?, u.password = ? WHERE note = '?' AND id = ? AND secret_key IN (?, ?)",
+            ['ali', 'hash', 7, 's1', 's2']
+        );
+
+        $this->assertSame(['ali', '********', 7, '********', '********'], $masked);
+    }
+
+    public function test_named_placeholders_are_masked_by_column(): void
+    {
+        $masked = SensitiveDataFilter::mask_params(
+            'INSERT INTO users (email, password) VALUES (:__p0, :__p1) ON DUPLICATE KEY UPDATE password = :__p2',
+            [
+                ':__p0' => ['value' => 'a@b.c', 'type' => \PDO::PARAM_STR],
+                ':__p1' => ['value' => 'h1', 'type' => \PDO::PARAM_STR],
+                ':__p2' => ['value' => 'h2', 'type' => \PDO::PARAM_STR],
+            ]
+        );
+
+        $this->assertSame('a@b.c', $masked[':__p0']['value']);
+        $this->assertSame('********', $masked[':__p1']['value']);
+        $this->assertSame(\PDO::PARAM_STR, $masked[':__p1']['type']);
+        $this->assertSame('********', $masked[':__p2']['value']);
+
+        $this->assertSame(
+            ['id' => 3, 'pw' => '********'],
+            SensitiveDataFilter::mask_params('UPDATE users SET password = :pw WHERE id = :id', ['id' => 3, 'pw' => 'x'])
+        );
+    }
+
+    public function test_unmapped_values_are_kept(): void
+    {
+        $this->assertSame(
+            [1, 'x'],
+            SensitiveDataFilter::mask_params('SELECT * FROM t WHERE a BETWEEN ? AND ?', [1, 'x'])
+        );
+        $this->assertSame([5], SensitiveDataFilter::mask_params('SELECT ?::int', [5]));
+    }
+
     public function test_sensitive_keys_config_extends_list(): void
     {
         Config::set('sensitive_keys', 'phone, iban_no');
