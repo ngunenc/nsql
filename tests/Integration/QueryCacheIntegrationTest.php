@@ -64,6 +64,20 @@ class QueryCacheIntegrationTest extends DatabaseTestCase
         $this->assertSame($hits_before + 1, $this->db->get_cache_stats()['hits']);
     }
 
+    public function test_mutating_returned_rows_does_not_change_cache(): void
+    {
+        $id = $this->insert_row('original');
+        $row_sql = 'SELECT id, name FROM test_table WHERE id = :id';
+
+        $this->db->get_row($row_sql, ['id' => $id])->name = 'changed';
+        $this->db->get_results('SELECT name FROM test_table ORDER BY id')[0]->name = 'changed';
+
+        $hits_before = $this->db->get_cache_stats()['hits'];
+        $this->assertSame('original', $this->db->get_row($row_sql, ['id' => $id])->name);
+        $this->assertSame(['original'], $this->names());
+        $this->assertSame($hits_before + 2, $this->db->get_cache_stats()['hits']);
+    }
+
     public function test_query_builder_select_is_served_from_cache(): void
     {
         $this->insert_row('qb cached');
