@@ -2,6 +2,7 @@
 
 namespace Tests\Portable;
 
+use nsql\database\Config;
 use Tests\Support\PortableTestCase;
 
 class StreamingPortableTest extends PortableTestCase
@@ -36,6 +37,24 @@ class StreamingPortableTest extends PortableTestCase
         }
 
         $this->assertSame(1 + 2 + 3, $count);
+    }
+
+    public function test_get_yield_buffered_tolerates_zero_intervals(): void
+    {
+        Config::set('generator_cleanup_interval', 0);
+        Config::set('generator_gc_interval_multiplier', 0);
+
+        try {
+            $count = 0;
+            foreach ($this->db->get_yield('SELECT id FROM p_events ORDER BY id', [], unbuffered: false) as $row) {
+                $count++;
+            }
+        } finally {
+            Config::set('generator_cleanup_interval', null);
+            Config::set('generator_gc_interval_multiplier', null);
+        }
+
+        $this->assertSame(25, $count);
     }
 
     public function test_chunk_by_id_visits_every_row(): void

@@ -41,7 +41,9 @@ trait StreamingTrait
         }
 
         $offset = 0;
-        $chunk_size = (int) Config::get('default_chunk_size', Config::default_chunk_size);
+        $chunk_size = max(1, (int) Config::get('default_chunk_size', Config::default_chunk_size));
+        $cleanup_interval = max(1, (int) Config::get('generator_cleanup_interval', 1000));
+        $gc_interval = Config::default_chunk_size * max(1, (int) Config::get('generator_gc_interval_multiplier', 5));
         $total_rows = 0;
         $stmt = null;
 
@@ -78,8 +80,6 @@ trait StreamingTrait
                     $found_rows = true;
                     $total_rows++;
 
-                    // Memory optimizasyonu (config'den al)
-                    $cleanup_interval = Config::get('generator_cleanup_interval', 1000);
                     if ($total_rows % $cleanup_interval === 0) {
                         $this->cleanup_resources();
                     }
@@ -105,8 +105,7 @@ trait StreamingTrait
                 }
 
                 // Her chunk'tan sonra GC çağır (daha agresif cleanup)
-                $gc_interval_multiplier = Config::get('generator_gc_interval_multiplier', 5);
-                if ($offset % (Config::default_chunk_size * $gc_interval_multiplier) === 0) {
+                if ($offset % $gc_interval === 0) {
                     gc_collect_cycles();
                 }
             }
