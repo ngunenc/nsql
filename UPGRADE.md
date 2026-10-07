@@ -1,5 +1,18 @@
 # Yükseltme Rehberi
 
+## 2.2.0 → 2.2.1
+
+Patch sürümü; public API kırılmadı. Aşağıdaki davranış değişikliklerini kontrol edin:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| Session fingerprint'te `Accept-Language` yok (#86) | `SessionManager` / `secure_session_start()` kullanan uygulamalar | Yükseltme sonrası mevcut oturumlar ilk `validate()` çağrısında bir kez sonlanır (kullanıcı yeniden giriş yapar). Bunu istemiyorsanız geçiş süresince `fingerprint_fields`'e `HTTP_ACCEPT_LANGUAGE`'i ekleyin |
+| Tırnaklı `.env` değerleri string kalır (#77) | `DEBUG_MODE="false"`, `DB_PORT="3306"` gibi tırnaklı bool/sayı değerleri | Bool ve sayıları tırnaksız yazın; tırnaklı `"false"` artık string'tir |
+| Kimlik bilgisi anahtarları dönüştürülmez (#77) | `*_PASS`, `*_USER`, `*_NAME`, `*_TOKEN`, `*_SECRET`, `*_KEY` değerini int/bool bekleyen kod | Değer her zaman string döner; gerekiyorsa açıkça dönüştürün |
+| `batch_insert()` kolon uyumsuzluğunda hata verir (#84) | Satırları farklı kolon kümeleriyle gönderen kod | Eksik kolonlara açıkça `null` verin; kolon sırası farklı olabilir |
+| Yazma sorguları bağlantı kopmasında tekrar denenmez (#80) | Kopan bağlantıda `INSERT`/`UPDATE`'in otomatik tekrarına güvenen kod | Hata çağırana iletilir; gerekirse idempotent yazmaları uygulamada tekrar deneyin |
+| Havuz istatistik etiketi değişti (#83) | `get_stats()['pools']` anahtarlarını saklayan izleme | Etiketler DSN + kullanıcıdan türetilir; aynı DSN/kullanıcılı havuzlar `-2`, `-3` ekiyle ayrılır |
+
 ## 2.1.1 → 2.2.0
 
 Minor sürüm; yeni özellikler isteğe bağlıdır. Kontrol edilecekler:

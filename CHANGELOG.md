@@ -4,6 +4,25 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.2.1] - 2026-10-07
+
+Hata ve güvenlik düzeltmeleri. Davranış değişiklikleri için: [UPGRADE.md](UPGRADE.md#220--221).
+
+### Security
+- Hata, debug ve sorgu olayı çıktılarında konumsal (`?`) ve QueryBuilder (`:p1`) parametreleri SQL'deki kolon adına göre maskelenir; `INSERT INTO users (password) VALUES (?)` şifresi artık açık yazılmaz (#79).
+- `ConnectionPool::get_stats()['pools']` etiketi şifre içermeyen DSN + kullanıcı hash'inden türetilir; dahili havuz anahtarı süreç başına gizli anahtarla HMAC olarak hesaplanır (#83).
+- `SessionManager` varsayılan fingerprint alanlarından `HTTP_ACCEPT_LANGUAGE` çıkarıldı; dil başlığı değişen meşru oturumlar "Session hijacking" ile düşmez. `fingerprint_fields` ile yeniden eklenebilir (#86).
+
+### Fixed
+- `batch_insert()` başarısız sorguda transaction'ı iki kez geri almaz; dış transaction korunur (#76).
+- `.env` / `getenv()`: kimlik bilgisi anahtarları (`*_PASS`, `*_PASSWORD`, `*_USER`, `*_USERNAME`, `*_NAME`, `*_TOKEN`, `*_SECRET`, `*_KEY`) ve tırnaklı değerler tipe dönüştürülmez (`DB_PASS=0123` artık `"0123"`) (#77).
+- Query cache satır nesnelerinin kopyasını saklar ve döndürür; dönen satırı değiştirmek cache'i bozmaz (#78).
+- Bağlantı koptuğunda yalnızca okuma sorguları otomatik tekrar denenir; yazma sorguları ikinci kez çalıştırılmaz, kopuk bağlantı yenilenir ve hata çağırana iletilir (#80).
+- PostgreSQL bağlantı kopması (SQLSTATE `08xxx`, `57P01`–`57P03`) tanınır; okumalar yeniden bağlanıp tekrar denenir (#81).
+- `get_yield()` `GENERATOR_CLEANUP_INTERVAL` / `GENERATOR_GC_INTERVAL_MULTIPLIER` sıfır olduğunda sıfıra bölme hatası vermez (#82).
+- `batch_insert()` sürücünün parametre sınırına göre (SQLite 32766, MySQL/PostgreSQL 65535) parçalara bölünür; kolonları ilk satırla aynı olmayan satırda sorgu çalışmadan `QueryException` fırlatır (önceden eksik kolona sessizce `NULL` yazılıyordu). `QueryBuilder::insert_many()` aynı sürücü sınırını kullanır (#84).
+- `Logger` zaman tabanlı rotasyonu log dosyasının ilk kaydına göre yapar (PHP-FPM gibi kısa ömürlü süreçlerde de çalışır); boyut kontrolünden önce stat önbelleği temizlenir (#85).
+
 ## [2.2.0] - 2026-10-06
 
 Geçiş notları: [UPGRADE.md](UPGRADE.md#211--220).
