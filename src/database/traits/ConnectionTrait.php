@@ -149,10 +149,17 @@ trait ConnectionTrait
     }
 
     /**
-     * Bağlantı koptuğunu gösteren MySQL hata kodları (server has gone away, lost connection).
+     * Bağlantı koptu mu? MySQL: 2006 (server has gone away), 2013 (lost connection).
+     * PostgreSQL: SQLSTATE 08xxx (connection exception), 57P01-57P03 (sunucu kapanıyor / başlatılıyor).
      */
     private static function is_connection_lost_error(PDOException $e): bool
     {
-        return in_array((int) ($e->errorInfo[1] ?? 0), [2006, 2013], true);
+        if (in_array((int) ($e->errorInfo[1] ?? 0), [2006, 2013], true)) {
+            return true;
+        }
+
+        $sql_state = (string) ($e->errorInfo[0] ?? $e->getCode());
+
+        return str_starts_with($sql_state, '08') || in_array($sql_state, ['57P01', '57P02', '57P03'], true);
     }
 }
