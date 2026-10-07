@@ -52,7 +52,7 @@ trait QueryEventsTrait
             return;
         }
 
-        $masked = SensitiveDataFilter::mask_array($params);
+        $masked = SensitiveDataFilter::mask_params($sql, $params);
         $row_count = $row_count_known && $stmt !== null ? $stmt->rowCount() : null;
 
         if ($is_slow) {

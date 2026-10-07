@@ -42,7 +42,7 @@ trait DebugTrait
         }
 
         try {
-            $params = SensitiveDataFilter::mask_array($this->last_params);
+            $params = SensitiveDataFilter::mask_params($this->last_query, $this->last_params);
             $query = $this->interpolate_query($this->last_query, $params);
             $params_json = json_encode($params, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         } catch (Throwable $e) {

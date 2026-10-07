@@ -4,6 +4,7 @@ namespace nsql\database\traits;
 
 use nsql\database\drivers\InsertId;
 use nsql\database\exceptions\QueryException;
+use nsql\database\security\SensitiveDataFilter;
 
 /**
  * Ham SQL yazma işlemleri: insert, batch_insert, batch_update, statement, update, delete.
@@ -123,7 +124,7 @@ trait WriteOperationsTrait
             $stmt = $this->execute_query($sql, $values);
 
             if ($stmt === false) {
-                throw new QueryException('Batch insert başarısız oldu.', $sql, $values);
+                throw new QueryException('Batch insert başarısız oldu.', $sql, SensitiveDataFilter::mask_params($sql, $values));
             }
 
             $affected_rows = $stmt->rowCount();
@@ -143,7 +144,7 @@ trait WriteOperationsTrait
                 throw $e;
             }
 
-            throw new QueryException('Batch insert hatası: ' . $e->getMessage(), $sql, $values, 0, $e);
+            throw new QueryException('Batch insert hatası: ' . $e->getMessage(), $sql, SensitiveDataFilter::mask_params($sql, $values), 0, $e);
         }
     }
 
