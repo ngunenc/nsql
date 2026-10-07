@@ -38,6 +38,8 @@ class ConnectionPool
 
     private static ?string $default_key = null;
 
+    private static ?string $key_secret = null;
+
     /** @var array<int, string> spl_object_id(PDO) => havuz anahtarı */
     private static array $owners = [];
 
@@ -214,7 +216,12 @@ class ConnectionPool
             $active += $pool_active;
             $max += $pool['max'];
 
-            $pools[substr($key, 0, 12)] = [
+            $label = $base_label = self::stats_label($pool['config']);
+            for ($n = 2; isset($pools[$label]); $n++) {
+                $label = $base_label . '-' . $n;
+            }
+
+            $pools[$label] = [
                 'total_connections' => $pool_total,
                 'active_connections' => $pool_active,
                 'idle_connections' => $pool_total - $pool_active,
@@ -238,12 +245,25 @@ class ConnectionPool
         $options = (array) $config['options'];
         ksort($options);
 
-        return hash('sha256', implode("\0", [
+        self::$key_secret ??= random_bytes(32);
+
+        // Anahtar şifreye bağlı; süreç dışında doğrulanamaması için gizli anahtarla HMAC
+        return hash_hmac('sha256', implode("\0", [
             (string) $config['dsn'],
             (string) $config['username'],
             (string) $config['password'],
             serialize($options),
-        ]));
+        ]), self::$key_secret);
+    }
+
+    /**
+     * İstatistiklerde gösterilen, şifre içermeyen havuz etiketi.
+     *
+     * @param array{dsn: string, username: string} $config
+     */
+    private static function stats_label(array $config): string
+    {
+        return substr(hash('sha256', $config['dsn'] . "\0" . $config['username']), 0, 12);
     }
 
     private static function resolve_key(?string $pool_key): string
