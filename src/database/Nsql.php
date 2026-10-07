@@ -11,6 +11,7 @@ use nsql\database\traits\{
     DebugTrait,
     ErrorHandlingTrait,
     ErrorModelTrait,
+    HotSettingsTrait,
     LogPathTrait,
     QueryAnalyzerTrait,
     QueryEventsTrait,
@@ -64,6 +65,7 @@ class Nsql
     use StreamingTrait;
     use SessionFacadeTrait;
     use ReadWriteSplitTrait;
+    use HotSettingsTrait;
 
     // Debug özellikleri
     protected ?string $last_error = null;
@@ -351,9 +353,9 @@ class Nsql
         $this->set_last_called_method();
         $query = $this->with_single_row_limit($query);
 
-        // Cache kontrolü
-        $cache_key = $this->generate_query_cache_key($query, $params);
-        if ($this->query_cache_enabled) {
+        // Cache anahtarı yalnızca cache kullanılabilirken hesaplanır
+        $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key($query, $params) : null;
+        if ($cache_key !== null) {
             $cached = $this->get_from_query_cache($cache_key);
             if ($cached !== null) {
                 return is_array($cached) && ! empty($cached) ? (object)$cached[0] : $cached;
@@ -370,9 +372,8 @@ class Nsql
         $result = $stmt->fetch(PDO::FETCH_OBJ);
         $stmt->closeCursor();
         $this->last_results = $result ? [$result] : [];
-        if ($result && $this->query_cache_enabled) {
-            $tables = $this->extract_tables_from_query($query);
-            $this->add_to_query_cache($cache_key, $result, [], $tables);
+        if ($result && $cache_key !== null) {
+            $this->add_to_query_cache($cache_key, $result, [], $this->extract_tables_from_query($query));
         }
 
         return $result ?: null;
@@ -385,9 +386,8 @@ class Nsql
         // Memory kontrolü
         $this->check_memory_status();
 
-        // Cache kontrolü
-        $cache_key = $this->generate_query_cache_key($query, $params);
-        if ($this->query_cache_enabled) {
+        $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key($query, $params) : null;
+        if ($cache_key !== null) {
             $cached = $this->get_from_query_cache($cache_key);
             if ($cached !== null) {
                 return $cached;
@@ -405,7 +405,7 @@ class Nsql
 
         // rowCount() SELECT için sürücüler arası güvenilir değil; gerçek satır sayısı kullanılır
         $result_count = count($results);
-        if ($result_count > (int) Config::get('large_result_warning', Config::large_result_warning)) {
+        if ($result_count > (int) $this->setting('large_result_warning', Config::large_result_warning)) {
             trigger_error(
                 "Büyük veri seti ($result_count satır). chunk_by_id() veya get_yield() kullanmayı düşünün.",
                 E_USER_NOTICE
@@ -413,7 +413,7 @@ class Nsql
         }
 
         $this->last_results = $results;
-        if ($this->query_cache_enabled && count($results) <= $this->query_cache_size_limit) {
+        if ($cache_key !== null && count($results) <= $this->query_cache_size_limit) {
             $this->add_to_query_cache($cache_key, $results, [], $this->extract_tables_from_query($query));
         }
 

@@ -56,14 +56,37 @@ trait CacheTrait
     /**
      * SQL sorgusundan tablo adlarını çıkarır.
      *
-     * Quote'lu (`tablo`, "tablo"), şema önekli (db.tablo), JOIN, virgüllü FROM listesi
-     * ve subquery içindeki tabloları yakalar. Boş dizi = tablo tespit edilemedi.
+     * Quote'lu (`tablo`, "tablo"), şema önekli (db.tablo), JOIN, virgüllü FROM listesi,
+     * subquery ve türetilmiş tablo (`FROM (SELECT ...) t`) içindeki tabloları yakalar.
+     * Boş dizi = tablo tespit edilemedi (sonuç cache'lenmez, yazmada tüm cache temizlenir).
      *
      * @param string $query SQL sorgusu
      * @return list<string> Küçük harfli tablo adları
      */
     private function extract_tables_from_query(string $query): array
     {
+        $tables = [];
+
+        // Alt sorgular ayrı ayrıştırılır, dış sorguda yer tutucuyla değiştirilir
+        $marker = 'nsql_subquery_marker';
+        $unresolved = false;
+        $query = (string) preg_replace_callback(
+            '/\(\s*((?:SELECT|WITH)\b(?:[^()]++|(\((?:[^()]++|(?2))*\)))*)\)/is',
+            function (array $m) use (&$tables, &$unresolved, $marker): string {
+                $inner = $this->extract_tables_from_query($m[1]);
+                if ($inner === []) {
+                    $unresolved = true;
+                }
+                array_push($tables, ...$inner);
+
+                return ' ' . $marker . ' ';
+            },
+            $query
+        );
+        if ($unresolved) {
+            return [];
+        }
+
         $ident = '[`"]?(?:\w+[`"]?\.[`"]?)?(\w+)[`"]?';
         $patterns = [
             '/\bJOIN\s+' . $ident . '/i',
@@ -72,7 +95,6 @@ trait CacheTrait
             '/\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?' . $ident . '/i',
         ];
 
-        $tables = [];
         foreach ($patterns as $pattern) {
             if (preg_match_all($pattern, $query, $matches)) {
                 foreach ($matches[1] as $table) {
@@ -85,14 +107,16 @@ trait CacheTrait
         if (preg_match_all('/\bFROM\s+(.+?)' . $from_end . '/is', $query, $matches)) {
             foreach ($matches[1] as $segment) {
                 foreach (explode(',', $segment) as $part) {
-                    if (preg_match('/^\s*' . $ident . '/', $part, $part_match)) {
-                        $tables[] = strtolower($part_match[1]);
+                    if (! preg_match('/^\s*' . $ident . '/', $part, $part_match)) {
+                        // Tanınmayan FROM öğesi (ör. parantezli ifade): eksik tablo listesi stale cache üretir
+                        return [];
                     }
+                    $tables[] = strtolower($part_match[1]);
                 }
             }
         }
 
-        return array_values(array_unique($tables));
+        return array_values(array_diff(array_unique($tables), [$marker]));
     }
 
     /**

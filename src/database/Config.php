@@ -21,6 +21,10 @@ class Config
     private static ?string $project_root = null;
     /** @var string|null Uygulama kökü (set_project_root veya tespit) */
     private static ?string $project_root_override = null;
+    /** @var array<string, list<string>> istenen anahtar => denenecek anahtarlar (alias'lar sabit) */
+    private static array $resolved_keys = [];
+    /** set() / refresh() / set_project_root() ile artar; örnek bazlı ayar önbellekleri buna bakar */
+    private static int $revision = 0;
 
     // Sık kullanılan varsayılan sabitler
     public const default_chunk_size = 1000;
@@ -146,6 +150,7 @@ class Config
     public static function set(string $key, mixed $value): void
     {
         self::ensure_bootstrapped();
+        self::$revision++;
         $canonical = self::canonical_key($key);
 
         foreach (self::KEY_ALIASES as $canon => $aliases) {
@@ -198,6 +203,7 @@ class Config
      */
     public static function set_project_root(?string $path): void
     {
+        self::$revision++;
         self::$env_loaded = false;
         self::$config = [];
         self::$project_root = null;
@@ -211,9 +217,20 @@ class Config
         self::$project_root_override = $real !== false ? $real : $trimmed;
     }
 
+    /**
+     * Yapılandırma sürümü: set(), refresh() ve set_project_root() sonrası değişir.
+     *
+     * @internal Nsql sıcak yol ayarlarını bununla yeniler
+     */
+    public static function revision(): int
+    {
+        return self::$revision;
+    }
+
     /** Yüklenen .env ve config önbelleğini sıfırlar */
     public static function refresh(): void
     {
+        self::$revision++;
         self::$env_loaded = false;
         self::$config = [];
         self::ensure_bootstrapped();
@@ -558,6 +575,14 @@ class Config
      * @return list<string>
      */
     private static function resolve_keys(string $key): array
+    {
+        return self::$resolved_keys[$key] ??= self::build_resolved_keys($key);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function build_resolved_keys(string $key): array
     {
         $canonical = self::canonical_key($key);
         $keys = [$canonical];

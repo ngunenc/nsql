@@ -90,7 +90,7 @@ trait ReadWriteSplitTrait
         if ($this->is_reader || self::is_read_query($sql)) {
             return;
         }
-        if ((bool) Config::get('read_write_sticky', Config::read_write_sticky) && $this->resolve_read_config() !== null) {
+        if ((bool) $this->setting('read_write_sticky', Config::read_write_sticky) && $this->resolve_read_config() !== null) {
             $this->sticky_primary = true;
         }
     }

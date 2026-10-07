@@ -90,7 +90,7 @@ trait ConnectionTrait
             return;
         }
 
-        $idle_limit = (int) Config::get('connection_ping_idle_seconds', Config::connection_ping_idle_seconds);
+        $idle_limit = (int) $this->setting('connection_ping_idle_seconds', Config::connection_ping_idle_seconds);
         if ($idle_limit < 0 || (microtime(true) - $this->last_activity_at) < $idle_limit) {
             return;
         }

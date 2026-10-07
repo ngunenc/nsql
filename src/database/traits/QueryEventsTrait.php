@@ -41,7 +41,7 @@ trait QueryEventsTrait
      */
     private function dispatch_query_event(string $sql, array $params, int|float $started, ?PDOStatement $stmt, ?\Throwable $error, bool $row_count_known = true): void
     {
-        $threshold = (float) Config::get('slow_query_threshold_ms', Config::slow_query_threshold_ms);
+        $threshold = (float) $this->setting('slow_query_threshold_ms', Config::slow_query_threshold_ms);
         if ($this->query_listeners === [] && $threshold <= 0) {
             return;
         }

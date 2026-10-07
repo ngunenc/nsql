@@ -12,6 +12,16 @@ Proje kökünde `.env` tanımlayın (`DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`,
 
 Veritabanında `users` tablosu ve yeterli örnek kayıtların olduğundan emin olun.
 
+## Sorgu sıcak yolu (kurulum gerektirmez)
+
+`benchmarks/hot_path.php` bellek içi SQLite ile query cache kapalıyken `get_row()` / `get_results()` sorgu başı süresini ve ham PDO referansını ölçer:
+
+```bash
+php -d xdebug.mode=off benchmarks/hot_path.php 30000
+```
+
+Örnek (PHP 8.4, Windows; v2.2.1 → v2.2.2): `get_row` 12,9 → 9,3 µs, `get_results` (10 satır) 20,0 → 13,7 µs; ham PDO `get_row` ≈ 5,3 µs.
+
 ## Çalıştırma
 
 PowerShell veya bash:

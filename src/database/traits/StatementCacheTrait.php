@@ -148,9 +148,7 @@ trait StatementCacheTrait
      */
     private function adjust_cache_size(): void
     {
-        // Config'den dinamik cache size ayarını kontrol et
-        $dynamic_cache_enabled = \nsql\database\Config::get('statement_cache_dynamic_size', false);
-        if (!$dynamic_cache_enabled) {
+        if (! $this->setting('statement_cache_dynamic_size', false)) {
             return;
         }
 
@@ -172,8 +170,7 @@ trait StatementCacheTrait
      */
     private function get_dynamic_cache_limit(): int
     {
-        $dynamic_cache_enabled = \nsql\database\Config::get('statement_cache_dynamic_size', false);
-        if ($dynamic_cache_enabled) {
+        if ($this->setting('statement_cache_dynamic_size', false)) {
             return $this->base_cache_limit;
         }
         return $this->statement_cache_limit;
