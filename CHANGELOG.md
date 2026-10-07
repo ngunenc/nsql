@@ -4,6 +4,21 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.2.2] - 2026-10-07
+
+Performans ve statik analiz. Public API değişmedi; ayrıntı: [UPGRADE.md](UPGRADE.md#221--222).
+
+### Performance
+- Sorgu sıcak yolu (#89): query cache kapalıyken cache anahtarı hesaplanmaz; `Config::get()` alias çözümlemesi anahtar başına bir kez yapılır; sorgu başına okunan ayarlar örnek bazında önbelleğe alınır ve `Config::set()` / `refresh()` sonrası yenilenir (`Config::revision()`). `benchmarks/hot_path.php` (bellek içi SQLite, cache kapalı): `get_row` 12,9 → 9,3 µs, `get_results` 20,0 → 13,7 µs.
+- Türetilmiş tablo içeren sorgular (`FROM (SELECT ... FROM u) t`, `QueryBuilder::count()` + `group_by`) artık query cache'e girer ve ilgili tablo yazmalarında geçersiz kılınır (#89).
+
+### Fixed
+- Query cache tablo tespiti: tanınmayan bir FROM öğesi (ör. `FROM (u)`) varsa eksik tablo listesiyle cache'lemek yerine sonuç cache'lenmez; yazmada tüm cache temizlenir (#89).
+- `get_yield()` başarısız sorgu sonrası `finally` bloğunda `false` üzerinde `closeCursor()` çağırmaz (#94).
+
+### Changed
+- PHPStan 2.x (`^2.1`); baseline boş, eşleşmeyen ignore kuralları raporlanır. Kullanılmayan `MigrationManager::remove_migration()` kaldırıldı; trait'lerdeki her zaman doğru `method_exists` kontrolleri temizlendi (#94).
+
 ## [2.2.1] - 2026-10-07
 
 Hata ve güvenlik düzeltmeleri. Davranış değişiklikleri için: [UPGRADE.md](UPGRADE.md#220--221).
