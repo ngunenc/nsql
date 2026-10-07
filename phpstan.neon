@@ -8,7 +8,7 @@ parameters:
     paths:
         - src
     excludePaths:
-        - src/database/migrations
+        - src/database/migrations (?)
         - src/database/templates
     ignoreErrors:
         - identifier: missingType.iterableValue
