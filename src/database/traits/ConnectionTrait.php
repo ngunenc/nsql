@@ -151,7 +151,7 @@ trait ConnectionTrait
     /**
      * Bağlantı koptuğunu gösteren MySQL hata kodları (server has gone away, lost connection).
      */
-    private function is_connection_lost_error(PDOException $e): bool
+    private static function is_connection_lost_error(PDOException $e): bool
     {
         return in_array((int) ($e->errorInfo[1] ?? 0), [2006, 2013], true);
     }
