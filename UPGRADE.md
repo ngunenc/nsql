@@ -1,5 +1,15 @@
 # Yükseltme Rehberi
 
+## 2.2.1 → 2.2.2
+
+Patch sürümü; public API değişmedi.
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| Türetilmiş tablolu sorgular cache'lenir (#89) | `QUERY_CACHE_ENABLED=true` ve `FROM (SELECT ...)` / `count()` + `group_by` kullanan uygulamalar | İşlem gerekmez; bu sorgular artık cache'ten döner ve tablo yazmalarında geçersiz olur |
+| Sorgu başı ayarlar örnek bazında önbellekte (#89) | Ayarı `putenv()` ile çalışma anında değiştiren kod | `Config::set()` veya `Config::refresh()` kullanın; yalnızca `putenv()` mevcut `Nsql` örneğine yansımaz |
+| `CacheTrait` `get_transaction_level()` ister (#94) | Dahili trait'i kendi sınıfında kullanan kod (desteklenen API değil) | Sınıfa `get_transaction_level(): int` ekleyin |
+
 ## 2.2.0 → 2.2.1
 
 Patch sürümü; public API kırılmadı. Aşağıdaki davranış değişikliklerini kontrol edin:
