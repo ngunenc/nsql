@@ -642,7 +642,7 @@ class QueryBuilder
         $query = clone $this;
         $row = $query->select($column)->first();
 
-        return $row?->{$this->result_property($column)} ?? null;
+        return $row->{$this->result_property($column)} ?? null;
     }
 
     /**
@@ -813,10 +813,8 @@ class QueryBuilder
      * @param array<string, array{value: mixed, type: int}> $params
      * @return array{0: string, 1: array<string, array{value: mixed, type: int}>}
      */
-    private function compile_insert(array $rows, ?int &$counter = null, ?array &$params = null): array
+    private function compile_insert(array $rows, int &$counter = 0, array &$params = []): array
     {
-        $counter ??= 0;
-        $params ??= [];
 
         $first = reset($rows);
         if (! is_array($first) || $first === [] || array_is_list($first)) {

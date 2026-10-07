@@ -35,9 +35,9 @@ class Logger
     private string $log_file;
     private int $log_level;
     private bool $structured_format;
-    private ?int $max_file_size;
-    private ?int $max_files;
-    private ?int $rotation_interval; // saniye cinsinden
+    private int $max_file_size;
+    private int $max_files;
+    private int $rotation_interval; // saniye cinsinden
     private bool $compress_old_logs;
 
     private static array $level_names = [

@@ -109,7 +109,7 @@ trait QueryExecutionTrait
         }
 
         try {
-            $stmt = $this->pdo->prepare($sql);
+            $stmt = $this->require_pdo()->prepare($sql);
         } catch (PDOException $e) {
             $this->handle_prepare_error($e);
             return false;

@@ -11,10 +11,8 @@ parameters:
         - src/database/migrations
         - src/database/templates
     ignoreErrors:
-        - '#Call to an undefined method PDO::#'
         - identifier: missingType.iterableValue
-        - identifier: missingType.generics
-    reportUnmatchedIgnoredErrors: false
+    reportUnmatchedIgnoredErrors: true
     treatPhpDocTypesAsCertain: false
     parallel:
         jobSize: 5

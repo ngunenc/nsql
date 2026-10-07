@@ -158,7 +158,7 @@ class EndpointGuard
     private static function env(string $key): ?string
     {
         $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
-        if ($value === false || $value === null) {
+        if ($value === false) {
             return null;
         }
 
@@ -173,12 +173,9 @@ class EndpointGuard
         }
 
         if (function_exists('getallheaders')) {
-            $headers = getallheaders();
-            if (is_array($headers)) {
-                foreach ($headers as $key => $value) {
-                    if (strcasecmp((string) $key, $name) === 0 && is_string($value)) {
-                        return trim($value);
-                    }
+            foreach (getallheaders() as $key => $value) {
+                if (strcasecmp((string) $key, $name) === 0 && is_string($value)) {
+                    return trim($value);
                 }
             }
         }

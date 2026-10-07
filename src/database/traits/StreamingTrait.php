@@ -110,11 +110,11 @@ trait StreamingTrait
                 }
             }
         } finally {
-            // Explicit cleanup: Statement'ı temizle
-            if ($stmt !== null) {
+            // execute_query() başarısızsa $stmt false olabilir
+            if ($stmt instanceof \PDOStatement) {
                 $stmt->closeCursor();
-                $stmt = null;
             }
+            $stmt = null;
 
             // Final GC çağrısı
             gc_collect_cycles();
@@ -272,7 +272,10 @@ trait StreamingTrait
             if ($stmt === false) {
                 return;
             }
-            $rows = $stmt->fetchAll(PDO::FETCH_OBJ);
+            $rows = [];
+            while (($row = $stmt->fetchObject()) !== false) {
+                $rows[] = $row;
+            }
             $stmt->closeCursor();
 
             if ($rows === []) {

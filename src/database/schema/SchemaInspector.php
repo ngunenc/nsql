@@ -107,7 +107,7 @@ final class SchemaInspector
                 'col_default' => $row['dflt_value'],
                 'max_length' => ! $is_numeric && isset($args[1]) ? (int) $args[1] : null,
                 'num_precision' => $is_numeric && isset($args[1]) ? (int) $args[1] : null,
-                'num_scale' => $is_numeric && isset($args[2]) && $args[2] !== '' ? (int) $args[2] : null,
+                'num_scale' => $is_numeric && isset($args[2]) ? (int) $args[2] : null,
             ];
         }
 

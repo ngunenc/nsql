@@ -183,7 +183,7 @@ HTML;
                     echo "<tr>";
                     foreach ((array)$row as $value) {
                         $display_value = is_null($value) ? '-' :
-                                    (is_array($value) || is_object($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : (string)$value);
+                                    (is_array($value) || is_object($value) ? (json_encode($value, JSON_UNESCAPED_UNICODE) ?: '') : (string)$value);
                         echo "<td>" . htmlspecialchars($display_value) . "</td>";
                     }
                     echo "</tr>";
@@ -259,7 +259,7 @@ HTML;
             'params' => $params_json,
             'error' => $this->last_error,
             'results' => json_encode(
-                $this->last_results ?? [],
+                $this->last_results,
                 JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
             ),
         ];

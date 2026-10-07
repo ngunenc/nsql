@@ -322,8 +322,10 @@ class ConnectionPool
         }
 
         $id = spl_object_id($conn);
-        self::$pools[$key]['connections'][$id] = $conn;
-        self::$pools[$key]['in_use'][$id] = true;
+        $pool = self::$pools[$key];
+        $pool['connections'][$id] = $conn;
+        $pool['in_use'][$id] = true;
+        self::$pools[$key] = $pool;
         self::$owners[$id] = $key;
 
         self::$stats['created_connections']++;

@@ -117,7 +117,7 @@ class CacheManager
         $result = true;
 
         if ($this->primary_adapter && $this->primary_adapter->is_available()) {
-            $result = $this->primary_adapter->clear() && $result;
+            $result = $this->primary_adapter->clear();
         }
 
         if ($this->use_fallback && $this->fallback_adapter && $this->fallback_adapter->is_available()) {
@@ -129,13 +129,15 @@ class CacheManager
 
     /**
      * Tag'e göre cache'leri temizler
+     *
+     * @param string|array<string> $tags Tag veya tag'ler
      */
     public function invalidate_by_tag($tags): bool
     {
         $result = true;
 
         if ($this->primary_adapter && $this->primary_adapter->is_available()) {
-            $result = $this->primary_adapter->invalidate_by_tag($tags) && $result;
+            $result = $this->primary_adapter->invalidate_by_tag($tags);
         }
 
         if ($this->use_fallback && $this->fallback_adapter && $this->fallback_adapter->is_available()) {
