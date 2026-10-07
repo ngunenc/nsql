@@ -147,7 +147,7 @@ trait CacheTrait
         }
 
         $entry = [
-            'data' => $data,
+            'data' => self::copy_cached_rows($data),
             'time' => time(),
             'tags' => array_values(array_unique(array_map('strval', $tags))),
             'tables' => array_values(array_unique(array_map(fn ($t) => strtolower(trim((string)$t)), $tables))),
@@ -232,7 +232,7 @@ trait CacheTrait
                 $this->remember_locally($key, $shared);
                 $this->query_cache_hits++;
 
-                return $shared['data'];
+                return self::copy_cached_rows($shared['data']);
             }
 
             $this->query_cache_misses++;
@@ -254,7 +254,22 @@ trait CacheTrait
         $this->query_cache[$key] = $cached;
         $this->query_cache_hits++;
 
-        return $cached['data'];
+        return self::copy_cached_rows($cached['data']);
+    }
+
+    /**
+     * Satır nesnelerinin kopyası: çağıranın sonuç üzerinde yaptığı değişiklik cache'teki kaydı bozmaz.
+     */
+    private static function copy_cached_rows(mixed $data): mixed
+    {
+        if (is_object($data)) {
+            return clone $data;
+        }
+        if (is_array($data)) {
+            return array_map(static fn (mixed $row) => is_object($row) ? clone $row : $row, $data);
+        }
+
+        return $data;
     }
 
     /**
