@@ -704,7 +704,7 @@ class QueryBuilder
         }
 
         $first = reset($rows);
-        $per_chunk = max(1, intdiv(60000, max(1, is_array($first) ? count($first) : 1)));
+        $per_chunk = max(1, intdiv($this->db->max_bound_params(), max(1, is_array($first) ? count($first) : 1)));
         $chunks = array_chunk($rows, $per_chunk);
 
         $run = function () use ($chunks): int {

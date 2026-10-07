@@ -287,6 +287,16 @@ class Nsql
     }
 
     /**
+     * Tek sorguda bağlanabilecek en fazla parametre sayısı (SQLite 32766, MySQL/PostgreSQL 65535).
+     *
+     * @internal Toplu ekleme parça boyutu için
+     */
+    public function max_bound_params(): int
+    {
+        return $this->get_driver_name() === 'sqlite' ? 32766 : 65535;
+    }
+
+    /**
      * Tablo/kolon adını doğrular ve driver'a göre quote eder (`tablo` veya `şema.tablo`).
      *
      * @throws InvalidArgumentException Ad yalnızca harf, rakam ve alt çizgiden oluşmuyorsa
