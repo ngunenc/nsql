@@ -84,6 +84,8 @@ abstract class PortableTestCase extends TestCase
         };
 
         $this->db->query('DROP TABLE IF EXISTS ' . $table);
-        $this->db->query('CREATE TABLE ' . $table . ' (' . implode(', ', [$id, ...$columns]) . ')');
+        $suffix = self::driver() === 'mysql' ? ' ENGINE=InnoDB' : '';
+
+        $this->db->query('CREATE TABLE ' . $table . ' (' . implode(', ', [$id, ...$columns]) . ')' . $suffix);
     }
 }
