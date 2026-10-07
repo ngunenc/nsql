@@ -29,6 +29,9 @@ class Logger
     public const ALERT = 550;
     public const EMERGENCY = 600;
 
+    /** Kaydın zamanı: JSON `"timestamp":"..."` alanı veya metin formatındaki `[...]` öneki */
+    private const entry_time_pattern = '/^(?:\{.*?"timestamp":"([^"]+)"|\[([^\]]+)\])/';
+
     private string $log_file;
     private int $log_level;
     private bool $structured_format;
@@ -36,7 +39,6 @@ class Logger
     private ?int $max_files;
     private ?int $rotation_interval; // saniye cinsinden
     private bool $compress_old_logs;
-    private ?int $last_rotation_time = null;
 
     private static array $level_names = [
         self::DEBUG => 'DEBUG',
@@ -215,29 +217,43 @@ class Logger
      */
     private function rotate_if_needed(): void
     {
-        $now = time();
-        $should_rotate = false;
-
-        // Size-based rotation
-        if ($this->max_file_size && is_file($this->log_file)) {
-            if (filesize($this->log_file) >= $this->max_file_size) {
-                $should_rotate = true;
-            }
+        clearstatcache(true, $this->log_file);
+        if (! is_file($this->log_file)) {
+            return;
         }
 
-        // Time-based rotation
-        if ($this->rotation_interval) {
-            if ($this->last_rotation_time === null) {
-                $this->last_rotation_time = $now;
-            } elseif (($now - $this->last_rotation_time) >= $this->rotation_interval) {
-                $should_rotate = true;
-            }
+        $should_rotate = $this->max_file_size && filesize($this->log_file) >= $this->max_file_size;
+
+        // Zaman, süreç içi sayaç yerine dosyanın ilk kaydından okunur (kısa ömürlü süreçlerde de çalışır)
+        if (! $should_rotate && $this->rotation_interval) {
+            $started_at = $this->first_entry_time();
+            $should_rotate = $started_at !== null && (time() - $started_at) >= $this->rotation_interval;
         }
 
         if ($should_rotate) {
             $this->rotate_log();
-            $this->last_rotation_time = $now;
         }
+    }
+
+    /**
+     * Log dosyasındaki ilk kaydın zamanı (JSON `timestamp` alanı veya `[zaman]` öneki); okunamazsa null.
+     */
+    private function first_entry_time(): ?int
+    {
+        $handle = @fopen($this->log_file, 'rb');
+        if ($handle === false) {
+            return null;
+        }
+        $line = fgets($handle, 4096);
+        fclose($handle);
+
+        if ($line === false || ! preg_match(self::entry_time_pattern, $line, $match)) {
+            return null;
+        }
+
+        $time = strtotime($match[1] !== '' ? $match[1] : ($match[2] ?? ''));
+
+        return $time === false ? null : $time;
     }
 
     /**
