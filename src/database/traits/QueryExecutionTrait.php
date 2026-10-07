@@ -167,8 +167,12 @@ trait QueryExecutionTrait
                 $attempts++;
                 $this->handle_execution_error($e);
 
-                if (! $this->should_retry($e, $attempts)) {
+                if (! $this->should_retry($e, $attempts, $sql)) {
                     $this->dispatch_query_event($sql, $params, $started, null, $e);
+                    if (self::is_connection_lost_error($e)) {
+                        // Kopuk bağlantı sonraki çağrılara dağıtılmaz; yazma ise tekrar çalıştırılmaz
+                        $this->reconnect($e);
+                    }
 
                     return false;
                 }
@@ -202,10 +206,11 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Retry yapılmalı mı kontrol eder (GELISTIRME-011: Helper metod)
+     * Bağlantı kopmasında yalnızca okuma sorguları tekrar denenir: yazma sorgusu sunucuda
+     * çalışıp commit edilmiş olabilir (ör. MySQL 2013), tekrar çalıştırmak çift kayıt üretir.
      */
-    private function should_retry(PDOException $e, int $attempts): bool
+    private function should_retry(PDOException $e, int $attempts, string $sql): bool
     {
-        return $this->is_connection_lost_error($e) && $attempts <= $this->retry_limit;
+        return self::is_connection_lost_error($e) && $attempts <= $this->retry_limit && self::is_read_query($sql);
     }
 }
