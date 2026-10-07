@@ -98,36 +98,46 @@ trait WriteOperationsTrait
         }
 
         $columns = array_keys($first_row);
-        $columns_str = implode(', ', array_map(fn($col) => $this->quote_identifier($col), $columns));
-
-        // Placeholder'ları oluştur
-        $placeholders = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
-
-        // Tüm satırlar için placeholder'ları birleştir
-        $all_placeholders = implode(', ', array_fill(0, count($data), $placeholders));
-
-        // Tüm değerleri düzleştir
-        $values = [];
-        foreach ($data as $row) {
-            foreach ($columns as $col) {
-                $values[] = $row[$col] ?? null;
+        foreach ($data as $index => $row) {
+            if (! is_array($row)) {
+                throw new QueryException('Batch insert için her satır bir array olmalıdır.');
+            }
+            if (count($row) !== count($columns) || array_diff_key($first_row, $row) !== []) {
+                throw new QueryException("Batch insert: {$index}. satırın kolonları ilk satırla aynı olmalıdır.");
             }
         }
 
-        $sql = "INSERT INTO {$this->quote_identifier($table)} ({$columns_str}) VALUES {$all_placeholders}";
+        $columns_str = implode(', ', array_map(fn($col) => $this->quote_identifier($col), $columns));
+        $placeholders = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $insert_prefix = "INSERT INTO {$this->quote_identifier($table)} ({$columns_str}) VALUES ";
+        $per_chunk = max(1, intdiv($this->max_bound_params(), count($columns)));
+
+        $sql = $insert_prefix;
+        $values = [];
 
         try {
             if ($use_transaction) {
                 $this->begin();
             }
 
-            $stmt = $this->execute_query($sql, $values);
+            $affected_rows = 0;
+            foreach (array_chunk($data, $per_chunk) as $chunk) {
+                $sql = $insert_prefix . implode(', ', array_fill(0, count($chunk), $placeholders));
+                $values = [];
+                foreach ($chunk as $row) {
+                    foreach ($columns as $col) {
+                        $values[] = $row[$col];
+                    }
+                }
 
-            if ($stmt === false) {
-                throw new QueryException('Batch insert başarısız oldu.', $sql, SensitiveDataFilter::mask_params($sql, $values));
+                $stmt = $this->execute_query($sql, $values);
+
+                if ($stmt === false) {
+                    throw new QueryException('Batch insert başarısız oldu.', $sql, SensitiveDataFilter::mask_params($sql, $values));
+                }
+
+                $affected_rows += $stmt->rowCount();
             }
-
-            $affected_rows = $stmt->rowCount();
             $this->invalidate_cache_for_write($sql);
 
             if ($use_transaction) {
