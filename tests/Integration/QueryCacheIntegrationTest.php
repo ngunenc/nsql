@@ -78,6 +78,21 @@ class QueryCacheIntegrationTest extends DatabaseTestCase
         $this->assertSame($hits_before + 2, $this->db->get_cache_stats()['hits']);
     }
 
+    public function test_grouped_count_from_derived_table_is_cached_and_invalidated(): void
+    {
+        $this->insert_row('a');
+        $this->insert_row('a');
+        $count = fn () => $this->db->table('test_table')->select('name')->group_by('name')->count();
+
+        $this->assertSame(1, $count());
+        $hits_before = $this->db->get_cache_stats()['hits'];
+        $this->assertSame(1, $count());
+        $this->assertSame($hits_before + 1, $this->db->get_cache_stats()['hits']);
+
+        $this->insert_row('b');
+        $this->assertSame(2, $count());
+    }
+
     public function test_query_builder_select_is_served_from_cache(): void
     {
         $this->insert_row('qb cached');
