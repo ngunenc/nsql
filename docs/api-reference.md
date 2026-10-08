@@ -412,6 +412,20 @@ $limiter->purge(?int $older_than_seconds = null): int
 // options['purge_probability'] / RATE_LIMIT_PURGE_PROBABILITY (0-100, varsayılan 0): check_rate_limit() başına temizlik olasılığı
 ```
 
+**Redis arka ucu (v2.4.0+):** `RedisRateLimiter` aynı algoritmayı tek bir atomik Lua betiğiyle çalıştırır; veritabanına kilit ve transaction yükü bindirmez. Saat enjekte edilmezse Redis sunucu saati kullanılır. Kayıtlar pencerenin iki katı TTL ile kendiliğinden silinir (`purge()` 0 döner). Redis 5+ ve phpredis gerekir.
+
+```php
+use nsql\security\RateLimiter;
+use nsql\security\RedisRateLimiter;
+
+$limiter = RateLimiter::create($db);   // RATE_LIMIT_DRIVER=database (varsayılan) | redis
+$limiter = new RedisRateLimiter(?\Redis $client = null, ?callable $clock = null, array $options = []);
+// options: prefix (RATE_LIMIT_REDIS_PREFIX, varsayılan 'nsql_rl_'), max_requests, window, burst
+// $client null ise REDIS_HOST / REDIS_PORT / REDIS_PASSWORD / REDIS_DATABASE ile bağlanılır
+```
+
+Her iki sınıf `nsql\security\RateLimiterInterface`'i uygular. Redis'e ulaşılamazsa `RuntimeException` fırlatılır; isteği reddetmek (fail-closed) veya geçirmek (fail-open) uygulamanın kararıdır.
+
 ### Audit Logger
 
 Güvenlik olaylarını loglama.
