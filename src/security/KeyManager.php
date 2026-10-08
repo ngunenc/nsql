@@ -254,7 +254,8 @@ class KeyManager
         }
 
         // Aynı saniyede birden fazla rotation olabilir; sıralama dosya adına göre yapılır.
-        $archive_file = $archive_dir . '/key_' . date('Y-m-d_His') . '_' . sprintf('%06d', (int) (fmod(microtime(true), 1) * 1_000_000)) . '_' . bin2hex(random_bytes(2)) . '.key';
+        $microseconds = sprintf('%06d', (int) (fmod(microtime(true), 1) * 1_000_000));
+        $archive_file = $archive_dir . '/key_' . date('Y-m-d_His') . '_' . $microseconds . '_' . bin2hex(random_bytes(2)) . '.key';
 
         if (file_put_contents($archive_file, $key, LOCK_EX) === false) {
             throw new RuntimeException("Key arşiv dosyasına yazılamadı: {$archive_file}");

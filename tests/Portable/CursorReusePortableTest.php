@@ -26,6 +26,63 @@ class CursorReusePortableTest extends PortableTestCase
         }
     }
 
+    public function test_held_query_statement_survives_same_sql(): void
+    {
+        $sql = 'SELECT name FROM p_cursor ORDER BY id';
+
+        $first = $this->db->query($sql);
+        $this->assertNotFalse($first);
+        $this->assertSame('a', $first->fetch(\PDO::FETCH_OBJ)->name);
+
+        $second = $this->db->query($sql);
+        $this->assertNotSame($first, $second);
+        $this->assertSame('a', $second->fetch(\PDO::FETCH_OBJ)->name);
+        $second->closeCursor();
+
+        $this->assertSame('b', $first->fetch(\PDO::FETCH_OBJ)->name);
+        $this->assertSame('c', $first->fetch(\PDO::FETCH_OBJ)->name);
+        $first->closeCursor();
+    }
+
+    public function test_buffered_get_yield_with_same_query_inside_loop(): void
+    {
+        $sql = 'SELECT name FROM p_cursor ORDER BY id';
+        $outer = [];
+
+        foreach ($this->db->get_yield($sql, [], unbuffered: false) as $row) {
+            $outer[] = $row->name;
+            // Aynı sorgu döngü içinde: dış akış bozulmamalı
+            $inner = iterator_to_array($this->db->get_yield($sql, [], unbuffered: false), false);
+            $this->assertCount(3, $inner);
+        }
+
+        $this->assertSame(['a', 'b', 'c'], $outer);
+    }
+
+    public function test_warm_cache_force_reloads_existing_entry(): void
+    {
+        $previous = Config::get('query_cache_enabled');
+        Config::set('query_cache_enabled', true);
+        try {
+            $db = $this->connect();
+        } finally {
+            Config::set('query_cache_enabled', $previous);
+        }
+        $sql = 'SELECT name FROM p_cursor WHERE id = 1';
+        $db->register_warm_query($sql);
+        $this->assertSame(1, $db->warm_cache()['loaded']);
+
+        // Cache'i atlayan yazma: eski kayıt cache'te kalır
+        $this->assertNotNull($db->get_pdo());
+        $db->get_pdo()->exec("UPDATE p_cursor SET name = 'z' WHERE id = 1");
+
+        $this->assertSame(1, $db->warm_cache()['loaded']);
+        $this->assertSame('a', $db->get_results($sql)[0]->name);
+
+        $this->assertSame(1, $db->warm_cache(true)['loaded']);
+        $this->assertSame('z', $db->get_results($sql)[0]->name);
+    }
+
     public function test_preload_then_reuse(): void
     {
         $previous = Config::get('query_cache_enabled');

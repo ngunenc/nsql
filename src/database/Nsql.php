@@ -108,7 +108,8 @@ class Nsql
         ?string $charset = null,
         ?bool $debug = null,
         ?string $driver = null,
-        ?int $port = null
+        ?int $port = null,
+        ?array $options = null
     ) {
         // Driver belirle (varsayılan: mysql)
         $driver_name = $driver ?? Config::get('db_driver', 'mysql');
@@ -150,11 +151,14 @@ class Nsql
         $this->user = (string)$user;
         $this->pass = (string)$pass;
 
-        // PDO bağlantı seçeneklerini ayarla (driver'a özel + genel)
-        $driver_options = $this->driver->get_pdo_options();
-        $this->options = array_merge($driver_options, [
+        // PDO bağlantı seçenekleri: driver + genel + çağıranın verdikleri. Anahtarlar PDO::ATTR_*
+        // tamsayıları olduğundan array_merge kullanılmaz (anahtarları yeniden numaralar) (#98).
+        $this->options = [
             \PDO::ATTR_PERSISTENT => (int)(bool)Config::get('persistent_connection', Config::persistent_connection),
-        ]);
+        ] + $this->driver->get_pdo_options();
+        foreach ($options ?? [] as $attribute => $value) {
+            $this->options[$attribute] = $value;
+        }
 
         // MySQL için timeout DSN'e eklenir (PDO attribute olarak desteklenmez)
         if ($driver_name === 'mysql' && Config::has('connection_timeout')) {
@@ -226,20 +230,16 @@ class Nsql
         // Driver'a göre instance oluştur
         $instance = new static(
             host: $parsed['host'] ?? null,
-            db: $parsed['dbname'] ?? $parsed['path'] ?? null,
+            // SQLite'ta dbname yalnızca dosya adıdır (basename); tam yol kullanılmalı (#98)
+            db: $parsed['driver'] === 'sqlite' ? ($parsed['path'] ?? null) : ($parsed['dbname'] ?? null),
             user: $username,
             pass: $password,
             charset: $parsed['charset'] ?? null,
             driver: $parsed['driver'],
-            port: isset($parsed['port']) ? (int) $parsed['port'] : null
+            port: isset($parsed['port']) ? (int) $parsed['port'] : null,
+            // Bağlantı kurulmadan uygulanır: ATTR_PERSISTENT, ATTR_TIMEOUT, SSL vb. ancak böyle etkilidir (#98)
+            options: $options
         );
-
-        // Özel options varsa uygula
-        if ($options !== null) {
-            foreach ($options as $key => $value) {
-                $instance->pdo?->setAttribute($key, $value);
-            }
-        }
 
         return $instance;
     }
@@ -270,7 +270,8 @@ class Nsql
         $this->set_last_called_method();
 
         // GELISTIRME-009: Error handling - exception fırlatma
-        $result = $this->execute_query($query, [], $fetch_mode, ...$fetch_mode_args);
+        // Statement çağırana verilir: cache'teki statement'ı paylaşmaz (#96)
+        $result = $this->execute_query_uncached($query, [], $fetch_mode, ...$fetch_mode_args);
 
         // query() her iki modda da fırlatır (geriye uyumluluk)
         if ($result === false) {
@@ -452,9 +453,10 @@ class Nsql
      * @param array $params Sorgu parametreleri
      * @param array $tags Cache tags (opsiyonel)
      * @param array $tables İlgili tablolar (opsiyonel, otomatik çıkarılır)
+     * @param bool $force Cache'de olsa bile sorguyu yeniden çalıştırıp kaydı yeniler (#99)
      * @return bool Başarılı ise true
      */
-    public function preload_query(string $query, array $params = [], array $tags = [], array $tables = []): bool
+    public function preload_query(string $query, array $params = [], array $tags = [], array $tables = [], bool $force = false): bool
     {
         if (! $this->query_cache_enabled) {
             return false;
@@ -463,7 +465,7 @@ class Nsql
         $cache_key = $this->generate_query_cache_key($query, $params);
 
         // Zaten cache'de varsa true döndür
-        if (isset($this->query_cache[$cache_key])) {
+        if (! $force && isset($this->query_cache[$cache_key])) {
             return true;
         }
 
@@ -515,7 +517,8 @@ class Nsql
                     $warm_query['query'],
                     $warm_query['params'] ?? [],
                     $warm_query['tags'] ?? [],
-                    $warm_query['tables'] ?? []
+                    $warm_query['tables'] ?? [],
+                    $force
                 );
 
                 if ($success) {

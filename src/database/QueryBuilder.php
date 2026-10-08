@@ -477,6 +477,7 @@ class QueryBuilder
         }
 
         $this->validate_join_type($type);
+        $this->assert_join_supported($type);
 
         if (! is_string($first) && is_callable($first)) {
             $condition = call_user_func($first, $this);
@@ -954,10 +955,15 @@ class QueryBuilder
             $query .= ' HAVING ' . $this->render_list($this->having, ' AND ', $counter, $params);
         }
 
-        // UNION'lar ORDER BY ve LIMIT'ten önce
-        foreach ($this->unions as $union) {
+        // UNION'lar ORDER BY ve LIMIT'ten önce. SQLite bileşik SELECT'te parantezli alt sorguyu
+        // kabul etmez; alt sorgu türetilmiş tabloya sarılır, kendi ORDER BY / LIMIT'i korunur (#97).
+        $sqlite = $this->unions !== [] && $this->db->get_driver_name() === 'sqlite';
+        foreach ($this->unions as $index => $union) {
             $union_type = $union['all'] ? 'UNION ALL' : 'UNION';
-            $query .= " {$union_type} (" . $union['builder']->compile_into($counter, $params) . ')';
+            $compiled = $union['builder']->compile_into($counter, $params);
+            $query .= $sqlite
+                ? " {$union_type} SELECT * FROM ({$compiled}) AS " . $this->db->quote_identifier('nsql_union_' . $index)
+                : " {$union_type} ({$compiled})";
         }
 
         if ($this->order_by !== []) {
@@ -1310,6 +1316,30 @@ class QueryBuilder
         $valid_types = ['INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'LEFT OUTER', 'RIGHT OUTER', 'FULL OUTER'];
         if (! in_array(strtoupper($type), $valid_types, true)) {
             throw new \InvalidArgumentException("Geçersiz JOIN tipi: $type. Geçerli tipler: " . implode(', ', $valid_types));
+        }
+    }
+
+    /**
+     * FULL JOIN'i desteklemeyen sürücülerde anlaşılmaz SQL hatası yerine açıklayıcı hata (#101).
+     * MySQL/MariaDB hiç desteklemez; SQLite 3.39.0 ile destekler.
+     */
+    private function assert_join_supported(string $type): void
+    {
+        if (! str_starts_with(strtoupper(trim($type)), 'FULL')) {
+            return;
+        }
+
+        $driver = $this->db->get_driver_name();
+        $supported = match ($driver) {
+            'mysql' => false,
+            'sqlite' => version_compare((string) $this->db->get_pdo()?->getAttribute(\PDO::ATTR_SERVER_VERSION), '3.39.0', '>='),
+            default => true,
+        };
+
+        if (! $supported) {
+            throw new \LogicException(
+                "FULL JOIN {$driver} sürücüsünde desteklenmiyor. LEFT JOIN ve RIGHT JOIN sonuçlarını union() ile birleştirin."
+            );
         }
     }
 

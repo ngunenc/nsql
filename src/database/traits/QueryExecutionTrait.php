@@ -10,6 +10,27 @@ use PDOStatement;
  */
 trait QueryExecutionTrait
 {
+    /** true iken statement cache atlanır (statement çağırana veya tembel okumaya veriliyor) */
+    private bool $bypass_statement_cache = false;
+
+    /**
+     * Statement cache'i atlayarak sorgu çalıştırır.
+     *
+     * Dönen statement çağırana veriliyor veya satırları tembel okunuyorsa kullanılır: cache'teki
+     * statement aynı SQL ile yeniden çalıştırılınca açık imleç baştan başlar (#96).
+     */
+    private function execute_query_uncached(string $sql, array $params = [], ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
+    {
+        $previous = $this->bypass_statement_cache;
+        $this->bypass_statement_cache = true;
+
+        try {
+            return $this->execute_query($sql, $params, $fetch_mode, ...$fetch_mode_args);
+        } finally {
+            $this->bypass_statement_cache = $previous;
+        }
+    }
+
     /**
      * Sorguyu çalıştırır (GELISTIRME-011: Complexity azaltma - helper metodlara bölündü)
      */
@@ -101,9 +122,9 @@ trait QueryExecutionTrait
      */
     private function prepare_or_get_cached_statement(string $sql, array $params): PDOStatement|false
     {
-        $cache_key = $this->get_statement_cache_key($sql, $params);
+        $cache_key = $this->bypass_statement_cache ? null : $this->get_statement_cache_key($sql, $params);
 
-        $stmt = $this->get_from_statement_cache($cache_key);
+        $stmt = $cache_key !== null ? $this->get_from_statement_cache($cache_key) : null;
         if ($stmt !== null) {
             return $stmt;
         }
@@ -117,7 +138,9 @@ trait QueryExecutionTrait
         if ($stmt === false) {
             return false;
         }
-        $this->add_to_statement_cache($cache_key, $stmt);
+        if ($cache_key !== null) {
+            $this->add_to_statement_cache($cache_key, $stmt);
+        }
 
         return $stmt;
     }

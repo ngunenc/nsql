@@ -107,7 +107,9 @@ trait ReadWriteSplitTrait
         $this->last_query = $sql;
         $this->last_params = $params;
         try {
-            return $reader->execute_query($sql, $params, $fetch_mode, ...$fetch_mode_args);
+            return $this->bypass_statement_cache
+                ? $reader->execute_query_uncached($sql, $params, $fetch_mode, ...$fetch_mode_args)
+                : $reader->execute_query($sql, $params, $fetch_mode, ...$fetch_mode_args);
         } finally {
             $this->last_error = $reader->last_error;
             $this->last_pdo_exception = $reader->last_pdo_exception;
@@ -146,7 +148,8 @@ trait ReadWriteSplitTrait
                 charset: $args['charset'],
                 debug: $this->debug_mode,
                 driver: $args['driver'],
-                port: isset($config['port']) ? (int) $config['port'] : $args['port']
+                port: isset($config['port']) ? (int) $config['port'] : $args['port'],
+                options: $this->options
             );
         } catch (\Throwable $e) {
             $this->log_error('Okuma replica\'sına bağlanılamadı; sorgular primary\'de çalışıyor: ' . $e->getMessage(), [], Logger::WARNING);
