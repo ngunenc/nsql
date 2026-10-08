@@ -1,5 +1,18 @@
 # Yükseltme Rehberi
 
+## 2.2.2 → 2.2.3
+
+Patch sürümü; public API kırılmadı.
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `query()` statement cache'i kullanmaz (#96) | `query()` ile her çağrıda aynı `PDOStatement` nesnesinin döndüğüne güvenen kod | Her çağrı yeni statement döndürür; nesne kimliğine güvenmeyin. `get_results()` / `get_row()` cache'i kullanmaya devam eder |
+| `Nsql` constructor'ına `?array $options = null` eklendi (#98) | `Nsql`'i genişletip constructor'ı override eden ve `Nsql::connect()` kullanan alt sınıflar | `connect()` örneği `options:` adlı argümanla oluşturur; constructor'ınıza `?array $options = null` ekleyip `parent::__construct()`'a iletin |
+| `connect()` seçenekleri bağlantıdan önce uygulanır (#98) | `connect()`'e yalnızca bağlantı sonrası ayarlanabilen seçenek verenler | İşlem gerekmez; seçenekler artık etkili. Farklı seçenekler ayrı havuz kullanır |
+| PDO öznitelikleri doğru anahtarla geçer (#98) | `CONNECTION_TIMEOUT` ayarına güvenen uygulamalar | Zaman aşımı artık gerçekten uygulanır; çok düşük değerleri kontrol edin |
+| `connect('sqlite:…')` tam yolu kullanır (#98) | `connect()` ile SQLite'a tam yolla bağlanan uygulamalar | Önceden veritabanı çalışma dizininde aynı adla açılıyordu; o dosyada veri varsa doğru yola taşıyın |
+| `full_join()` desteklenmeyen sürücüde `LogicException` (#101) | MySQL / eski SQLite'ta `full_join()` çağıran kod | Önceden de SQL hatası alıyordunuz; LEFT/RIGHT JOIN + `union()` kullanın |
+
 ## 2.2.1 → 2.2.2
 
 Patch sürümü; public API değişmedi.

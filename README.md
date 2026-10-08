@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.2.2
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.2.3
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -114,6 +114,8 @@
 >
 > **v2.2.2**: Sorgu sıcak yolu optimizasyonu (cache kapalıyken `get_row` ~%30 daha hızlı), türetilmiş tablolu sorgular query cache'e girer, PHPStan 2.x. Geçiş: [UPGRADE.md](UPGRADE.md#221--222)
 >
+> **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
+>
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
 >
 > **v1.11.1**: CI'da PostgreSQL ve SQLite job'ları (`tests/Portable`); migration manager ve rate limiter sürücüden bağımsız hale getirildi; veritabanı başına özellik tablosu eklendi (#53).
@@ -179,7 +181,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.2.2 --prefer-dist
+composer require ngunenc/nsql:^2.2.3 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -199,13 +201,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.2.2"
+        "ngunenc/nsql": "^2.2.3"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.2.2 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.2.3 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1769,6 +1771,9 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v2.2.3 (2026-10-08)
+  - Düzeltmeler: statement cache'in dışarı verilen / tembel okunan statement'ı paylaşması (#96), SQLite'ta `union()` (#97), `connect()` seçenekleri ve PDO öznitelik anahtarlarının yeniden numaralanması (#98), `warm_cache($force)` (#99), debug interpolasyonu (#100), `full_join()` sürücü kontrolü (#101), phpcs uyarıları (#102).
 
 - v2.2.2 (2026-10-07)
   - Performans: sorgu sıcak yolu (cache anahtarı yalnızca cache açıkken, `Config::get()` alias önbelleği, örnek bazlı ayar önbelleği), türetilmiş tablolu sorguların cache'lenmesi; `benchmarks/hot_path.php` (#89).

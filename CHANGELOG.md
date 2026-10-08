@@ -4,6 +4,23 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.2.3] - 2026-10-08
+
+Hata düzeltmeleri. Ayrıntı: [UPGRADE.md](UPGRADE.md#222--223).
+
+### Fixed
+- Statement cache: `query()` ile çağırana verilen ve `get_yield()` (buffered) ile tembel okunan statement'lar artık cache'teki statement'ı paylaşmaz. Önceden aynı SQL tekrar çalıştırıldığında açık imleç baştan başlıyor, iç içe döngülerde yanlış satırlar okunuyordu (#96).
+- `QueryBuilder::union()` SQLite'ta sözdizimi hatası veriyordu (`UNION (SELECT ...)`); SQLite'ta alt sorgu türetilmiş tabloya sarılır, kendi ORDER BY / LIMIT'i korunur (#97).
+- `Nsql::connect($dsn, $user, $pass, $options)` seçenekleri bağlantı kurulduktan sonra uyguluyordu; artık bağlantıdan önce uygulanır ve havuz anahtarına girer (`ATTR_PERSISTENT`, `ATTR_TIMEOUT`, SSL vb. etkili). Constructor'a opsiyonel `options` parametresi eklendi (#98).
+- PDO öznitelik anahtarları `array_merge` ile yeniden numaralanıyordu; sürücü seçenekleri havuza yanlış öznitelikler olarak gidiyor, `ATTR_TIMEOUT` 0'a eziliyordu (#98).
+- `Nsql::connect('sqlite:/tam/yol/db.sqlite')` yalnızca dosya adını kullanıp veritabanını çalışma dizininde açıyordu; tam yol kullanılır (#98).
+- `warm_cache(true)` / `preload_query(..., force: true)` mevcut kaydı yeniden yükler; `$force` önceden yok sayılıyordu (#99).
+- Debug çıktısında `?` veya `:ad` içeren parametre değerleri sonraki parametrelerin yanlış yere yazılmasına yol açıyordu; değeri `null` olan yapılandırılmış parametreler doğru gösterilir (#100).
+- `full_join()` MySQL'de ve SQLite < 3.39'da anlaşılmaz SQL hatası yerine açıklayıcı `LogicException` verir (#101).
+
+### Changed
+- `composer lint` uyarısız (#102).
+
 ## [2.2.2] - 2026-10-07
 
 Performans ve statik analiz. Public API değişmedi; ayrıntı: [UPGRADE.md](UPGRADE.md#221--222).
