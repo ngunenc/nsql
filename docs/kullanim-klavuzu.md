@@ -36,6 +36,10 @@ composer require ngunenc/nsql --prefer-dist
    - Yukarı doğru `.env` veya `composer.json`+`vendor/autoload.php` (Composer paket dizini atlanır)
    - Son çare: paket kökü — vendor altındaysa otomatik olarak uygulama köküne yükseltilir (v1.5.10+)
 
+   `.env` söz dizimi (v2.4.0+): `export ANAHTAR=değer` desteklenir; tırnaksız değerde boşluktan sonra gelen `#` satır sonu yorumudur (`DB_HOST=localhost # yerel` → `localhost`). Değerinde ` #` geçen parolaları tırnak içinde yazın (`DB_PASS="a #b"`); boşluksuz `#` (`ab#cd`) değerin parçasıdır.
+
+   Öncelik: `.env` > ortam değişkeni > varsayılan. Docker / Kubernetes / CI'da ortam değişkeninin `.env`'yi ezmesi için **ortam değişkeni olarak** `ENV_OVERRIDES_DOTENV=true` verin (`.env` içinde tanımlanamaz). 3.0'da bu davranışın varsayılan olması planlanıyor.
+
 3. Önerilen: giriş dosyanızda (ör. `public/index.php`) autoload sonrası:
 
 ```php
