@@ -413,7 +413,7 @@ class Nsql
         }
 
         $this->last_results = $results;
-        if ($cache_key !== null && count($results) <= $this->query_cache_size_limit) {
+        if ($cache_key !== null && count($results) <= $this->query_cache_max_rows()) {
             $this->add_to_query_cache($cache_key, $results, [], $this->extract_tables_from_query($query));
         }
 

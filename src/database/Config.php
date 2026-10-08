@@ -70,6 +70,7 @@ class Config
     public const cache_cleanup_probability = 10; // %10 olasılıkla temizlik
     public const query_cache_driver = 'memory'; // memory | redis (production önerisi) | memcached
     public const query_cache_prefix = 'nsql_qc_';
+    public const query_cache_local_verify = true; // paylaşılan store varken süreç içi isabette sürüm token'ları doğrulanır
 
     // Rate Limiting sabitleri
     public const rate_limit_decay = 1;
@@ -509,6 +510,7 @@ class Config
             'CACHE_CLEANUP_PROBABILITY' => self::cache_cleanup_probability,
             'QUERY_CACHE_DRIVER' => self::query_cache_driver,
             'QUERY_CACHE_PREFIX' => self::query_cache_prefix,
+            'QUERY_CACHE_LOCAL_VERIFY' => self::query_cache_local_verify,
             'REDIS_HOST' => '127.0.0.1',
             'REDIS_PORT' => 6379,
             'REDIS_PASSWORD' => null,
