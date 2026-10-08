@@ -7,8 +7,7 @@ use nsql\database\Config;
 /**
  * Log Path Trait
  *
- * Ortak log path ve directory metodları
- * GELISTIRME-010: Code duplication azaltma
+ * Logger ve AuditLogger için ortak log yolu ve dizin metodları
  */
 trait LogPathTrait
 {

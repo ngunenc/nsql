@@ -16,7 +16,7 @@ class QueryAnalyzer
         'union_query' => '/UNION\s+(?:ALL\s+)?SELECT/i',
         'subquery_exists' => '/EXISTS\s*\(\s*SELECT/i',
         'large_in_clause' => '/IN\s*\([^)]{1000,}\)/i',
-        // GELISTIRME-008: Yeni pattern'ler
+        // Veritabanı / şema düzeyi işlemler
         'drop_database' => '/DROP\s+(?:DATABASE|SCHEMA)\s+[`\w.]+/i',
         'create_database' => '/CREATE\s+(?:DATABASE|SCHEMA)\s+[`\w.]+/i',
         'drop_index' => '/DROP\s+INDEX\s+[`\w.]+/i',
@@ -49,7 +49,7 @@ class QueryAnalyzer
         'multiple_statements' => '/;\s*\w+/i',
         'potential_injection' => '/EXEC\(|EXECUTE\(|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD\s+DATA|LOAD\s+XML/i',
         'privilege_escalation' => '/GRANT\s+|REVOKE\s+|CREATE\s+USER|DROP\s+USER/i',
-        // GELISTIRME-008: Yeni güvenlik pattern'leri
+        // Kodlama ve fonksiyon tabanlı injection teknikleri
         'hex_encoding' => '/0x[0-9a-fA-F]+/i', // Hex encoding (SQL injection tekniği)
         'char_function' => '/CHAR\s*\([^)]+\)/i', // CHAR() function (SQL injection tekniği)
         'concat_function' => '/CONCAT\s*\([^)]+\)/i', // CONCAT() function (SQL injection tekniği)
@@ -97,7 +97,7 @@ class QueryAnalyzer
         'multiple_statements' => 'critical',
         'potential_injection' => 'critical',
         'privilege_escalation' => 'critical',
-        // GELISTIRME-008: Yeni pattern risk seviyeleri
+        // Veritabanı / şema düzeyi ve injection teknikleri
         'drop_database' => 'critical',
         'create_database' => 'high',
         'drop_index' => 'high',
@@ -198,7 +198,7 @@ class QueryAnalyzer
             'union_query' => 'UNION sorguları performans sorunlarına yol açabilir',
             'subquery_exists' => 'EXISTS alt sorgusu tespit edildi',
             'large_in_clause' => 'Çok büyük IN bloğu tespit edildi',
-            // GELISTIRME-008: Yeni risk mesajları
+            // Veritabanı / şema düzeyi işlemler
             'drop_database' => 'DROP DATABASE sorgusu tüm veritabanını siler',
             'create_database' => 'CREATE DATABASE sorgusu yeni veritabanı oluşturur',
             'drop_index' => 'DROP INDEX sorgusu index\'i siler',
@@ -247,7 +247,7 @@ class QueryAnalyzer
             'multiple_statements' => 'Çoklu SQL sorgusu tespit edildi',
             'potential_injection' => 'Potansiyel SQL injection riski',
             'privilege_escalation' => 'Yetki yükseltme riski tespit edildi',
-            // GELISTIRME-008: Yeni güvenlik mesajları
+            // Kodlama ve fonksiyon tabanlı injection teknikleri
             'hex_encoding' => 'Hex encoding tespit edildi (SQL injection tekniği)',
             'char_function' => 'CHAR() fonksiyonu tespit edildi (SQL injection tekniği)',
             'concat_function' => 'CONCAT() fonksiyonu tespit edildi (SQL injection tekniği)',

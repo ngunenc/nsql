@@ -30,7 +30,6 @@
 # Geliştirme dosyaları
 /.github export-ignore
 /.cursor export-ignore
-/env.example export-ignore
 /.env.example export-ignore
 /.env.testing export-ignore
 

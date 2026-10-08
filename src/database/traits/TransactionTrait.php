@@ -14,6 +14,15 @@ trait TransactionTrait
 {
     private int $transaction_level = 0;
 
+    // Host sınıfın diğer trait'lerden sağladığı bağımlılıklar (ConnectionTrait, CacheTrait)
+    abstract public function ensure_connection(): void;
+
+    abstract public function reconnect(?\Throwable $cause = null): void;
+
+    abstract private static function is_connection_lost_error(\PDOException $e): bool;
+
+    abstract private function flush_deferred_cache_invalidations(bool $committed): void;
+
     /**
      * Bir veritabanı işlemi başlatır (iç içe çağrılarda SAVEPOINT).
      *

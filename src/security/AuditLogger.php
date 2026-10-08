@@ -173,7 +173,7 @@ class AuditLogger
         }
     }
 
-    // Log path metodları artık log_path_trait'te (GELISTIRME-010)
+    // Log yolu metodları: LogPathTrait
 
     private function rotate_if_needed(string $file): void
     {
