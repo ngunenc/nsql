@@ -49,6 +49,12 @@ abstract class Model implements \JsonSerializable
     protected string $deleted_at_column = 'deleted_at';
 
     /**
+     * Optimistic locking kolonu (ör. 'lock_version', INT). Tanımlıysa yüklenmiş modelin UPDATE/DELETE
+     * sorgusu sürüm koşuluyla çalışır ve sürümü artırır; satır arada değiştiyse StaleModelException.
+     */
+    protected ?string $lock_version_column = null;
+
+    /**
      * save() INSERT/UPDATE kararı: true = yalnızca yüklenmiş/kaydedilmiş model UPDATE edilir
      * (elle atanmış UUID / doğal anahtarlı yeni model INSERT edilir); null = ORM_TRACK_EXISTS ayarı.
      */
@@ -502,20 +508,98 @@ abstract class Model implements \JsonSerializable
     }
 
     /**
+     * Model olay kancaları (#113). Alt sınıf ezer; `on_saving`, `on_creating`, `on_updating`,
+     * `on_deleting` false döndürürse işlem yapılmaz ve save() / delete() false döner.
+     * Sıra: on_saving → on_creating|on_updating → (sorgu) → on_created|on_updated → on_saved.
+     * Değişiklik olmayan yüklenmiş modelde yalnızca on_saving ve on_saved çağrılır.
+     */
+    protected function on_saving(): ?bool
+    {
+        return null;
+    }
+
+    protected function on_saved(): void
+    {
+    }
+
+    protected function on_creating(): ?bool
+    {
+        return null;
+    }
+
+    protected function on_created(): void
+    {
+    }
+
+    protected function on_updating(): ?bool
+    {
+        return null;
+    }
+
+    protected function on_updated(): void
+    {
+    }
+
+    protected function on_deleting(): ?bool
+    {
+        return null;
+    }
+
+    protected function on_deleted(): void
+    {
+    }
+
+    /**
      * Kaydı ekler veya günceller. Hidden alanlar da kaydedilir.
      *
      * @throws \InvalidArgumentException Tablo veya kolon adı geçersizse
+     * @throws StaleModelException Optimistic locking: satır yüklendikten sonra değişti
      */
     public function save(): bool
     {
+        // Kanca attribute değiştirebilir (slug, normalize); karar ondan sonra verilir
+        if ($this->on_saving() === false) {
+            return false;
+        }
+
         // Yüklenmiş model: UPDATE. Yüklenmemiş model: ORM_TRACK_EXISTS açıksa INSERT, kapalıysa
         // 2.x davranışı (birincil anahtar doluysa UPDATE).
         $is_new = ! $this->exists && ($this->tracks_exists() || empty($this->attributes[$this->primary_key]));
 
+        if ($this->exists && ! $this->is_dirty()) {
+            $this->on_saved();
+
+            return true;
+        }
+
+        if (($is_new ? $this->on_creating() : $this->on_updating()) === false) {
+            return false;
+        }
+        if (! $this->perform_save($is_new)) {
+            return false;
+        }
+
+        $is_new ? $this->on_created() : $this->on_updated();
+        $this->on_saved();
+
+        return true;
+    }
+
+    private function perform_save(bool $is_new): bool
+    {
         // Yüklenmiş modelde yalnızca değişen kolonlar yazılır; değişiklik yoksa sorgu çalışmaz (#88)
         $data = $this->exists ? $this->get_dirty() : $this->attributes;
         if ($this->exists && $data === []) {
             return true;
+        }
+
+        $version_column = $this->lock_version_column;
+        if ($version_column !== null) {
+            // Sürüm yalnızca kütüphane tarafından yönetilir
+            unset($data[$version_column]);
+            if ($is_new) {
+                $data[$version_column] = 1;
+            }
         }
 
         if ($this->timestamps) {
@@ -546,12 +630,26 @@ abstract class Model implements \JsonSerializable
             foreach (array_keys($data) as $column) {
                 $set_parts[] = $this->db->quote_identifier((string) $column) . ' = ?';
             }
+            $params = array_values($data);
+
+            $locked = $version_column !== null && $this->exists;
+            if ($locked) {
+                $quoted_version = $this->db->quote_identifier($version_column);
+                $set_parts[] = "{$quoted_version} = {$quoted_version} + 1";
+            }
 
             $sql = "UPDATE {$table} SET " . implode(', ', $set_parts) . " WHERE {$primary_key} = ?";
-            $params = array_values($data);
             $params[] = $id;
 
-            $result = $this->db->update($sql, $params) !== false;
+            if ($locked) {
+                [$condition, $condition_params] = $this->version_condition();
+                $this->run_versioned($sql . $condition, [...$params, ...$condition_params], $id);
+                $this->attributes[$version_column] = (int) ($this->original[$version_column] ?? 0) + 1;
+                $result = true;
+            } else {
+                $result = $this->db->update($sql, $params) !== false;
+            }
+
             if ($result) {
                 if ($this->timestamps) {
                     $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
@@ -603,6 +701,9 @@ abstract class Model implements \JsonSerializable
 
         // Elle atanmış anahtarda sürücünün son eklenen id'si (SQLite rowid, MySQL 0) kullanılmaz
         $this->attributes[$this->primary_key] = $assigned_key ?? $id;
+        if ($version_column !== null) {
+            $this->attributes[$version_column] = 1;
+        }
         if ($this->timestamps) {
             $this->attributes[$this->created_at_column] = $data[$this->created_at_column];
             $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
@@ -618,15 +719,18 @@ abstract class Model implements \JsonSerializable
      */
     public function delete(): bool
     {
-        if (! isset($this->attributes[$this->primary_key])) {
+        if (! isset($this->attributes[$this->primary_key]) || $this->on_deleting() === false) {
             return false;
         }
 
-        if ($this->soft_deletes) {
-            return $this->write_deleted_at(date('Y-m-d H:i:s'));
+        $deleted = $this->soft_deletes
+            ? $this->write_deleted_at(date('Y-m-d H:i:s'))
+            : $this->perform_force_delete();
+        if ($deleted) {
+            $this->on_deleted();
         }
 
-        return $this->force_delete();
+        return $deleted;
     }
 
     /**
@@ -634,21 +738,71 @@ abstract class Model implements \JsonSerializable
      */
     public function force_delete(): bool
     {
-        if (! isset($this->attributes[$this->primary_key])) {
+        if (! isset($this->attributes[$this->primary_key]) || $this->on_deleting() === false) {
             return false;
         }
 
+        $deleted = $this->perform_force_delete();
+        if ($deleted) {
+            $this->on_deleted();
+        }
+
+        return $deleted;
+    }
+
+    private function perform_force_delete(): bool
+    {
         $id = $this->attributes[$this->primary_key];
         $table = $this->db->quote_identifier($this->table);
         $primary_key = $this->db->quote_identifier($this->primary_key);
+        $sql = "DELETE FROM {$table} WHERE {$primary_key} = ?";
 
-        $deleted = $this->db->delete("DELETE FROM {$table} WHERE {$primary_key} = ?", [$id]) !== false;
+        if ($this->lock_version_column !== null && $this->exists) {
+            [$condition, $condition_params] = $this->version_condition();
+            $this->run_versioned($sql . $condition, [$id, ...$condition_params], $id);
+            $deleted = true;
+        } else {
+            $deleted = $this->db->delete($sql, [$id]) !== false;
+        }
+
         if ($deleted) {
             // Tekrar save() edilirse yeni kayıt olarak eklenir
             $this->exists = false;
         }
 
         return $deleted;
+    }
+
+    /**
+     * Yüklendiği andaki sürüme göre WHERE eki: [` AND "lock_version" = ?`, [sürüm]].
+     *
+     * @return array{0: string, 1: list<mixed>}
+     */
+    private function version_condition(): array
+    {
+        $column = (string) $this->lock_version_column;
+        $quoted = $this->db->quote_identifier($column);
+        $expected = $this->original[$column] ?? null;
+
+        return $expected === null ? [" AND {$quoted} IS NULL", []] : [" AND {$quoted} = ?", [$expected]];
+    }
+
+    /**
+     * Sürüm koşullu yazma: etkilenen satır yoksa satır arada değişmiş / silinmiştir.
+     *
+     * @param list<mixed> $params
+     * @throws StaleModelException
+     */
+    private function run_versioned(string $sql, array $params, mixed $id): void
+    {
+        // statement(): THROW_ON_ERROR'dan bağımsız olarak etkilenen satır sayısını döndürür
+        if ($this->db->statement($sql, $params) === 0) {
+            throw new StaleModelException(
+                static::class,
+                is_int($id) || is_string($id) ? $id : (string) json_encode($id),
+                $this->original[(string) $this->lock_version_column] ?? null
+            );
+        }
     }
 
     /**
@@ -674,10 +828,23 @@ abstract class Model implements \JsonSerializable
         $column = $this->db->quote_identifier($this->deleted_at_column);
         $primary_key = $this->db->quote_identifier($this->primary_key);
 
-        $ok = $this->db->update(
-            "UPDATE {$table} SET {$column} = ? WHERE {$primary_key} = ?",
-            [$value, $this->attributes[$this->primary_key]]
-        ) !== false;
+        $id = $this->attributes[$this->primary_key];
+        $version_column = $this->lock_version_column;
+        if ($version_column !== null && $this->exists) {
+            $quoted_version = $this->db->quote_identifier($version_column);
+            [$condition, $condition_params] = $this->version_condition();
+            $this->run_versioned(
+                "UPDATE {$table} SET {$column} = ?, {$quoted_version} = {$quoted_version} + 1 WHERE {$primary_key} = ?" . $condition,
+                [$value, $id, ...$condition_params],
+                $id
+            );
+            $version = (int) ($this->original[$version_column] ?? 0) + 1;
+            $this->attributes[$version_column] = $this->original[$version_column] = $version;
+            $ok = true;
+        } else {
+            $ok = $this->db->update("UPDATE {$table} SET {$column} = ? WHERE {$primary_key} = ?", [$value, $id]) !== false;
+        }
+
         if ($ok) {
             $this->attributes[$this->deleted_at_column] = $value;
             if ($this->exists) {

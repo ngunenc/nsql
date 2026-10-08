@@ -578,6 +578,44 @@ Yüklenmemiş, birincil anahtarı elle atanmış model (UUID, doğal anahtar):
 | `ORM_TRACK_EXISTS=false` (2.x varsayılanı) | Anahtar doluysa UPDATE (eski davranış) |
 | `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;` | INSERT (anahtar değeri korunur); `force_delete()` sonrası tekrar `save()` yeniden ekler |
 
+### Model olayları (v2.4.0+)
+
+Alt sınıfta korumalı kancaları ezin. `on_saving`, `on_creating`, `on_updating`, `on_deleting` `false` döndürürse işlem yapılmaz ve `save()` / `delete()` `false` döner:
+
+```php
+class Post extends Model
+{
+    protected function on_saving(): ?bool
+    {
+        $this->set_attribute('slug', slugify((string) $this->get_attribute('title')));
+
+        return null;            // false → kaydetme iptal
+    }
+
+    protected function on_deleted(): void
+    {
+        AuditLogger::log('post_deleted', ['id' => $this->get_key()]);
+    }
+}
+```
+
+Sıra: `on_saving` → `on_creating` | `on_updating` → (sorgu) → `on_created` | `on_updated` → `on_saved`. Değişiklik olmayan yüklenmiş modelde yalnızca `on_saving` ve `on_saved` çağrılır. Silme: `on_deleting` → (soft delete veya DELETE) → `on_deleted`; `force_delete()` da aynı kancaları çağırır.
+
+### Optimistic locking (v2.4.0+)
+
+```php
+class Order extends Model
+{
+    protected ?string $lock_version_column = 'lock_version';   // INT kolon
+}
+
+$order = Order::find_or_fail(5, $db);
+$order->status = 'paid';
+$order->save();   // UPDATE ... SET status = ?, lock_version = lock_version + 1 WHERE id = ? AND lock_version = ?
+```
+
+Yüklenmiş modelin `save()`, `delete()` (soft delete dahil), `restore()` ve `force_delete()` sorguları yüklendiği andaki sürümle koşullanır ve sürümü artırır. Satır arada başka bir işlem tarafından değiştirildi veya silindiyse `nsql\database\orm\StaleModelException` fırlatılır (`$e->model`, `$e->id`, `$e->expected_version`); modeli yeniden yükleyip işlemi tekrarlayın. Yeni kayıtlar sürüm 1 ile eklenir; sürüm kolonuna elle atanan değer yok sayılır.
+
 ### Cast tipleri
 
 `int`, `float`, `decimal`, `bool`, `string`, `array` / `json`, `object`, `datetime`, `date` ve `decimal:N` (v2.3.0+). `decimal:N` değeri `N` ondalıklı **string** olarak döndürür ve saklar; float'a çevrilmeden yuvarlanır (yarım yukarı), para / oran için önerilir. Düz `decimal` geriye uyumluluk için `float` döner.
