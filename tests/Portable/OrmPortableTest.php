@@ -5,6 +5,7 @@ namespace Tests\Portable;
 use nsql\database\Config;
 use nsql\database\orm\Model;
 use nsql\database\orm\ModelNotFoundException;
+use nsql\database\orm\StaleModelException;
 use Tests\Support\PortableTestCase;
 
 class Author extends Model
@@ -56,6 +57,70 @@ class BlogCategory extends Model
 {
 }
 
+/** Olay kancaları ve optimistic locking (#113) */
+class Article extends Model
+{
+    protected string $table = 'p_articles';
+    protected array $fillable = ['title', 'slug', 'body'];
+    protected bool $timestamps = false;
+    protected bool $soft_deletes = true;
+    protected ?string $lock_version_column = 'lock_version';
+
+    /** @var list<string> */
+    public array $events = [];
+    public bool $block_delete = false;
+
+    protected function on_saving(): ?bool
+    {
+        $this->events[] = 'saving';
+        // Kanca attribute değiştirebilir
+        $this->set_attribute('slug', strtolower(str_replace(' ', '-', (string) $this->get_attribute('title'))));
+
+        return $this->get_attribute('title') === 'iptal' ? false : null;
+    }
+
+    protected function on_saved(): void
+    {
+        $this->events[] = 'saved';
+    }
+
+    protected function on_creating(): ?bool
+    {
+        $this->events[] = 'creating';
+
+        return null;
+    }
+
+    protected function on_created(): void
+    {
+        $this->events[] = 'created';
+    }
+
+    protected function on_updating(): ?bool
+    {
+        $this->events[] = 'updating';
+
+        return null;
+    }
+
+    protected function on_updated(): void
+    {
+        $this->events[] = 'updated';
+    }
+
+    protected function on_deleting(): ?bool
+    {
+        $this->events[] = 'deleting';
+
+        return $this->block_delete ? false : null;
+    }
+
+    protected function on_deleted(): void
+    {
+        $this->events[] = 'deleted';
+    }
+}
+
 /** Elle atanmış (UUID / doğal) birincil anahtarlı model (#88) */
 class Voucher extends Model
 {
@@ -87,6 +152,13 @@ class OrmPortableTest extends PortableTestCase
         ]);
         $this->create_table('p_posts', ['author_id INT NOT NULL', 'title VARCHAR(100) NOT NULL', 'deleted_at TIMESTAMP NULL']);
         $this->create_table('p_profiles', ['author_id INT NOT NULL', 'bio VARCHAR(200) NULL']);
+        $this->create_table('p_articles', [
+            'title VARCHAR(100) NOT NULL',
+            'slug VARCHAR(100) NULL',
+            'body TEXT NULL',
+            'lock_version INT NULL',
+            'deleted_at TIMESTAMP NULL',
+        ]);
         $this->db->query('DROP TABLE IF EXISTS p_vouchers');
         $this->db->query('CREATE TABLE p_vouchers (code VARCHAR(36) PRIMARY KEY, label VARCHAR(50) NOT NULL, amount DECIMAL(15,2) NULL)');
     }
@@ -182,6 +254,89 @@ class OrmPortableTest extends PortableTestCase
 
         $this->assertNull(Voucher::find('old-code', $this->db));
         $this->assertSame('x', Voucher::find_or_fail('new-code', $this->db)->label);
+    }
+
+    public function test_model_event_hooks(): void
+    {
+        $article = new Article($this->db, ['title' => 'Merhaba Dünya']);
+        $this->assertTrue($article->save());
+        $this->assertSame(['saving', 'creating', 'created', 'saved'], $article->events);
+        $this->assertSame('merhaba-dünya', Article::find_or_fail($article->get_key(), $this->db)->slug);
+
+        $article->events = [];
+        $this->assertTrue($article->save());
+        $this->assertSame(['saving', 'saved'], $article->events, 'Değişiklik yok: yalnızca saving/saved');
+
+        $article->events = [];
+        $article->body = 'içerik';
+        $this->assertTrue($article->save());
+        $this->assertSame(['saving', 'updating', 'updated', 'saved'], $article->events);
+
+        $cancelled = new Article($this->db, ['title' => 'iptal']);
+        $this->assertFalse($cancelled->save());
+        $this->assertFalse($cancelled->exists());
+        $this->assertSame(1, $this->db->table('p_articles')->count());
+
+        $article->events = [];
+        $article->block_delete = true;
+        $this->assertFalse($article->delete());
+        $this->assertSame(['deleting'], $article->events);
+        $this->assertFalse($article->trashed());
+
+        $article->block_delete = false;
+        $article->events = [];
+        $this->assertTrue($article->delete());
+        $this->assertSame(['deleting', 'deleted'], $article->events);
+        $this->assertTrue($article->trashed());
+    }
+
+    public function test_optimistic_locking(): void
+    {
+        $article = new Article($this->db, ['title' => 'Sürüm']);
+        $article->save();
+        $this->assertSame(1, (int) $article->lock_version);
+
+        $first = Article::find_or_fail($article->get_key(), $this->db);
+        $second = Article::find_or_fail($article->get_key(), $this->db);
+
+        $first->body = 'ilk';
+        $this->assertTrue($first->save());
+        $this->assertSame(2, (int) $first->lock_version);
+        $this->assertSame(2, (int) Article::find_or_fail($article->get_key(), $this->db)->lock_version);
+
+        $second->body = 'ikinci';
+        try {
+            $second->save();
+            $this->fail('Eski sürümle kayıt StaleModelException vermeli');
+        } catch (StaleModelException $e) {
+            $this->assertSame(Article::class, $e->model);
+            $this->assertSame(1, (int) $e->expected_version);
+        }
+        $this->assertSame('ilk', Article::find_or_fail($article->get_key(), $this->db)->body);
+
+        // Elle verilen sürüm yok sayılır
+        $first->set_attribute('lock_version', 99);
+        $first->body = 'üçüncü';
+        $first->save();
+        $this->assertSame(3, (int) Article::find_or_fail($article->get_key(), $this->db)->lock_version);
+
+        // Soft delete ve kalıcı silme de sürümü kontrol eder
+        $this->expectException(StaleModelException::class);
+        $second->force_delete();
+    }
+
+    public function test_soft_delete_bumps_version(): void
+    {
+        $article = new Article($this->db, ['title' => 'Silinecek']);
+        $article->save();
+        $loaded = Article::find_or_fail($article->get_key(), $this->db);
+
+        $this->assertTrue($loaded->delete());
+        $this->assertSame(2, (int) $loaded->lock_version);
+        $this->assertTrue($loaded->restore());
+        $this->assertSame(3, (int) $loaded->lock_version);
+        $this->assertTrue($loaded->force_delete());
+        $this->assertSame(0, $this->db->table('p_articles')->count());
     }
 
     public function test_decimal_cast_rounds_without_float_error(): void
