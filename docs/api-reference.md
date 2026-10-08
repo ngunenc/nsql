@@ -274,6 +274,21 @@ offset(int $offset): self   // LIMIT olmadan da çalışır
 
 // JOIN clause
 join(string $table, string $first, string $operator, string $second, string $type = 'INNER'): self
+// full_join(): MySQL ve SQLite < 3.39'da LogicException (v2.2.3+)
+
+// Tablo takma adı (v2.3.0+): table(), join*(), cross_join() için `ad AS t` veya `ad t`
+// ->table('users u')->join('posts p', 'p.user_id', '=', 'u.id')   — takma adlı tabloda yazma desteklenmez
+
+// v2.3.0+
+distinct(bool $distinct = true): self                       // SELECT DISTINCT; count() alt sorgu üzerinden sayar
+where_column(string $first, string $operator, ?string $second = null): self   // iki kolon; operatör verilmezse '='
+or_where_column(string $first, string $operator, ?string $second = null): self
+or_where_not_in(string $column, array $values): self
+or_where_not_null(string $column): self
+lock_for_update(): self      // FOR UPDATE (SQLite'ta yok sayılır); transaction içinde kullanın
+shared_lock(): self          // MySQL LOCK IN SHARE MODE, PostgreSQL FOR SHARE, SQLite yok sayılır
+chunk(int $size, callable $callback, string $column = 'id', ?string $alias = null): bool
+// keyset sayfalama: callback(list<object> $rows, int $page); false dönerse durur
 
 // Sorguyu çalıştırma
 get(): array
@@ -298,6 +313,10 @@ delete(bool $allow_without_where = false): int                // silinen satır
 upsert(array $rows, array $update_columns, array $unique_by = []): int
 // MySQL: ON DUPLICATE KEY UPDATE; PostgreSQL/SQLite: ON CONFLICT ($unique_by) DO UPDATE ($unique_by zorunlu)
 // $update_columns: ['name', 'qty'] (yeni değer) veya ['qty' => QueryBuilder::raw('qty + 1')]
+// MySQL 8.0.19+: `VALUES (...) AS nsql_new ... kolon = nsql_new.kolon`; MariaDB / eski MySQL: VALUES(kolon) (v2.3.0+)
+increment(string $column, int|float $amount = 1, array $extra = [], bool $allow_without_where = false): int
+decrement(string $column, int|float $amount = 1, array $extra = [], bool $allow_without_where = false): int
+// ->where('id', '=', 5)->increment('views', 1, ['seen_at' => $now])   — WHERE kuralı update() ile aynı
 
 // SQL sorgusunu alma (test için)
 get_query(): string
@@ -874,6 +893,7 @@ Yönlendirme kuralları:
 - `stick_to_primary(true|false)` sticky durumunu elle yönetir (ör. istek başında `false`).
 - Query cache, `on_query()` dinleyicileri, PSR-3 logger ve `THROW_ON_ERROR` primary'de kalır; replica'daki hata `get_last_error()` / `QueryException` olarak primary üzerinden görünür.
 - Replica'ya bağlanılamazsa `warning` loglanır ve sorgular primary'de çalışır (`uses_read_replica()` false döner).
+- Replica bağlantısı çalışma sırasında kopar ve yeniden kurulamazsa da aynı şekilde: o okuma primary'de tekrarlanır, sonraki okumalar primary'de çalışır; `set_read_replica()` ile yeniden açılır (v2.3.0+).
 
 ## 📊 Yeni İstatistik API'leri (v1.4)
 

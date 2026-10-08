@@ -292,6 +292,17 @@ class Nsql
         return $this->driver?->get_driver_name() ?? 'mysql';
     }
 
+    private ?string $server_version = null;
+
+    /**
+     * Veritabanı sunucusu sürümü (`PDO::ATTR_SERVER_VERSION`, ör. `8.0.36`, `10.11.6-MariaDB`).
+     * Bağlantı başına bir kez okunur.
+     */
+    public function get_server_version(): string
+    {
+        return $this->server_version ??= (string) ($this->pdo?->getAttribute(PDO::ATTR_SERVER_VERSION) ?? '');
+    }
+
     /**
      * Tek sorguda bağlanabilecek en fazla parametre sayısı (SQLite 32766, MySQL/PostgreSQL 65535).
      *

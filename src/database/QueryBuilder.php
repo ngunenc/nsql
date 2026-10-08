@@ -48,6 +48,11 @@ class QueryBuilder
     /** @var list<array{builder: QueryBuilder, all: bool}> */
     private array $unions = [];
     private bool $allow_empty_string;
+    /** table() ile verilen tablo takma adı (`users AS u`) */
+    private ?string $table_alias = null;
+    private bool $distinct = false;
+    /** @var 'update'|'share'|null Satır kilidi */
+    private ?string $lock = null;
 
     public function __construct(Nsql $db)
     {
@@ -69,14 +74,48 @@ class QueryBuilder
     /**
      * Tabloyu belirler
      *
-     * @param string $table Tablo adı (`tablo` veya `şema.tablo`)
+     * @param string $table Tablo adı (`tablo`, `şema.tablo`), takma adla `tablo AS t` veya `tablo t`
      */
     public function table(string $table): self
     {
-        $this->table = [$this->compile_reference($table)];
-        $this->table_name = $table;
+        [$name, $alias] = $this->split_alias($table);
+        $this->table = [$this->compile_table_reference($table)];
+        $this->table_name = $name;
+        $this->table_alias = $alias;
 
         return $this;
+    }
+
+    /**
+     * `ad`, `ad AS takma_ad` veya `ad takma_ad` → [ad, takma_ad|null].
+     *
+     * @return array{0: string, 1: string|null}
+     */
+    private function split_alias(string $reference): array
+    {
+        if (preg_match('/^\s*(\S+)\s+(?:AS\s+)?(\S+)\s*$/i', $reference, $m)) {
+            return [$m[1], $this->unquote($m[2])];
+        }
+
+        return [trim($reference), null];
+    }
+
+    /**
+     * Tablo referansını (isteğe bağlı takma adla) doğrular ve quote eder.
+     */
+    private function compile_table_reference(string $reference): string
+    {
+        [$name, $alias] = $this->split_alias($reference);
+        $compiled = $this->compile_reference($name);
+        if ($alias === null) {
+            return $compiled;
+        }
+
+        try {
+            return $compiled . ' AS ' . $this->db->quote_identifier($alias);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException('Geçersiz tablo takma adı: ' . $this->excerpt($reference), 0, $e);
+        }
     }
 
     /**
@@ -94,6 +133,7 @@ class QueryBuilder
 
             $this->table = $this->subquery_part($table, $alias);
             $this->table_name = null;
+            $this->table_alias = null;
 
             return $this;
         }
@@ -328,6 +368,86 @@ class QueryBuilder
         return $this;
     }
 
+    public function or_where_not_in(string $column, array $values): self
+    {
+        return $this->with_or(fn () => $this->where_not_in($column, $values));
+    }
+
+    public function or_where_not_null(string $column): self
+    {
+        return $this->with_or(fn () => $this->where_not_null($column));
+    }
+
+    /**
+     * İki kolonu karşılaştırır: `where_column('orders.total', '>', 'orders.paid')`.
+     * Operatör verilmezse `=`; ikinci argüman kolon adı olarak doğrulanır (değer bağlanmaz).
+     */
+    public function where_column(string $first, string $operator, ?string $second = null): self
+    {
+        if ($second === null) {
+            [$operator, $second] = ['=', $operator];
+        }
+
+        $this->validate_operator($operator);
+        $op = strtoupper(trim($operator));
+        if (in_array($op, ['IN', 'NOT IN', 'IS', 'IS NOT', 'LIKE', 'NOT LIKE'], true)) {
+            throw new \InvalidArgumentException("where_column() için karşılaştırma operatörü gerekli: {$operator}");
+        }
+
+        $this->add_where([$this->compile_column($first) . " {$op} " . $this->compile_column($second)]);
+
+        return $this;
+    }
+
+    public function or_where_column(string $first, string $operator, ?string $second = null): self
+    {
+        return $this->with_or(fn () => $this->where_column($first, $operator, $second));
+    }
+
+    /**
+     * SELECT DISTINCT
+     */
+    public function distinct(bool $distinct = true): self
+    {
+        $this->distinct = $distinct;
+
+        return $this;
+    }
+
+    /**
+     * Seçilen satırları güncelleme için kilitler (`FOR UPDATE`). Transaction içinde kullanın.
+     * SQLite satır kilidi desteklemez; orada yok sayılır (yazma kilidi tüm veritabanı içindir).
+     */
+    public function lock_for_update(): self
+    {
+        $this->lock = 'update';
+
+        return $this;
+    }
+
+    /**
+     * Paylaşımlı okuma kilidi: MySQL/MariaDB `LOCK IN SHARE MODE`, PostgreSQL `FOR SHARE`, SQLite yok sayılır.
+     */
+    public function shared_lock(): self
+    {
+        $this->lock = 'share';
+
+        return $this;
+    }
+
+    private function compile_lock(): string
+    {
+        if ($this->lock === null) {
+            return '';
+        }
+
+        return match ($this->db->get_driver_name()) {
+            'sqlite' => '',
+            'mysql' => $this->lock === 'update' ? ' FOR UPDATE' : ' LOCK IN SHARE MODE',
+            default => $this->lock === 'update' ? ' FOR UPDATE' : ' FOR SHARE',
+        };
+    }
+
     /**
      * WHERE IN subquery ekler
      */
@@ -473,7 +593,7 @@ class QueryBuilder
 
             $table_part = $this->subquery_part($table, $alias);
         } else {
-            $table_part = [$this->compile_reference($table)];
+            $table_part = [$this->compile_table_reference($table)];
         }
 
         $this->validate_join_type($type);
@@ -531,7 +651,7 @@ class QueryBuilder
     {
         $this->joins[] = [
             'type' => 'CROSS',
-            'table' => [$this->compile_reference($table)],
+            'table' => [$this->compile_table_reference($table)],
             'condition' => null,
         ];
 
@@ -583,7 +703,7 @@ class QueryBuilder
         $aggregate = 'COUNT(' . ($column === '*' ? '*' : $this->compile_reference($column)) . ') AS '
             . $this->db->quote_identifier('aggregate');
 
-        if ($this->group_by !== [] || $this->unions !== [] || $this->limit !== null || $this->offset > 0) {
+        if ($this->group_by !== [] || $this->unions !== [] || $this->limit !== null || $this->offset > 0 || $this->distinct) {
             $outer = new self($this->db);
             $outer->from(clone $this, 'nsql_count');
             $outer->columns = [[$aggregate]];
@@ -667,6 +787,52 @@ class QueryBuilder
             'current_page' => $page,
             'last_page' => max(1, (int) ceil($total / $per_page)),
         ];
+    }
+
+    /**
+     * Sonuçları $column'a göre artan sırada (keyset) $size'lık parçalar halinde $callback'e verir.
+     * Callback false döndürürse durur. OFFSET kullanılmadığından büyük tablolarda da sabit maliyetlidir
+     * ve parçalar arasında eklenen/silinen satırlar kaymaya yol açmaz.
+     *
+     * @param callable(list<object>, int): mixed $callback Satırlar ve 1 tabanlı parça numarası
+     * @param string $column Benzersiz ve sıralanabilir kolon (genellikle birincil anahtar)
+     * @param string|null $alias Sonuç nesnesindeki kolon adı (varsayılan: $column'ın son parçası)
+     * @return bool Tüm parçalar işlendiyse true, callback durdurduysa false
+     */
+    public function chunk(int $size, callable $callback, string $column = 'id', ?string $alias = null): bool
+    {
+        if ($size < 1) {
+            throw new \InvalidArgumentException('chunk(): parça boyutu en az 1 olmalıdır.');
+        }
+        if ($this->order_by !== [] || $this->limit !== null || $this->offset > 0 || $this->unions !== []) {
+            throw new \LogicException('chunk(): sıralama ve sayfalama kolon üzerinden yapılır; order_by, limit, offset ve union kullanmayın.');
+        }
+
+        $property = $alias ?? $this->result_property($column);
+        $last = null;
+        for ($page = 1;; $page++) {
+            $query = clone $this;
+            if ($last !== null) {
+                $query->where($column, '>', $last);
+            }
+            $rows = array_values($query->order_by($column)->limit($size)->get());
+            if ($rows === []) {
+                return true;
+            }
+
+            $tail = $rows[count($rows) - 1];
+            if (! property_exists($tail, $property)) {
+                throw new \InvalidArgumentException("chunk(): sonuçta '{$property}' kolonu yok; select() listesine ekleyin.");
+            }
+
+            if ($callback($rows, $page) === false) {
+                return false;
+            }
+            if (count($rows) < $size) {
+                return true;
+            }
+            $last = $tail->{$property};
+        }
     }
 
     /**
@@ -763,6 +929,55 @@ class QueryBuilder
     }
 
     /**
+     * Kolonu artırır: `UPDATE t SET kolon = kolon + :n [, $extra…] WHERE …`. Etkilenen satır sayısını döndürür.
+     * Koşulsuz artırma yalnızca $allow_without_where=true ile yapılır.
+     *
+     * @param array<string, mixed> $extra Aynı sorguda güncellenecek diğer kolonlar
+     */
+    public function increment(string $column, int|float $amount = 1, array $extra = [], bool $allow_without_where = false): int
+    {
+        return $this->step($column, $amount, $extra, $allow_without_where, 'increment');
+    }
+
+    /**
+     * Kolonu azaltır. Bkz. increment().
+     *
+     * @param array<string, mixed> $extra
+     */
+    public function decrement(string $column, int|float $amount = 1, array $extra = [], bool $allow_without_where = false): int
+    {
+        return $this->step($column, -$amount, $extra, $allow_without_where, 'decrement');
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     */
+    private function step(string $column, int|float $amount, array $extra, bool $allow_without_where, string $operation): int
+    {
+        // WHERE zorunluluğu update() ile aynı
+        $this->assert_writable('update', $allow_without_where);
+        if ($extra !== [] && array_is_list($extra)) {
+            throw new \InvalidArgumentException("{$operation}(): \$extra kolon => değer dizisi bekler.");
+        }
+
+        $counter = 0;
+        $params = [];
+        $quoted = $this->compile_reference($column);
+        $sets = [
+            "{$quoted} = {$quoted} " . ($amount < 0 ? '- ' : '+ ')
+                . $this->bind(abs($amount), is_int($amount) ? \PDO::PARAM_INT : \PDO::PARAM_STR, $counter, $params),
+        ];
+        foreach ($extra as $key => $value) {
+            $sets[] = $this->compile_reference((string) $key) . ' = '
+                . $this->render([$this->value_part((string) $key, $value)], $counter, $params);
+        }
+
+        $sql = 'UPDATE ' . $this->write_table() . ' SET ' . implode(', ', $sets) . $this->compile_where($counter, $params);
+
+        return $this->db->statement($sql, $params);
+    }
+
+    /**
      * Ekle; benzersiz anahtar çakışırsa $update_columns kolonlarını güncelle.
      * MySQL: ON DUPLICATE KEY UPDATE; PostgreSQL/SQLite: ON CONFLICT ($unique_by) DO UPDATE ($unique_by zorunlu).
      *
@@ -788,11 +1003,24 @@ class QueryBuilder
         $params = [];
         [$sql] = $this->compile_insert($rows, $counter, $params);
 
+        // MySQL 8.0.20+ `VALUES(kolon)`'u deprecated sayar; 8.0.19+ satır takma adını destekler.
+        // MariaDB takma ad sözdizimini desteklemez, VALUES() ile devam eder (#91).
+        $row_alias = $driver === 'mysql' && self::mysql_supports_insert_alias($this->db->get_server_version())
+            ? $this->db->quote_identifier('nsql_new')
+            : null;
+        if ($row_alias !== null) {
+            $sql .= ' AS ' . $row_alias;
+        }
+
         $sets = [];
         foreach ($update_columns as $key => $value) {
             if (is_int($key)) {
                 $column = $this->compile_reference((string) $value);
-                $sets[] = $column . ' = ' . ($driver === 'mysql' ? "VALUES({$column})" : "EXCLUDED.{$column}");
+                $sets[] = $column . ' = ' . match (true) {
+                    $driver !== 'mysql' => "EXCLUDED.{$column}",
+                    $row_alias !== null => "{$row_alias}.{$column}",
+                    default => "VALUES({$column})",
+                };
             } else {
                 $sets[] = $this->compile_reference($key) . ' = '
                     . $this->render([$this->value_part($key, $value)], $counter, $params);
@@ -807,6 +1035,20 @@ class QueryBuilder
         }
 
         return $this->db->statement($sql, $params);
+    }
+
+    /**
+     * `INSERT ... VALUES (...) AS takma_ad ON DUPLICATE KEY UPDATE` desteği: MySQL 8.0.19+ (MariaDB hariç).
+     *
+     * @internal
+     */
+    public static function mysql_supports_insert_alias(string $server_version): bool
+    {
+        if ($server_version === '' || stripos($server_version, 'mariadb') !== false) {
+            return false;
+        }
+
+        return preg_match('/^(\d+\.\d+\.\d+)/', $server_version, $m) === 1 && version_compare($m[1], '8.0.19', '>=');
     }
 
     /**
@@ -855,9 +1097,18 @@ class QueryBuilder
             throw new \LogicException("{$operation}(): table() ile düz bir tablo adı belirtilmeli.");
         }
 
+        if ($this->table_alias !== null) {
+            // UPDATE/DELETE'te takma ad sözdizimi sürücüler arasında farklı; koşullar takma ada başvurabilir
+            throw new \LogicException("{$operation}(): takma adlı tabloda (`{$this->table_name} AS {$this->table_alias}`) yazma desteklenmez.");
+        }
+
+        if ($this->lock !== null) {
+            throw new \LogicException("{$operation}(): lock_for_update() / shared_lock() yalnızca okuma sorgularında kullanılır.");
+        }
+
         if (
             $this->joins !== [] || $this->unions !== [] || $this->group_by !== [] || $this->having !== []
-            || $this->order_by !== [] || $this->limit !== null || $this->offset > 0
+            || $this->order_by !== [] || $this->limit !== null || $this->offset > 0 || $this->distinct
         ) {
             throw new \LogicException("{$operation}(): JOIN, UNION, GROUP BY, HAVING, ORDER BY, LIMIT ve OFFSET desteklenmez.");
         }
@@ -934,7 +1185,7 @@ class QueryBuilder
             throw new \LogicException('Sorgu için tablo belirtilmedi (table() veya from()).');
         }
 
-        $query = 'SELECT ' . $this->render_list($this->columns, ', ', $counter, $params)
+        $query = 'SELECT ' . ($this->distinct ? 'DISTINCT ' : '') . $this->render_list($this->columns, ', ', $counter, $params)
             . ' FROM ' . $this->render($this->table, $counter, $params);
 
         foreach ($this->joins as $join) {
@@ -985,7 +1236,7 @@ class QueryBuilder
             $query .= ' OFFSET ' . $this->bind($this->offset, \PDO::PARAM_INT, $counter, $params);
         }
 
-        return $query;
+        return $query . $this->compile_lock();
     }
 
     /**

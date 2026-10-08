@@ -147,6 +147,109 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertCount(5, $build()->select('p_products.sku', 'p_orders.qty')->get());
     }
 
+    public function test_table_alias_and_self_join(): void
+    {
+        $this->assertSame(
+            ['Kalem'],
+            $this->db->table('p_products AS p')->where('p.sku', '=', 'A1')->pluck('p.name')
+        );
+
+        // Self-join: aynı kategorideki daha pahalı ürünler
+        $pairs = $this->db->table('p_products a')
+            ->join('p_products b', 'a.category', '=', 'b.category')
+            ->where_column('a.price', '<', 'b.price')
+            ->select('a.name AS cheaper', 'b.name AS pricier')
+            ->get();
+        $this->assertSame([['Kalem', 'Defter']], array_map(fn ($r) => [$r->cheaper, $r->pricier], $pairs));
+
+        $this->expectException(\LogicException::class);
+        $this->db->table('p_products AS p')->where('p.id', '=', 1)->update(['price' => 1]);
+    }
+
+    public function test_distinct_and_count(): void
+    {
+        $categories = $this->db->table('p_products')->distinct()->select('category')->where_not_null('category')->order_by('category');
+
+        $this->assertSame(['kirtasiye', 'mutfak'], $categories->pluck('category'));
+        $this->assertSame(2, $categories->count());
+        $this->assertSame(3, $this->db->table('p_orders')->count());
+        $this->assertSame(2, $this->db->table('p_orders')->distinct()->select('product_id')->count());
+    }
+
+    public function test_where_column_and_or_variants(): void
+    {
+        $names = fn ($builder) => $builder->order_by('id')->pluck('name');
+
+        $this->assertSame(
+            ['Kalem', 'Lamba'],
+            $names($this->db->table('p_products')->where('price', '<', 20)->or_where_not_in('sku', ['A1', 'A2', 'B1']))
+        );
+        $this->assertSame(
+            ['Kalem', 'Defter', 'Kupa'],
+            $names($this->db->table('p_products')->where('price', '<', 0)->or_where_not_null('category'))
+        );
+        $this->assertSame(
+            ['Kalem', 'Defter', 'Kupa', 'Lamba'],
+            $names($this->db->table('p_products')->where_column('id', '<=', 'price'))
+        );
+        $this->assertSame([], $names($this->db->table('p_products')->where_column('id', 'price')));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->db->table('p_products')->where_column('id', 'IN', 'price');
+    }
+
+    public function test_increment_and_decrement(): void
+    {
+        $products = fn () => $this->db->table('p_products')->where('sku', '=', 'A1');
+
+        $this->assertSame(1, $products()->increment('price'));
+        $this->assertSame(1, $products()->increment('price', 5, ['name' => 'Kalem+']));
+        $this->assertSame(16, (int) $products()->value('price'));
+        $this->assertSame('Kalem+', $products()->value('name'));
+
+        $this->assertSame(1, $products()->decrement('price', 6));
+        $this->assertSame(10, (int) $products()->value('price'));
+
+        $this->expectException(\LogicException::class);
+        $this->db->table('p_products')->increment('price');
+    }
+
+    public function test_locks_compile_per_driver_and_run_in_transaction(): void
+    {
+        $sql = $this->db->table('p_products')->where('id', '=', 1)->lock_for_update()->get_query();
+        $shared = $this->db->table('p_products')->where('id', '=', 1)->shared_lock()->get_query();
+
+        match (self::driver()) {
+            'sqlite' => [$this->assertStringNotContainsString('FOR UPDATE', $sql), $this->assertStringNotContainsString('SHARE', $shared)],
+            'mysql' => [$this->assertStringEndsWith('FOR UPDATE', $sql), $this->assertStringEndsWith('LOCK IN SHARE MODE', $shared)],
+            default => [$this->assertStringEndsWith('FOR UPDATE', $sql), $this->assertStringEndsWith('FOR SHARE', $shared)],
+        };
+
+        $name = $this->db->transaction(
+            fn () => $this->db->table('p_products')->where('id', '=', 1)->lock_for_update()->value('name')
+        );
+        $this->assertSame('Kalem', $name);
+    }
+
+    public function test_chunk_walks_all_rows_by_key(): void
+    {
+        $seen = [];
+        $pages = [];
+        $done = $this->db->table('p_products')->select('id', 'name')->chunk(3, function (array $rows, int $page) use (&$seen, &$pages) {
+            $pages[] = $page;
+            foreach ($rows as $row) {
+                $seen[] = $row->name;
+            }
+        });
+
+        $this->assertTrue($done);
+        $this->assertSame([1, 2], $pages);
+        $this->assertSame(['Kalem', 'Defter', 'Kupa', 'Lamba'], $seen);
+
+        $stopped = $this->db->table('p_products')->where('price', '>', 0)->chunk(1, fn () => false);
+        $this->assertFalse($stopped);
+    }
+
     public function test_write_operations(): void
     {
         $id = $this->db->table('p_products')->insert(['sku' => 'D1', 'name' => 'Masa', 'category' => 'mobilya', 'price' => 900]);
