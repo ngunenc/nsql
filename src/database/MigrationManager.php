@@ -802,13 +802,19 @@ PHP;
     }
 
     /**
-     * Belirli bir sürüme kadar migration'ları çalıştırır
+     * Bekleyen migration'ları bağımlılık sırasıyla $version dahil olmak üzere çalıştırır
+     * (v2.4.0 öncesi hedefin kendisi çalıştırılmıyordu).
+     *
+     * @return list<string> Çalıştırılan migration'lar
      */
     public function migrate_to(string $version): array
     {
         return $this->with_lock(fn (): array => $this->migrate_to_locked($version));
     }
 
+    /**
+     * @return list<string>
+     */
     private function migrate_to_locked(string $version): array
     {
         $this->ensure_migrations_table();
@@ -830,21 +836,23 @@ PHP;
 
         $batch = $this->get_next_batch();
         $applied = $this->get_applied_migrations();
+        $sorted = $this->resolve_dependencies()
+            ?? throw new \RuntimeException('Circular dependency tespit edildi! Migration bağımlılıklarında döngü var.');
 
-        foreach ($this->migrations as $name => $migration) {
-            if ($name === $version) {
-                break;
-            }
-
+        // Hedef dahil: migrate() ile aynı (bağımlılık) sırası; rollback_to() ile simetrik
+        foreach ($sorted as $name) {
             if (! in_array($name, $applied, true)) {
-                if ($this->check_dependencies($name)) {
-                    if (! $this->dry_run) {
-                        $this->run_up($name, $migration, $batch);
-                    }
-                    $executed[] = $name;
-                } else {
+                if (! $this->check_dependencies($name, $this->dry_run ? $executed : [])) {
                     throw new \RuntimeException("Bağımlılıklar karşılanmadı: {$name}");
                 }
+                if (! $this->dry_run) {
+                    $this->run_up($name, $this->migrations[$name], $batch);
+                }
+                $executed[] = $name;
+            }
+
+            if ($name === $version) {
+                break;
             }
         }
 
