@@ -773,6 +773,10 @@ if (! $limiter->check_rate_limit(SecurityManager::get_client_ip(), 'api')) {
 // Tablo ilk çağrıda oluşturulur. DDL açık transaction'ı commit edeceğinden deploy sırasında kurmak için:
 $limiter->install();                    // veya migration içinde: RateLimiter::schema_sql()
 
+// Her identifier (genellikle IP) bir satırdır; eski satırları temizleyin (v2.3.0+):
+$limiter->purge(3600);                  // cron: son isteği 1 saatten eski kayıtları sil (silinen sayıyı döner)
+// veya RATE_LIMIT_PURGE_PROBABILITY=1 → check_rate_limit() çağrılarının ~%1'inde otomatik temizlik
+
 use nsql\security\Encryption;
 use nsql\security\KeyManager;
 

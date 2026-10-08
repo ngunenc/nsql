@@ -79,6 +79,7 @@ class Config
     public const rate_limit_burst = 10;
     public const rate_limit_window = 60;
     public const rate_limit_max_requests = 100;
+    public const rate_limit_purge_probability = 0; // check_rate_limit() başına eski kayıt temizliği olasılığı (%)
 
     /**
      * Env / config anahtar eşlemeleri (canonical => alternatifler).
@@ -547,6 +548,7 @@ class Config
             'RATE_LIMIT_BURST' => self::rate_limit_burst,
             'RATE_LIMIT_WINDOW' => self::rate_limit_window,
             'RATE_LIMIT_MAX_REQUESTS' => self::rate_limit_max_requests,
+            'RATE_LIMIT_PURGE_PROBABILITY' => self::rate_limit_purge_probability,
 
             // Güvenlik
             'SECURITY_STRICT_MODE' => false,

@@ -393,6 +393,10 @@ RateLimiter::schema_statements(string $table = 'rate_limits', string $driver = '
 
 // Saniyede eklenen token (max_requests / window)
 $limiter->refill_rate(): float
+
+// Eski kayıtları siler (v2.3.0+); süre en az pencere kadardır, null = pencerenin 2 katı
+$limiter->purge(?int $older_than_seconds = null): int
+// options['purge_probability'] / RATE_LIMIT_PURGE_PROBABILITY (0-100, varsayılan 0): check_rate_limit() başına temizlik olasılığı
 ```
 
 ### Audit Logger

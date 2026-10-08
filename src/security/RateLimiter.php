@@ -26,12 +26,14 @@ class RateLimiter
     private int $capacity;
     private int $window;
     private int $burst_limit;
+    private int $purge_probability;
     /** @var callable(): int */
     private $clock;
 
     /**
      * @param callable(): int|null $clock Unix zamanı (saniye) döndüren saat; testlerde enjekte edilir
-     * @param array{table?: string, max_requests?: int, window?: int, burst?: int} $options Config değerlerini ezer
+     * @param array{table?: string, max_requests?: int, window?: int, burst?: int, purge_probability?: int} $options
+     *        Config değerlerini ezer
      */
     public function __construct(?Nsql $db = null, ?callable $clock = null, array $options = [])
     {
@@ -43,6 +45,28 @@ class RateLimiter
         $this->capacity = max(1, (int) ($options['max_requests'] ?? Config::get('RATE_LIMIT_MAX_REQUESTS', Config::rate_limit_max_requests)));
         $this->window = max(1, (int) ($options['window'] ?? Config::get('RATE_LIMIT_WINDOW', Config::rate_limit_window)));
         $this->burst_limit = max(1, (int) ($options['burst'] ?? Config::get('RATE_LIMIT_BURST', Config::rate_limit_burst)));
+        $this->purge_probability = min(100, max(0, (int) ($options['purge_probability']
+            ?? Config::get('RATE_LIMIT_PURGE_PROBABILITY', Config::rate_limit_purge_probability))));
+    }
+
+    /**
+     * Son isteği $older_than_seconds'tan eski kayıtları siler; silinen satır sayısını döndürür (#92).
+     *
+     * Kova RATE_LIMIT_WINDOW saniyede tamamen dolduğundan bu süreden uzun boşta kalan kayıt yeni
+     * kayıtla aynı durumdadır; silmek sınırlamayı değiştirmez. Cron'dan çağrılması önerilir:
+     * `(new RateLimiter($db))->purge(3600)`. Varsayılan süre: pencerenin iki katı.
+     */
+    public function purge(?int $older_than_seconds = null): int
+    {
+        $db = $this->require_db();
+        if (! isset(self::$installed_tables[$this->installed_key($db)])) {
+            $this->install();
+        }
+
+        $age = max($this->window, $older_than_seconds ?? $this->window * 2);
+        $cutoff = (int) ($this->clock)() - $age;
+
+        return $db->statement("DELETE FROM {$this->table} WHERE last_update < ?", [$cutoff]);
     }
 
     private static function assert_table_name(string $table): string
@@ -190,6 +214,11 @@ class RateLimiter
             $db->rollback();
 
             throw $e;
+        }
+
+        // Olasılıksal temizlik (RATE_LIMIT_PURGE_PROBABILITY, varsayılan 0 = kapalı); transaction dışında
+        if ($this->purge_probability > 0 && random_int(1, 100) <= $this->purge_probability) {
+            $this->purge();
         }
 
         return $allowed;
