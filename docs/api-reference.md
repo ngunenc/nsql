@@ -194,7 +194,7 @@ get_all_stats(): array
 table(?string $table = null): query_builder
 
 // Cache işlemleri
-preload_query(string $query, array $params = [], array $tags = [], array $tables = []): bool
+preload_query(string $query, array $params = [], array $tags = [], array $tables = [], bool $force = false): bool
 warm_cache(bool $force = false): array
 
 // Debug bilgileri

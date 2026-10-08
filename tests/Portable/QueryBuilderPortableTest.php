@@ -106,6 +106,47 @@ class QueryBuilderPortableTest extends PortableTestCase
         );
     }
 
+    public function test_union(): void
+    {
+        $category = fn (string $c) => $this->db->table('p_products')->select('name')->where('category', '=', $c);
+
+        $union = $category('kirtasiye')->union($category('mutfak'))->order_by('name');
+        $this->assertSame(['Defter', 'Kalem', 'Kupa'], array_column($union->get(), 'name'));
+        $this->assertSame(3, $category('kirtasiye')->union($category('mutfak'))->count());
+
+        $sku = fn (string $s) => $this->db->table('p_products')->select('name')->where('sku', '=', $s);
+        $this->assertCount(1, $sku('A1')->union($sku('A1'))->get());
+        $this->assertCount(2, $sku('A1')->union($sku('A1'), true)->get());
+
+        // Alt sorgunun kendi ORDER BY / LIMIT'i korunur
+        $most_expensive = $this->db->table('p_products')->select('name')->order_by('price', 'DESC')->limit(1);
+        $names = array_column($sku('A1')->union($most_expensive)->get(), 'name');
+        sort($names);
+        $this->assertSame(['Kalem', 'Lamba'], $names);
+    }
+
+    public function test_full_join_support_matches_driver(): void
+    {
+        $build = fn () => $this->db->table('p_products')->full_join('p_orders', 'p_products.id', '=', 'p_orders.product_id');
+        $sqlite_version = (string) $this->db->get_pdo()?->getAttribute(\PDO::ATTR_SERVER_VERSION);
+        $supported = match (self::driver()) {
+            'mysql' => false,
+            'sqlite' => version_compare($sqlite_version, '3.39.0', '>='),
+            default => true,
+        };
+
+        if (! $supported) {
+            $this->expectException(\LogicException::class);
+            $this->expectExceptionMessage('FULL JOIN');
+            $build();
+
+            return;
+        }
+
+        // A1 iki sipariş, B1 bir sipariş, A2 ve C1 siparişsiz → 5 satır
+        $this->assertCount(5, $build()->select('p_products.sku', 'p_orders.qty')->get());
+    }
+
     public function test_write_operations(): void
     {
         $id = $this->db->table('p_products')->insert(['sku' => 'D1', 'name' => 'Masa', 'category' => 'mobilya', 'price' => 900]);

@@ -68,7 +68,8 @@ trait StreamingTrait
 
                 // Chunk sorgusu oluştur ve çalıştır
                 $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
-                $stmt = $this->execute_query($chunk_query, $params);
+                // Satırlar tembel okunur; döngüdeki aynı sorgu bu statement'ı paylaşmamalı (#96)
+                $stmt = $this->execute_query_uncached($chunk_query, $params);
 
                 if ($stmt === false) {
                     break;

@@ -135,7 +135,10 @@ class MigrationManager
         }
 
         if ($this->db->get_driver_name() === 'mysql' && isset($columns['status']) && ! str_contains($columns['status'], 'rolled_back')) {
-            $this->db->query("ALTER TABLE {$this->migrations_table} MODIFY COLUMN status ENUM('pending', 'completed', 'failed', 'rolled_back') DEFAULT 'pending'");
+            $this->db->query(
+                "ALTER TABLE {$this->migrations_table} MODIFY COLUMN status "
+                . "ENUM('pending', 'completed', 'failed', 'rolled_back') DEFAULT 'pending'"
+            );
         }
     }
 

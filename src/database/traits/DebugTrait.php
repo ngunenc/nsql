@@ -213,12 +213,10 @@ HTML;
             throw new RuntimeException("interpolate_query yalnızca debug modunda kullanılabilir.");
         }
 
+        $named = [];
+        $positional = [];
         foreach ($params as $key => $value) {
-            if (is_array($value) && isset($value['value'])) {
-                $actual_value = $value['value'];
-            } else {
-                $actual_value = $value;
-            }
+            $actual_value = is_array($value) && array_key_exists('value', $value) ? $value['value'] : $value;
 
             if ($actual_value === null) {
                 $escaped = 'NULL';
@@ -230,18 +228,28 @@ HTML;
             }
 
             if (is_string($key)) {
-                $name = preg_quote(ltrim($key, ':'), '/');
-                $query = (string) preg_replace_callback(
-                    '/:' . $name . '(?![A-Za-z0-9_])/',
-                    static fn () => $escaped,
-                    $query
-                );
+                $named[ltrim($key, ':')] = $escaped;
             } else {
-                $query = (string) preg_replace_callback('/\?/', static fn () => $escaped, $query, 1);
+                $positional[] = $escaped;
             }
         }
 
-        return $query;
+        // Tek geçiş: yerleştirilen değerdeki `?` veya `:ad` tekrar taranmaz (#100)
+        $index = 0;
+
+        return (string) preg_replace_callback(
+            '/\?|:([A-Za-z_][A-Za-z0-9_]*)/',
+            static function (array $m) use ($named, $positional, &$index): string {
+                // `?` eşleşmesinde isim grubu yoktur
+                $name = $m[1] ?? null;
+                if ($name === null) {
+                    return $positional[$index++] ?? '?';
+                }
+
+                return $named[$name] ?? $m[0];
+            },
+            $query
+        );
     }
 
     /**
