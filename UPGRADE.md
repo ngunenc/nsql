@@ -1,5 +1,19 @@
 # Yükseltme Rehberi
 
+## 2.3.0 → 2.4.0
+
+Minor sürüm; yeni özellikler isteğe bağlıdır. Kontrol edilecek davranış farkları:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `.env`'de tırnaksız değerdeki ` #` yorum sayılır (#93) | Değerinde boşluk + `#` geçen tırnaksız satırlar (ör. `DB_PASS=abc #123`) | Değeri tırnak içine alın: `DB_PASS="abc #123"`. Boşluksuz `#` (`ab#cd`) değişmedi |
+| `export ANAHTAR=...` satırları okunur (#93) | `.env`'de `export` önekli satır bulunduran ve bunların yok sayılmasına güvenen kurulumlar | İşlem gerekmez; önceden `EXPORT ANAHTAR` adıyla yükleniyordu |
+| `migrate_to('X')` X'i de çalıştırır | `migrate_to()`'yu "X'ten öncekiler" anlamında kullanan betikler | Bir önceki migration adını verin |
+| Log satırlarında `\r` / `\n` kaçırılır | Metin formatlı log'u (`Logger` structured=false, `AuditLogger`) satır satır ayrıştıran araçlar | Çok satırlı mesajlar artık tek satırda `\n` olarak görünür |
+| ORM kanca adları (`on_saving`, `on_deleted` …) (#113) | Modelinde bu adlarla farklı imzalı metot tanımlayan sınıflar | Metotları yeniden adlandırın veya kanca imzasına uyun (`?bool` / `void`) |
+
+Yeni ve isteğe bağlı: `Encryption` bağlam parametresi ve `ENCRYPTION_ALLOW_V1` (#112), `RedisRateLimiter` / `RATE_LIMIT_DRIVER` (#111), `READ_WRITE_STICKY_SECONDS` (#90), `ENV_OVERRIDES_DOTENV` (#93), `$lock_version_column` (#113).
+
 ## 2.2.3 → 2.3.0
 
 Minor sürüm; yeni özellikler isteğe bağlıdır. Kontrol edilecek davranış farkları:
