@@ -99,4 +99,14 @@ class LoggerRotationTest extends TestCase
 
         $this->assertCount(1, $this->rotated_files());
     }
+
+    public function test_text_format_keeps_entry_on_single_line(): void
+    {
+        $logger = new Logger($this->file, Logger::DEBUG, false);
+        $logger->error("Sorgu hatası\n[2026-01-01 00:00:00] [INFO] sahte satır", ['sql' => "SELECT 1\nFROM t"]);
+
+        $lines = array_values(array_filter(explode(PHP_EOL, (string) file_get_contents($this->file))));
+        $this->assertCount(1, $lines);
+        $this->assertStringContainsString('Sorgu hatası\n[2026-01-01 00:00:00] [INFO] sahte satır', $lines[0]);
+    }
 }
