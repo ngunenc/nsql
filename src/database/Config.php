@@ -57,6 +57,7 @@ class Config
     public const slow_query_threshold_ms = 0; // >0: bu süreyi aşan sorgular WARNING seviyesinde loglanır
     public const read_write_split = false; // true: okumalar DB_READ_HOST replica'sına gider
     public const read_write_sticky = true; // yazmadan sonra aynı örnekte okumalar primary'de kalır
+    public const read_write_sticky_seconds = 0; // >0: son yazmadan bu kadar saniye sonra okumalar tekrar replica'ya
     public const orm_table_naming = 'inflector'; // 'legacy': BlogPost → blogposts (1.x davranışı)
     public const encryption_allow_v1 = true; // false: Encryption v1 (<= 1.5.22) biçimini çözmez
     public const migration_lock_timeout = 60; // migrate/rollback eşzamanlılık kilidi için bekleme (saniye)
@@ -582,6 +583,7 @@ class Config
             'SLOW_QUERY_THRESHOLD_MS' => self::slow_query_threshold_ms,
             'READ_WRITE_SPLIT' => self::read_write_split,
             'READ_WRITE_STICKY' => self::read_write_sticky,
+            'READ_WRITE_STICKY_SECONDS' => self::read_write_sticky_seconds,
             'ORM_TABLE_NAMING' => self::orm_table_naming,
             'ORM_TRACK_EXISTS' => self::orm_track_exists,
             'MIGRATION_LOCK_TIMEOUT' => self::migration_lock_timeout,
