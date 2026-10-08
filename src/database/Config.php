@@ -122,6 +122,7 @@ class Config
 
     /**
      * Yapılandırma değerini alır. .env > env var > dahili config > varsayılan
+     * (ENV_OVERRIDES_DOTENV=true ortam değişkeniyle: env var > .env)
      * Tip dönüşümü yapar (true/false, int, float, null, JSON)
      *
      * @param string $key
@@ -406,38 +407,24 @@ class Config
         try {
             $line_number = 0;
             $max_lines = 10000; // Güvenlik: maksimum satır sayısı (dosya boyutu kontrolü)
+            $env_wins = self::env_overrides_dotenv();
 
             while (($line = fgets($handle)) !== false && $line_number < $max_lines) {
                 $line_number++;
-                $line = trim($line);
-
-                // Boş satır veya yorum satırı
-                if ($line === '' || str_starts_with($line, '#')) {
+                $parsed = self::parse_env_line($line);
+                if ($parsed === null) {
                     continue;
                 }
 
-                // KEY=VALUE formatı
-                $pos = strpos($line, '=');
-                if ($pos === false) {
+                [$key, $value, $quoted] = $parsed;
+
+                // ENV_OVERRIDES_DOTENV=true: gerçek ortam değişkeni .env değerine üstün gelir (#93)
+                if ($env_wins && getenv($key) !== false) {
                     continue;
                 }
-
-                $key = strtoupper(trim(substr($line, 0, $pos)));
-                $value = trim(substr($line, $pos + 1));
 
                 // Tırnaklı değer olduğu gibi string kalır (ör. DB_PASS="0123")
-                if (
-                    strlen($value) >= 2 && (
-                        (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
-                        (str_starts_with($value, "'") && str_ends_with($value, "'"))
-                    )
-                ) {
-                    self::$config[$key] = substr($value, 1, -1);
-
-                    continue;
-                }
-
-                self::$config[$key] = self::cast_value($value, $key);
+                self::$config[$key] = $quoted ? $value : self::cast_value($value, $key);
             }
 
             // Maksimum satır sayısı aşıldıysa uyar
@@ -447,6 +434,64 @@ class Config
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * `.env` satırını ayrıştırır (#93):
+     * - Boş ve `#` ile başlayan satırlar atlanır; `export ` öneki yok sayılır.
+     * - Tırnaklı değer (`"…"` / `'…'`) kapanış tırnağına kadar olduğu gibi alınır; sonrasındaki yorum atılır.
+     * - Tırnaksız değerde boşluktan sonra gelen `#` satır sonu yorumudur (`A=1 # not` → `1`);
+     *   boşluksuz `#` değerin parçasıdır (`PASS=ab#cd`).
+     *
+     * @internal
+     * @return array{0: string, 1: string, 2: bool}|null [anahtar, değer, tırnaklı mı]
+     */
+    public static function parse_env_line(string $line): ?array
+    {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            return null;
+        }
+
+        if (preg_match('/^export\s+/', $line, $m)) {
+            $line = substr($line, strlen($m[0]));
+        }
+
+        $pos = strpos($line, '=');
+        if ($pos === false) {
+            return null;
+        }
+
+        $key = strtoupper(trim(substr($line, 0, $pos)));
+        if ($key === '') {
+            return null;
+        }
+        $after = substr($line, $pos + 1);
+        $raw = ltrim($after);
+
+        $quote = $raw[0] ?? '';
+        if ($quote === '"' || $quote === "'") {
+            $end = strpos($raw, $quote, 1);
+            if ($end !== false) {
+                return [$key, substr($raw, 1, $end - 1), true];
+            }
+        }
+
+        // `=` sonrasındaki boşluk da sayılır: `A= # not` → ''
+        $value = preg_replace('/\s+#.*$/s', '', $after) ?? $after;
+
+        return [$key, trim($value), false];
+    }
+
+    /**
+     * ENV_OVERRIDES_DOTENV yalnızca gerçek ortam değişkeninden okunur (.env kendi önceliğini belirleyemez).
+     * 2.x varsayılanı false (.env üstün); 3.0'da true olması planlanıyor.
+     */
+    private static function env_overrides_dotenv(): bool
+    {
+        $raw = getenv('ENV_OVERRIDES_DOTENV');
+
+        return $raw !== false && in_array(strtolower(trim($raw)), ['1', 'true', 'on', 'yes'], true);
     }
 
     /** Ortamı ENV değişkenlerinden tahmin eder ve set eder */
