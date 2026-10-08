@@ -147,6 +147,39 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertCount(5, $build()->select('p_products.sku', 'p_orders.qty')->get());
     }
 
+    public function test_nested_subqueries_raw_bindings_and_groups(): void
+    {
+        // Alt sorgu, raw ve dış sorgu aynı isimli binding kullanır; compile() hepsini tek sayaçla yeniden adlandırır
+        $ordered = $this->db->table('p_orders')->select('product_id')->where_raw('qty >= :min', ['min' => 2]);
+        $query = $this->db->table('p_products')
+            ->where_in_subquery('id', $ordered)
+            ->where(fn ($q) => $q->where('price', '>', 5)->or_where(fn ($q2) => $q2->where_null('category')->where_raw('price > :min', ['min' => 100])))
+            ->when(true, fn ($q) => $q->where_raw('price < :min', ['min' => 1000]))
+            ->when(false, fn ($q) => $q->where('id', '=', -1), fn ($q) => $q->where('id', '>', 0));
+
+        [$sql, $params] = $query->compile();
+        $this->assertCount(5, $params);
+        $this->assertSame(count($params), substr_count($sql, ':__p'));
+        $this->assertSame(['Kalem'], $query->pluck('name'));
+
+        // compile() yan etkisiz: tekrar çağrı aynı sonucu verir
+        $this->assertSame([$sql, $params], $query->compile());
+    }
+
+    public function test_paginate_edges(): void
+    {
+        $page = $this->db->table('p_products')->order_by('id')->paginate(3, 2);
+        $this->assertSame(['total' => 4, 'per_page' => 3, 'current_page' => 2, 'last_page' => 2], array_diff_key($page, ['data' => 1]));
+        $this->assertSame(['Lamba'], array_column($page['data'], 'name'));
+
+        $empty = $this->db->table('p_products')->where('price', '>', 10_000)->paginate(10);
+        $this->assertSame([], $empty['data']);
+        $this->assertSame(1, $empty['last_page']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->db->table('p_products')->paginate(0);
+    }
+
     public function test_table_alias_and_self_join(): void
     {
         $this->assertSame(
