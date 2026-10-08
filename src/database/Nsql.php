@@ -269,7 +269,6 @@ class Nsql
     {
         $this->set_last_called_method();
 
-        // GELISTIRME-009: Error handling - exception fırlatma
         // Statement çağırana verilir: cache'teki statement'ı paylaşmaz (#96)
         $result = $this->execute_query_uncached($query, [], $fetch_mode, ...$fetch_mode_args);
 

@@ -271,7 +271,7 @@ class nsql_cli
 
     private function error(string $message): void
     {
-        echo "HATA: {$message}\n";
+        fwrite(STDERR, "HATA: {$message}\n");
         exit(1);
     }
 }

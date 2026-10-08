@@ -20,6 +20,20 @@ trait ConnectionTrait
     private ?string $pool_key = null;
     private float $last_activity_at = 0.0;
 
+    // Host sınıfın diğer trait'lerden sağladığı bağımlılıklar
+    // (TransactionTrait, StatementCacheTrait, ReadWriteSplitTrait, ErrorModelTrait, HotSettingsTrait)
+    abstract public function get_transaction_level(): int;
+
+    abstract private function reset_transaction_state(): void;
+
+    abstract public function clear_statement_cache(): void;
+
+    abstract private function drop_reader(): void;
+
+    abstract private function log_error(string $message, array $context = [], int $level = \nsql\database\logging\Logger::ERROR): void;
+
+    abstract private function setting(string $key, mixed $default = null): mixed;
+
     /**
      * Bu örneğin DSN/kullanıcı bilgisine ait havuzu kaydeder.
      */

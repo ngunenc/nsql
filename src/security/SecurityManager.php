@@ -107,7 +107,7 @@ class SecurityManager
     }
 
     /**
-     * Input validation için validator kullanır (GELISTIRME-007)
+     * Girdiyi Validator kurallarıyla doğrular
      */
     public static function validate_input(mixed $value, array $rules): bool
     {
@@ -251,7 +251,6 @@ class SecurityManager
     /**
      * Parametrelerin güvenlik kontrolü (mutasyon yok). Diziler/objeler reddedilir.
      * Strict mode: şüpheli param içerikte istisna; değilse audit log.
-     * GELISTIRME-007: Validator entegrasyonu ile genişletildi
      */
     public static function validate_sql_params(array $params): array
     {

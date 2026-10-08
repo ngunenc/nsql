@@ -32,7 +32,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Sorguyu çalıştırır (GELISTIRME-011: Complexity azaltma - helper metodlara bölündü)
+     * Sorguyu çalıştırır: replica yönlendirmesi, bağlantı kontrolü, parametre doğrulama, reconnect ile yürütme
      */
     private function execute_query(string $sql, array $params = [], ?int $fetch_mode = null, mixed ...$fetch_mode_args): PDOStatement|false
     {
@@ -95,7 +95,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * PDO bağlantısını validate eder (GELISTIRME-011: Helper metod)
+     * PDO bağlantısının varlığını doğrular
      */
     private function validate_pdo_connection(): bool
     {
@@ -108,7 +108,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Sorgu context'ini hazırlar (GELISTIRME-011: Helper metod)
+     * Son sorgu bilgisini (debug / hata raporu için) kaydeder
      */
     private function prepare_query_context(string $sql, array $params): void
     {
@@ -118,7 +118,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Statement'ı hazırlar veya cache'den alır (GELISTIRME-011: Helper metod)
+     * Statement'ı hazırlar veya cache'den alır
      */
     private function prepare_or_get_cached_statement(string $sql, array $params): PDOStatement|false
     {
@@ -146,7 +146,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Parametreleri statement'a bağlar (GELISTIRME-011: Helper metod)
+     * Parametreleri statement'a bağlar
      */
     private function bind_parameters(PDOStatement $stmt, array $params): void
     {
@@ -207,7 +207,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Prepare hatasını handle eder (GELISTIRME-011: Helper metod)
+     * Prepare hatasını kaydeder
      */
     private function handle_prepare_error(PDOException $e): void
     {
@@ -218,7 +218,7 @@ trait QueryExecutionTrait
     }
 
     /**
-     * Execution hatasını handle eder (GELISTIRME-011: Helper metod)
+     * Yürütme hatasını kaydeder
      */
     private function handle_execution_error(PDOException $e): void
     {

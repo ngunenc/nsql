@@ -475,7 +475,6 @@ nsql/
 ├── phpstan.neon              # PHPStan yapılandırması
 ├── .php_cs                   # PHP CS Fixer yapılandırması
 ├── .env.example              # Yapılandırma örneği (resmi şablon)
-├── env.example               # DEPRECATED → .env.example kullanın
 └── README.md                # Dokümantasyon
 ```
 
