@@ -4,6 +4,28 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.3.0] - 2026-10-08
+
+Minor sürüm: yeni özellikler isteğe bağlı, kırıcı varsayılan değişikliği yok. Davranış farkları: [UPGRADE.md](UPGRADE.md#223--230).
+
+### Added
+- ORM: `exists()`, `is_dirty()`, `get_dirty()`, `get_original()`, `sync_original()`; `save()` yüklenmiş modelde yalnızca değişen kolonları yazar. `ORM_TRACK_EXISTS` / `$track_exists`: elle anahtar atanmış (UUID) yeni model INSERT edilir (#88).
+- ORM `decimal:N` cast: float'a çevirmeden yuvarlanan string (#108).
+- QueryBuilder: tablo takma adı (`table('users u')`, `join('posts AS p', ...)`), `distinct()`, `where_column()` / `or_where_column()`, `or_where_not_in()`, `or_where_not_null()`, `lock_for_update()` / `shared_lock()`, `increment()` / `decrement()`, `chunk()` (keyset) (#106).
+- `Nsql::get_server_version()`.
+- Migration eşzamanlılık kilidi (MySQL `GET_LOCK`, PostgreSQL advisory lock, SQLite dosya kilidi), `MIGRATION_LOCK_TIMEOUT`; PostgreSQL/SQLite'ta migration başına transaction, `BaseMigration::within_transaction()` (#87).
+- Query cache: `set_cache_dependency()` / `get_cache_dependencies()` (view, CASCADE, trigger) (#104); `QUERY_CACHE_MAX_ROWS` (#107); `QUERY_CACHE_LOCAL_VERIFY` (#103).
+- `RateLimiter::purge()`, `RATE_LIMIT_PURGE_PROBABILITY` (#92).
+
+### Changed
+- Paylaşılan query cache store'u varken süreç içi isabette sürüm token'ları doğrulanır; uzun ömürlü süreçler başka sürecin yazmasından sonra eski veri döndürmez (#103).
+- Replica bağlantısı çalışma sırasında koparsa okuma primary'de tekrarlanır ve ayrım kapatılır (#105).
+- `upsert()` MySQL 8.0.19+ için `VALUES (...) AS nsql_new(...)` kullanır (`VALUES()` deprecated); MariaDB ve eski MySQL değişmedi (#91).
+- `bin/nsql` hataları STDERR'e yazar; deprecated `env.example` kaldırıldı; iç referans yorumları temizlendi; `ConnectionTrait` / `TransactionTrait` bağımlılıkları abstract olarak bildirildi (#95).
+
+### Documentation
+- Query cache geçersiz kılma sınırları (#104); bağlantı havuzu ve kalıcı bağlantı oturum durumu, session ID yenileme yarışı (#109).
+
 ## [2.2.3] - 2026-10-08
 
 Hata düzeltmeleri. Ayrıntı: [UPGRADE.md](UPGRADE.md#222--223).

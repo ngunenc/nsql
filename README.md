@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.2.3
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.3.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -114,6 +114,8 @@
 >
 > **v2.2.2**: Sorgu sıcak yolu optimizasyonu (cache kapalıyken `get_row` ~%30 daha hızlı), türetilmiş tablolu sorgular query cache'e girer, PHPStan 2.x. Geçiş: [UPGRADE.md](UPGRADE.md#221--222)
 >
+> **v2.3.0**: ORM değişiklik takibi ve `exists()` (yalnızca değişen kolonlar yazılır), `decimal:N` cast; QueryBuilder tablo takma adı, `distinct()`, `where_column()`, `lock_for_update()`, `increment()`, `chunk()`; migration eşzamanlılık kilidi ve PostgreSQL/SQLite'ta transaction; replica koptuğunda primary'ye düşme; paylaşılan query cache'te süreç içi sürüm doğrulaması ve `set_cache_dependency()`; `RateLimiter::purge()`; MySQL 8 upsert sözdizimi. Geçiş: [UPGRADE.md](UPGRADE.md#223--230)
+>
 > **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
 >
 > **v1.11.0**: İsimlendirilmiş çoklu bağlantı (`nsql::connection('reporting')`, `connection_manager`) ve okuma/yazma ayrımı (`READ_WRITE_SPLIT`, `DB_READ_HOST`, `set_read_replica()`); okumalar replica'ya, yazma ve transaction primary'ye gider (#51).
@@ -181,7 +183,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.2.3 --prefer-dist
+composer require ngunenc/nsql:^2.3.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -201,13 +203,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.2.3"
+        "ngunenc/nsql": "^2.3.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.2.3 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.3.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1774,6 +1776,14 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v2.3.0 (2026-10-08)
+  - ORM: değişiklik takibi, `exists()`, `ORM_TRACK_EXISTS` (#88), `decimal:N` cast (#108).
+  - QueryBuilder: tablo takma adı, `distinct()`, `where_column()`, `or_where_not_in/not_null()`, `lock_for_update()` / `shared_lock()`, `increment()` / `decrement()`, `chunk()` (#106); MySQL 8.0.19+ upsert satır takma adı (#91).
+  - Migration: eşzamanlılık kilidi, PostgreSQL/SQLite'ta migration başına transaction (#87).
+  - Query cache: paylaşılan store'da süreç içi sürüm doğrulaması (#103), tablo bağımlılıkları (#104), `QUERY_CACHE_MAX_ROWS` (#107).
+  - Okuma/yazma ayrımı: replica koptuğunda primary'ye düşme (#105). `RateLimiter::purge()` (#92).
+  - Düzen: iç referans yorumları, `env.example` kaldırıldı, CLI hataları STDERR'e (#95); dokümantasyon (#109).
 
 - v2.2.3 (2026-10-08)
   - Düzeltmeler: statement cache'in dışarı verilen / tembel okunan statement'ı paylaşması (#96), SQLite'ta `union()` (#97), `connect()` seçenekleri ve PDO öznitelik anahtarlarının yeniden numaralanması (#98), `warm_cache($force)` (#99), debug interpolasyonu (#100), `full_join()` sürücü kontrolü (#101), phpcs uyarıları (#102).
