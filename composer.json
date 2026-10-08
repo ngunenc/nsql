@@ -45,7 +45,7 @@
 			"@putenv NSQL_TEST_QUERY_CACHE=1",
 			"@php vendor/bin/phpunit -c phpunit.xml --testsuite integration,portable"
 		],
-		"test:coverage-check": "@php tests/coverage_check.php coverage/clover.xml 50 --lowest=10",
+		"test:coverage-check": "@php tests/coverage_check.php coverage/clover.xml 65 --lowest=10",
 		"test:portable": "@php vendor/bin/phpunit -c phpunit.xml --testsuite portable",
 		"test:coverage": [
 			"@putenv XDEBUG_MODE=coverage",

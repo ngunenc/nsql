@@ -406,12 +406,12 @@ composer test:cache
 # Sürücüden bağımsız testler (DB_DRIVER=mysql|pgsql|sqlite)
 composer test:portable
 
-# Coverage (clover + text; Xdebug / XDEBUG_MODE=coverage) ve %50 eşik kontrolü
+# Coverage (clover + text; Xdebug / XDEBUG_MODE=coverage) ve %65 eşik kontrolü
 composer test:coverage
 composer test:coverage-check
 ```
 
-Ölçülen satır coverage (v1.13.2, MySQL üzerinde tüm suite): **%65.4** (`src/`; v1.5.13'te ~%30). CI, PHP 8.3 job'ında %50'nin altına düşerse başarısız olur ve en düşük kapsamalı 10 dosyayı listeler.
+Ölçülen satır coverage (v2.3.0, MySQL üzerinde tüm suite): **%74.9** (`src/`; v1.13.2'de %65.4). CI, PHP 8.3 job'ında %65'in altına düşerse başarısız olur (v2.4.0+, önceden %50) ve en düşük kapsamalı 10 dosyayı listeler.
 
 ### Kod Kalitesi
 
@@ -431,7 +431,7 @@ composer fix
 Proje GitHub Actions ile otomatik test edilir:
 - **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.4 (unit, integration, portable; query cache açık/kapalı)
 - **Portable**: PostgreSQL 16 ve SQLite üzerinde `tests/Portable`
-- PHP 8.3 job’da `coverage/clover.xml` üretilir, %50 satır coverage eşiği uygulanır ve Codecov’a yüklenir
+- PHP 8.3 job’da `coverage/clover.xml` üretilir, %65 satır coverage eşiği uygulanır ve Codecov’a yüklenir
 - Windows unit smoke isteğe bağlıdır (`continue-on-error`; MySQL service yok)
 
 ## 📂 Proje Yapısı
