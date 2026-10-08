@@ -779,6 +779,8 @@ $limiter->install();                    // veya migration içinde: RateLimiter::
 $limiter->purge(3600);                  // cron: son isteği 1 saatten eski kayıtları sil (silinen sayıyı döner)
 // veya RATE_LIMIT_PURGE_PROBABILITY=1 → check_rate_limit() çağrılarının ~%1'inde otomatik temizlik
 
+// Yüksek trafikte Redis (v2.4.0+): RATE_LIMIT_DRIVER=redis ile RateLimiter::create($db) RedisRateLimiter döndürür
+
 use nsql\security\Encryption;
 use nsql\security\KeyManager;
 

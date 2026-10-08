@@ -13,7 +13,7 @@ use nsql\database\Nsql;
  * - RATE_LIMIT_BURST aynı saniye içinde izin verilen en fazla istek sayısıdır.
  * - Satır `SELECT ... FOR UPDATE` ile kilitlenir; eşzamanlı istekler aynı token'ı harcayamaz.
  */
-class RateLimiter
+class RateLimiter implements RateLimiterInterface
 {
     /** Eski şemalardaki FLOAT kolonun yuvarlama hatası */
     private const TOKEN_EPSILON = 1e-6;
@@ -67,6 +67,22 @@ class RateLimiter
         $cutoff = (int) ($this->clock)() - $age;
 
         return $db->statement("DELETE FROM {$this->table} WHERE last_update < ?", [$cutoff]);
+    }
+
+    /**
+     * RATE_LIMIT_DRIVER ayarına göre sınırlayıcı: `database` (varsayılan, bu sınıf) veya `redis` (RedisRateLimiter).
+     *
+     * @param array<string, mixed> $options Seçilen sınıfın constructor seçenekleri
+     */
+    public static function create(?Nsql $db = null, array $options = []): RateLimiterInterface
+    {
+        $driver = strtolower(trim((string) Config::get('RATE_LIMIT_DRIVER', Config::rate_limit_driver)));
+
+        return match ($driver) {
+            'redis' => new RedisRateLimiter(null, null, $options),
+            'database', 'db', '' => new self($db, null, $options),
+            default => throw new \InvalidArgumentException("Geçersiz RATE_LIMIT_DRIVER '{$driver}' (database, redis)"),
+        };
     }
 
     private static function assert_table_name(string $table): string
