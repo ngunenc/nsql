@@ -1,5 +1,22 @@
 # Yükseltme Rehberi
 
+## 2.2.3 → 2.3.0
+
+Minor sürüm; yeni özellikler isteğe bağlıdır. Kontrol edilecek davranış farkları:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| ORM `save()` yüklenmiş modelde yalnızca değişen kolonları yazar; değişiklik yoksa sorgu çalışmaz (#88) | Değişiklik olmadan `save()` çağırıp `updated_at`'in güncellenmesine ("touch") güvenen kod | `updated_at`'i açıkça atayın: `$model->set_attribute('updated_at', date('Y-m-d H:i:s'))->save()` |
+| `Model::exists()` metodu eklendi (#88) | Kendi modelinde `exists()` adlı metot tanımlayan sınıflar | Metodu yeniden adlandırın (imza uyuşmazlığı fatal error verir) |
+| `ORM_TRACK_EXISTS` (varsayılan `false`) (#88) | UUID / doğal anahtarlı modeller | Yeni modelin INSERT edilmesi için `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;`. 3.0'da varsayılan `true` olacak; anahtarı dolu yüklenmemiş modeli UPDATE etmek için önce `find()` kullanın |
+| Paylaşılan cache'te süreç içi isabet doğrulanır (#103) | `QUERY_CACHE_DRIVER=redis` / `memcached` / `set_query_cache_store()` kullananlar | Her isabet store'a bir `getMultiple` yapar. Kısa ömürlü FPM isteklerinde ek maliyeti istemiyorsanız `QUERY_CACHE_LOCAL_VERIFY=false` |
+| Replica koptuğunda primary'ye düşme (#105) | Replica hatasını exception olarak bekleyen kod | Hata artık `warning` loglanıp okuma primary'de çalışır; `uses_read_replica()` false olur. Yeniden açmak için `set_read_replica()` |
+| Migration kilidi ve transaction (#87) | PostgreSQL/SQLite'ta `CREATE INDEX CONCURRENTLY` gibi transaction dışı işlem yapan migration'lar; MySQL'de `GET_LOCK` yetkisi | İlgili migration'da `within_transaction()` metodunu `false` döndürecek şekilde ezin. Eşzamanlı ikinci migrate `MIGRATION_LOCK_TIMEOUT` (60 sn) bekler |
+| `table('ad takma_ad')` takma ad olarak yorumlanır (#106) | Boşluk içeren tablo argümanını hata olarak bekleyen kod | Takma adlı tabloda `insert/update/delete/upsert/increment` `LogicException` verir |
+| MySQL 8.0.19+ upsert sözdizimi (#91) | `upsert()` sonucu SQL'i (`get_query()` / log) metin olarak karşılaştıran testler | `VALUES(kolon)` yerine `AS nsql_new(...)` ve `nsql_cN` görülür; raw ifadelerdeki çıplak kolon adı yine mevcut satırı gösterir |
+| `env.example` kaldırıldı (#95) | Bu dosyayı kopyalayan kurulum betikleri | `.env.example` kullanın |
+| CLI hataları STDERR'e yazılır (#95) | `nsql` çıktısını yalnızca STDOUT'tan okuyan betikler | `2>&1` ile birleştirin; çıkış kodu değişmedi (1) |
+
 ## 2.2.2 → 2.2.3
 
 Patch sürümü; public API kırılmadı.
