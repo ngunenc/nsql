@@ -94,22 +94,38 @@ Config::set('log_rotation', true);
 
 ### 1. Connection Pooling
 
+Havuz **süreç içidir** (PHP-FPM worker'ları arasında paylaşılmaz) ve `Nsql` tarafından otomatik kullanılır; elle başlatmanız gerekmez. Her `Nsql` örneği ömrü boyunca bir bağlantı tutar, bu yüzden örnekleri yeniden kullanın:
+
 ```php
 <?php
-use nsql\database\ConnectionPool;
 use nsql\database\Nsql;
 
-// Connection pool'u başlat
-ConnectionPool::initialize([
-    'min_connections' => 5,
-    'max_connections' => 20,
-    'connection_timeout' => 30,
-    'idle_timeout' => 300,
-]);
-
-// Pool'dan bağlantı al
-$db = ConnectionPool::get_connection();
+$db = Nsql::connection();            // süreç içinde tekil 'default' bağlantı
+$stats = Nsql::get_pool_stats();     // total / active / idle / peak
 ```
+
+```env
+MIN_CONNECTIONS=2
+MAX_CONNECTIONS=15          # süreç başına; aşılırsa "havuz dolu" hatası (bekleme yok)
+CONNECTION_IDLE_TIMEOUT=600
+HEALTH_CHECK_INTERVAL=60
+PERSISTENT_CONNECTION=false
+```
+
+#### Kalıcı bağlantılar (`PERSISTENT_CONNECTION=true`)
+
+PDO kalıcı bağlantıları istekler arasında açık kalır. Havuz, bağlantıyı geri alırken yalnızca **açık transaction'ı geri alır**; bağlantıya ait diğer oturum durumu bir sonraki isteğe taşınır:
+
+- `SET` ile değiştirilen oturum değişkenleri (`SET time_zone`, `SET sql_mode`, PostgreSQL `SET search_path`)
+- Geçici tablolar (`CREATE TEMPORARY TABLE`)
+- MySQL `GET_LOCK()` kilitleri ve kullanıcı değişkenleri (`@degisken`)
+- PostgreSQL session-level advisory lock'ları ve `PREPARE` ile oluşturulan statement'lar
+
+Öneriler:
+
+- Bağlantı ayarlarını istek başında koşulsuz uygulayın veya DSN / PDO seçenekleriyle verin (`Nsql::connect($dsn, $user, $pass, [PDO::MYSQL_ATTR_INIT_COMMAND => '...'])`, v2.2.3+).
+- Geçici tabloları ve kilitleri `try/finally` içinde açıkça bırakın.
+- Bağlantı sayısı sorunu için önce `Nsql::connection()` ile örnek yeniden kullanımını ve veritabanı tarafında bir pooler'ı (ProxySQL, PgBouncer) değerlendirin; kalıcı bağlantı çoğu durumda gerekmez.
 
 ### 2. Query Cache
 
