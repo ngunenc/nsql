@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.3.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.4.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -114,6 +114,8 @@
 >
 > **v2.2.2**: Sorgu sıcak yolu optimizasyonu (cache kapalıyken `get_row` ~%30 daha hızlı), türetilmiş tablolu sorgular query cache'e girer, PHPStan 2.x. Geçiş: [UPGRADE.md](UPGRADE.md#221--222)
 >
+> **v2.4.0**: Encryption bağlam (AAD) parametresi ve `ENCRYPTION_ALLOW_V1`; ORM olay kancaları ve optimistic locking; Redis tabanlı `RedisRateLimiter`; `READ_WRITE_STICKY_SECONDS`; `.env` satır sonu yorumu / `export` / `ENV_OVERRIDES_DOTENV`; log injection düzeltmesi; `migrate_to()` hedefi dahil eder; PHP_CodeSniffer 4, CI coverage eşiği %65. Geçiş: [UPGRADE.md](UPGRADE.md#230--240)
+>
 > **v2.3.0**: ORM değişiklik takibi ve `exists()` (yalnızca değişen kolonlar yazılır), `decimal:N` cast; QueryBuilder tablo takma adı, `distinct()`, `where_column()`, `lock_for_update()`, `increment()`, `chunk()`; migration eşzamanlılık kilidi ve PostgreSQL/SQLite'ta transaction; replica koptuğunda primary'ye düşme; paylaşılan query cache'te süreç içi sürüm doğrulaması ve `set_cache_dependency()`; `RateLimiter::purge()`; MySQL 8 upsert sözdizimi. Geçiş: [UPGRADE.md](UPGRADE.md#223--230)
 >
 > **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
@@ -183,7 +185,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.3.0 --prefer-dist
+composer require ngunenc/nsql:^2.4.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -203,13 +205,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.3.0"
+        "ngunenc/nsql": "^2.4.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.3.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.4.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1778,6 +1780,13 @@ $db->debug();
 - Performans ve güvenlik göz önünde bulundurun
 
 ## 📝 Sürüm Geçmişi
+
+- v2.4.0 (2026-10-08)
+  - Güvenlik: `Encryption` bağlam (AAD) ve `ENCRYPTION_ALLOW_V1` (#112); AuditLogger / metin Logger'da log injection düzeltmesi.
+  - ORM: `on_saving` / `on_saved` … olay kancaları, `$lock_version_column` ile optimistic locking (#113).
+  - `RedisRateLimiter`, `RateLimiterInterface`, `RateLimiter::create()` (#111); `READ_WRITE_STICKY_SECONDS` (#90).
+  - `.env`: satır sonu yorumu, `export`, `ENV_OVERRIDES_DOTENV` (#93); `migrate_to()` hedefi dahil eder.
+  - Geliştirme: PHP_CodeSniffer 4 (#115), test kapsamı ve CI eşiği %65 (#116).
 
 - v2.3.0 (2026-10-08)
   - ORM: değişiklik takibi, `exists()`, `ORM_TRACK_EXISTS` (#88), `decimal:N` cast (#108).

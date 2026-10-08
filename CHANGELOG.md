@@ -4,6 +4,27 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.4.0] - 2026-10-08
+
+Minor sürüm: yeni özellikler isteğe bağlı. Davranış farkları: [UPGRADE.md](UPGRADE.md#230--240).
+
+### Security
+- `Encryption::encrypt()` / `decrypt()` / `reencrypt()` opsiyonel `$context` (AAD): şifreli değer başka kayda kopyalanırsa çözülemez; boş bağlam önceki biçimle uyumlu. `ENCRYPTION_ALLOW_V1` / `$allow_v1` ile v1 biçimi kapatılabilir (#112).
+- `AuditLogger` ve metin formatlı `Logger`: kullanıcı kontrolündeki değerlerdeki satır sonu / kontrol karakterleri kaçırılır (log injection).
+
+### Added
+- ORM olay kancaları: `on_saving`, `on_saved`, `on_creating`, `on_created`, `on_updating`, `on_updated`, `on_deleting`, `on_deleted`; optimistic locking `$lock_version_column`, `StaleModelException` (#113).
+- `RedisRateLimiter` (atomik Lua, Redis sunucu saati), `RateLimiterInterface`, `RateLimiter::create()` ve `RATE_LIMIT_DRIVER` (#111).
+- `READ_WRITE_STICKY_SECONDS`: yazmadan sonra primary'ye yapışma süresi (#90).
+- `.env`: satır sonu yorumu, `export` öneki; `ENV_OVERRIDES_DOTENV` (ortam değişkeni) ile gerçek ortam değişkenleri `.env`'ye üstün gelir (#93).
+
+### Fixed
+- `MigrationManager::migrate_to()` hedef migration'ı da çalıştırır ve bağımlılık sırasını izler (önceden hedefin öncesinde duruyordu).
+- `AuditLogger`: `LOG_MAX_SIZE` boş / 0 iken her yazımda dosya döndürülmez.
+
+### Changed
+- PHP_CodeSniffer 4.x (#115). CI satır coverage eşiği %50 → %65; MigrationManager, QueryBuilder ve AuditLogger testleri (#116).
+
 ## [2.3.0] - 2026-10-08
 
 Minor sürüm: yeni özellikler isteğe bağlı, kırıcı varsayılan değişikliği yok. Davranış farkları: [UPGRADE.md](UPGRADE.md#223--230).
