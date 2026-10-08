@@ -366,14 +366,27 @@ SecurityManager::prepare_safe_query(string $sql, array $params): string
 Veri şifreleme ve çözme.
 
 ```php
-$encryption = new Encryption(?string $key = null);
+$encryption = new Encryption(?string $key = null, array $previous_keys = [], ?bool $allow_v1 = null);
 
-// Veri şifreleme
-$encrypted = $encryption->encrypt(string $data): string
+// Veri şifreleme / çözme (AES-256-GCM, v2 biçimi)
+$encrypted = $encryption->encrypt(string $data, string $context = ''): string
+$decrypted = $encryption->decrypt(string $encrypted, string $context = ''): string
 
-// Veri çözme
-$decrypted = $encryption->decrypt(string $encrypted): string
+// Eski anahtar veya v1 biçimindeki veriyi mevcut anahtarla v2'ye taşıma
+$encryption->needs_reencrypt(string $encrypted): bool
+$encryption->reencrypt(string $encrypted, string $context = ''): string
 ```
+
+**Bağlam (v2.4.0+):** `$context` doğrulanmış ek veri (AAD) olarak şifreli metne bağlanır. Değeri ait olduğu kayda bağlayın; şifreli değer başka bir satıra veya kolona kopyalanırsa çözülemez:
+
+```php
+$row->tckn = $encryption->encrypt($tckn, "users.tckn:{$row->id}");
+$tckn = $encryption->decrypt($row->tckn, "users.tckn:{$row->id}");
+```
+
+Boş bağlam önceki sürümlerin biçimiyle birebir uyumludur. Bağlamla şifrelenen veri yalnızca aynı bağlamla çözülür.
+
+**v1 biçimi:** 1.5.22 ve öncesinin biçimi varsayılan olarak hâlâ çözülür (`ENCRYPTION_ALLOW_V1=true`). Verileri `reencrypt()` ile taşıdıktan sonra `ENCRYPTION_ALLOW_V1=false` yapın; v1 verisi reddedilir.
 
 ### Rate Limiter
 
