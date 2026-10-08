@@ -48,6 +48,18 @@ abstract class Model implements \JsonSerializable
     protected bool $soft_deletes = false;
     protected string $deleted_at_column = 'deleted_at';
 
+    /**
+     * save() INSERT/UPDATE kararı: true = yalnızca yüklenmiş/kaydedilmiş model UPDATE edilir
+     * (elle atanmış UUID / doğal anahtarlı yeni model INSERT edilir); null = ORM_TRACK_EXISTS ayarı.
+     */
+    protected ?bool $track_exists = null;
+
+    /** @var array<string, mixed> Veritabanından okunan / son kaydedilen değerler (dirty tracking) */
+    private array $original = [];
+
+    /** Satır veritabanında var mı (find/hydrate ile yüklendi veya save() ile eklendi) */
+    private bool $exists = false;
+
     /** @var array<string, mixed> Yüklenmiş ilişkiler */
     private array $relations = [];
 
@@ -370,12 +382,7 @@ abstract class Model implements \JsonSerializable
             ->where($instance->primary_key, '=', $id)
             ->first();
 
-        if ($result) {
-            $instance->attributes = (array) $result;
-            return $instance;
-        }
-
-        return null;
+        return $result ? $instance->new_from_row($result) : null;
     }
 
     /**
@@ -410,8 +417,88 @@ abstract class Model implements \JsonSerializable
     {
         $model = new static($this->db);
         $model->attributes = (array) $row;
+        $model->exists = true;
+        $model->sync_original();
 
         return $model;
+    }
+
+    /**
+     * Satır veritabanında var mı? (find/get/first/hydrate ile yüklenen veya save() ile eklenen model)
+     */
+    public function exists(): bool
+    {
+        return $this->exists;
+    }
+
+    /**
+     * Mevcut değerleri "kaydedilmiş" olarak işaretler; sonraki get_dirty() boş döner.
+     */
+    public function sync_original(): static
+    {
+        $this->original = $this->attributes;
+
+        return $this;
+    }
+
+    /**
+     * Veritabanından okunan / son kaydedilen değer (cast uygulanmamış).
+     */
+    public function get_original(?string $key = null): mixed
+    {
+        return $key === null ? $this->original : ($this->original[$key] ?? null);
+    }
+
+    /**
+     * Son yükleme / kayıttan beri değişen alanlar (veritabanı değerleriyle).
+     *
+     * @return array<string, mixed>
+     */
+    public function get_dirty(): array
+    {
+        $dirty = [];
+        foreach ($this->attributes as $key => $value) {
+            if (! array_key_exists($key, $this->original) || ! self::same_value($this->original[$key], $value)) {
+                $dirty[$key] = $value;
+            }
+        }
+
+        return $dirty;
+    }
+
+    /**
+     * @param string|null $key Verilirse yalnızca o alan
+     */
+    public function is_dirty(?string $key = null): bool
+    {
+        $dirty = $this->get_dirty();
+
+        return $key === null ? $dirty !== [] : array_key_exists($key, $dirty);
+    }
+
+    /**
+     * Veritabanından gelen '5' ile atanan 5 (veya true ile 1) aynı değer sayılır.
+     */
+    private static function same_value(mixed $original, mixed $current): bool
+    {
+        if ($original === $current) {
+            return true;
+        }
+        if ($original === null || $current === null) {
+            return false;
+        }
+
+        $normalize = static fn (mixed $v): mixed => is_bool($v) ? (int) $v : $v;
+        [$original, $current] = [$normalize($original), $normalize($current)];
+
+        return is_scalar($original) && is_scalar($current)
+            && is_numeric($original) && is_numeric($current)
+            && (string) $original === (string) $current;
+    }
+
+    private function tracks_exists(): bool
+    {
+        return $this->track_exists ?? (bool) Config::get('orm_track_exists', Config::orm_track_exists);
     }
 
     /**
@@ -421,8 +508,15 @@ abstract class Model implements \JsonSerializable
      */
     public function save(): bool
     {
-        $data = $this->attributes;
-        $is_new = empty($this->attributes[$this->primary_key]);
+        // Yüklenmiş model: UPDATE. Yüklenmemiş model: ORM_TRACK_EXISTS açıksa INSERT, kapalıysa
+        // 2.x davranışı (birincil anahtar doluysa UPDATE).
+        $is_new = ! $this->exists && ($this->tracks_exists() || empty($this->attributes[$this->primary_key]));
+
+        // Yüklenmiş modelde yalnızca değişen kolonlar yazılır; değişiklik yoksa sorgu çalışmaz (#88)
+        $data = $this->exists ? $this->get_dirty() : $this->attributes;
+        if ($this->exists && $data === []) {
+            return true;
+        }
 
         if ($this->timestamps) {
             $now = date('Y-m-d H:i:s');
@@ -436,8 +530,13 @@ abstract class Model implements \JsonSerializable
         $primary_key = $this->db->quote_identifier($this->primary_key);
 
         if (! $is_new) {
-            $id = $this->attributes[$this->primary_key];
-            unset($data[$this->primary_key]);
+            // Birincil anahtar değiştirildiyse satır eski değeriyle bulunur
+            $id = $this->exists && array_key_exists($this->primary_key, $this->original)
+                ? $this->original[$this->primary_key]
+                : $this->attributes[$this->primary_key];
+            if (! $this->exists || self::same_value($id, $this->attributes[$this->primary_key] ?? null)) {
+                unset($data[$this->primary_key]);
+            }
 
             if ($data === []) {
                 return true;
@@ -453,14 +552,24 @@ abstract class Model implements \JsonSerializable
             $params[] = $id;
 
             $result = $this->db->update($sql, $params) !== false;
-            if ($result && $this->timestamps) {
-                $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
+            if ($result) {
+                if ($this->timestamps) {
+                    $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
+                }
+                if ($this->exists) {
+                    $this->sync_original();
+                }
             }
 
             return $result;
         }
 
-        unset($data[$this->primary_key]);
+        // Elle atanmış birincil anahtar (UUID, doğal anahtar) INSERT'e dahil edilir
+        $assigned_key = $this->attributes[$this->primary_key] ?? null;
+        if (empty($assigned_key)) {
+            unset($data[$this->primary_key]);
+            $assigned_key = null;
+        }
 
         if ($data === []) {
             throw new \InvalidArgumentException('Kaydedilecek alan yok.');
@@ -492,11 +601,14 @@ abstract class Model implements \JsonSerializable
             }
         }
 
-        $this->attributes[$this->primary_key] = $id;
+        // Elle atanmış anahtarda sürücünün son eklenen id'si (SQLite rowid, MySQL 0) kullanılmaz
+        $this->attributes[$this->primary_key] = $assigned_key ?? $id;
         if ($this->timestamps) {
             $this->attributes[$this->created_at_column] = $data[$this->created_at_column];
             $this->attributes[$this->updated_at_column] = $data[$this->updated_at_column];
         }
+        $this->exists = true;
+        $this->sync_original();
 
         return true;
     }
@@ -530,7 +642,13 @@ abstract class Model implements \JsonSerializable
         $table = $this->db->quote_identifier($this->table);
         $primary_key = $this->db->quote_identifier($this->primary_key);
 
-        return $this->db->delete("DELETE FROM {$table} WHERE {$primary_key} = ?", [$id]) !== false;
+        $deleted = $this->db->delete("DELETE FROM {$table} WHERE {$primary_key} = ?", [$id]) !== false;
+        if ($deleted) {
+            // Tekrar save() edilirse yeni kayıt olarak eklenir
+            $this->exists = false;
+        }
+
+        return $deleted;
     }
 
     /**
@@ -562,6 +680,10 @@ abstract class Model implements \JsonSerializable
         ) !== false;
         if ($ok) {
             $this->attributes[$this->deleted_at_column] = $value;
+            if ($this->exists) {
+                // Yazılan değer kaydedilmiş sayılır; sonraki save() onu tekrar yazmaz
+                $this->original[$this->deleted_at_column] = $value;
+            }
         }
 
         return $ok;
@@ -835,6 +957,9 @@ abstract class Model implements \JsonSerializable
         if ($type === null || $value === null) {
             return $value;
         }
+        if (str_starts_with($type, 'decimal:')) {
+            return self::to_decimal($key, $value, $type);
+        }
 
         return match ($type) {
             'int', 'integer' => (int) $value,
@@ -855,6 +980,9 @@ abstract class Model implements \JsonSerializable
         if ($type === null || $value === null) {
             return $value;
         }
+        if (str_starts_with($type, 'decimal:')) {
+            return self::to_decimal($key, $value, $type);
+        }
 
         return match ($type) {
             'array', 'json', 'object' => is_string($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
@@ -864,6 +992,55 @@ abstract class Model implements \JsonSerializable
             'int', 'integer', 'float', 'double', 'real', 'decimal' => is_numeric($value) ? $this->from_storage($key, $value) : $value,
             default => $value,
         };
+    }
+
+    /**
+     * `decimal:N` cast'i: değeri N ondalık basamaklı string'e yuvarlar (yarım yukarı). Ondalık metin
+     * float'a çevrilmeden basamak basamak işlenir; para / oran değerlerinde hassasiyet kaybı olmaz (#108).
+     */
+    private static function to_decimal(string $key, mixed $value, string $type): string
+    {
+        $scale = substr($type, strlen('decimal:'));
+        if (! ctype_digit($scale)) {
+            throw new \InvalidArgumentException(static::class . ": geçersiz cast '{$type}' ({$key}); örn. 'decimal:2'");
+        }
+        $scale = (int) $scale;
+
+        $text = match (true) {
+            is_int($value) => (string) $value,
+            is_float($value) => sprintf('%.' . ($scale + 1) . 'F', $value),
+            is_string($value) => trim($value),
+            default => throw new \InvalidArgumentException(static::class . ": '{$key}' decimal değeri olmalıdır."),
+        };
+        if (! preg_match('/^([+-]?)(\d*)(?:\.(\d*))?$/', $text, $m) || ($m[2] === '' && ($m[3] ?? '') === '')) {
+            if (! is_numeric($text)) {
+                throw new \InvalidArgumentException(static::class . ": '{$key}' decimal değeri olmalıdır: " . substr($text, 0, 32));
+            }
+            // Üslü gösterim (1e3): float üzerinden
+            return self::to_decimal($key, (float) $text, $type);
+        }
+
+        $fraction = str_pad($m[3] ?? '', $scale + 1, '0');
+        $digits = ($m[2] === '' ? '0' : $m[2]) . substr($fraction, 0, $scale);
+        if ($fraction[$scale] >= '5') {
+            // Basamak dizisine 1 ekle (elde ile)
+            for ($i = strlen($digits) - 1; $i >= 0; $i--) {
+                if ($digits[$i] !== '9') {
+                    $digits[$i] = (string) ((int) $digits[$i] + 1);
+                    break;
+                }
+                $digits[$i] = '0';
+            }
+            if ($i < 0) {
+                $digits = '1' . $digits;
+            }
+        }
+
+        $integer = ltrim(substr($digits, 0, strlen($digits) - $scale), '0');
+        $integer = $integer === '' ? '0' : $integer;
+        $result = $scale > 0 ? $integer . '.' . substr($digits, -$scale) : $integer;
+
+        return $m[1] === '-' && trim($digits, '0') !== '' ? '-' . $result : $result;
     }
 
     private static function to_datetime(mixed $value): ?\DateTimeImmutable

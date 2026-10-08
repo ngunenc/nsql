@@ -528,6 +528,35 @@ Model::eager_load(array $models, string ...$relations): array
 - 1000'den fazla anahtar parçalara bölünür (parça başına bir sorgu). Soft delete'li ilişkili modellerde silinmişler hariç tutulur.
 - Aynı yazara ait gönderiler aynı `Author` örneğini paylaşır.
 
+### Değişiklik takibi ve `exists` (v2.3.0+)
+
+`find()` / `get()` / `first()` / `hydrate()` ile yüklenen veya `save()` ile eklenen model `exists()` true döner ve yüklendiği değerleri hatırlar. `save()` yalnızca değişen kolonları (ve `updated_at`'i) yazar; değişiklik yoksa sorgu çalışmaz. Birincil anahtar değiştirilirse satır eski değeriyle bulunur.
+
+```php
+$author = Author::find_or_fail(5, $db);
+$author->name = 'Fatma';
+$author->is_dirty();            // true
+$author->get_dirty();           // ['name' => 'Fatma']
+$author->get_original('name');  // veritabanındaki eski değer
+$author->save();                // UPDATE p_authors SET name = ?, updated_at = ? WHERE id = ?
+$author->sync_original();       // mevcut değerleri kaydedilmiş say
+```
+
+Yüklenmemiş, birincil anahtarı elle atanmış model (UUID, doğal anahtar):
+
+| Ayar | `save()` |
+|------|----------|
+| `ORM_TRACK_EXISTS=false` (2.x varsayılanı) | Anahtar doluysa UPDATE (eski davranış) |
+| `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;` | INSERT (anahtar değeri korunur); `force_delete()` sonrası tekrar `save()` yeniden ekler |
+
+### Cast tipleri
+
+`int`, `float`, `decimal`, `bool`, `string`, `array` / `json`, `object`, `datetime`, `date` ve `decimal:N` (v2.3.0+). `decimal:N` değeri `N` ondalıklı **string** olarak döndürür ve saklar; float'a çevrilmeden yuvarlanır (yarım yukarı), para / oran için önerilir. Düz `decimal` geriye uyumluluk için `float` döner.
+
+```php
+protected array $casts = ['amount' => 'decimal:2'];   // '10.005' → '10.01', 0.1 + 0.2 → '0.30'
+```
+
 ## 🧩 Traits
 
 ### Cache Trait
