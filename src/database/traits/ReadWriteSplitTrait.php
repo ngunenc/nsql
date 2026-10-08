@@ -3,6 +3,8 @@
 namespace nsql\database\traits;
 
 use nsql\database\Config;
+use nsql\database\exceptions\ConnectionException;
+use nsql\database\exceptions\QueryException;
 use nsql\database\logging\Logger;
 use PDOStatement;
 
@@ -15,7 +17,8 @@ use PDOStatement;
  * - kilitli okumalar (FOR UPDATE, FOR SHARE, LOCK IN SHARE MODE),
  * - READ_WRITE_STICKY=true (varsayılan) iken bu örnekte bir yazma yapıldıktan sonraki okumalar
  *   (replikasyon gecikmesinde kendi yazdığını okuyamama sorununa karşı).
- * Replica'ya bağlanılamazsa WARNING loglanır ve primary kullanılır.
+ * Replica'ya bağlanılamazsa veya bağlantı çalışma sırasında kopup yeniden kurulamazsa WARNING
+ * loglanır, ayrım kapatılır ve okuma primary'de tekrarlanır; set_read_replica() ile yeniden açılır.
  */
 trait ReadWriteSplitTrait
 {
@@ -107,13 +110,63 @@ trait ReadWriteSplitTrait
         $this->last_query = $sql;
         $this->last_params = $params;
         try {
-            return $this->bypass_statement_cache
+            $stmt = $this->bypass_statement_cache
                 ? $reader->execute_query_uncached($sql, $params, $fetch_mode, ...$fetch_mode_args)
                 : $reader->execute_query($sql, $params, $fetch_mode, ...$fetch_mode_args);
-        } finally {
-            $this->last_error = $reader->last_error;
-            $this->last_pdo_exception = $reader->last_pdo_exception;
+        } catch (ConnectionException $e) {
+            return $this->fall_back_to_primary($e, $sql, $params, $fetch_mode, ...$fetch_mode_args);
+        } catch (QueryException $e) {
+            if (! self::reader_connection_lost($reader)) {
+                $this->copy_reader_error($reader);
+
+                throw $e;
+            }
+
+            return $this->fall_back_to_primary($e, $sql, $params, $fetch_mode, ...$fetch_mode_args);
         }
+
+        if ($stmt === false && self::reader_connection_lost($reader)) {
+            return $this->fall_back_to_primary($reader->last_pdo_exception, $sql, $params, $fetch_mode, ...$fetch_mode_args);
+        }
+        $this->copy_reader_error($reader);
+
+        return $stmt;
+    }
+
+    private function copy_reader_error(self $reader): void
+    {
+        $this->last_error = $reader->last_error;
+        $this->last_pdo_exception = $reader->last_pdo_exception;
+    }
+
+    /**
+     * Replica bağlantısı koptu ve yeniden kurulamadı mı? (reader kendi içinde okuma sorgusunu
+     * RETRY sınırı kadar yeniden bağlanarak dener; buraya ulaşan hata kalıcıdır.)
+     */
+    private static function reader_connection_lost(self $reader): bool
+    {
+        return $reader->last_pdo_exception !== null && self::is_connection_lost_error($reader->last_pdo_exception);
+    }
+
+    /**
+     * Replica kullanılamıyor: reader bırakılır, ayrım kapatılır ve okuma primary'de tekrarlanır
+     * (okuma sorgusu olduğu için tekrar güvenli). set_read_replica() ile yeniden açılabilir (#105).
+     */
+    private function fall_back_to_primary(?\Throwable $cause, string $sql, array $params, ?int $fetch_mode, mixed ...$fetch_mode_args): PDOStatement|false
+    {
+        $this->log_error(
+            'Okuma replica\'sı kullanılamıyor; okuma/yazma ayrımı kapatıldı, sorgular primary\'de çalışıyor: '
+            . ($cause?->getMessage() ?? 'bağlantı koptu'),
+            [],
+            Logger::WARNING
+        );
+        $this->drop_reader();
+        $this->read_config = null;
+        $this->read_config_resolved = true;
+
+        return $this->bypass_statement_cache
+            ? $this->execute_query_uncached($sql, $params, $fetch_mode, ...$fetch_mode_args)
+            : $this->execute_query($sql, $params, $fetch_mode, ...$fetch_mode_args);
     }
 
     private function sync_reader(self $reader): void
