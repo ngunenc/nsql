@@ -58,6 +58,7 @@ class Config
     public const read_write_split = false; // true: okumalar DB_READ_HOST replica'sına gider
     public const read_write_sticky = true; // yazmadan sonra aynı örnekte okumalar primary'de kalır
     public const orm_table_naming = 'inflector'; // 'legacy': BlogPost → blogposts (1.x davranışı)
+    public const orm_track_exists = false; // true: save() INSERT/UPDATE kararını yüklenmiş olmaya göre verir (3.0 varsayılanı)
     public const auto_adjust_chunk_size = true;
     public const min_chunk_size = 200; // 100 → 200 (daha büyük minimum chunk)
     public const max_chunk_size = 15000; // 10000 → 15000 (daha büyük maximum chunk)
@@ -534,6 +535,7 @@ class Config
             'READ_WRITE_SPLIT' => self::read_write_split,
             'READ_WRITE_STICKY' => self::read_write_sticky,
             'ORM_TABLE_NAMING' => self::orm_table_naming,
+            'ORM_TRACK_EXISTS' => self::orm_track_exists,
             'AUTO_ADJUST_CHUNK_SIZE' => self::auto_adjust_chunk_size,
             'MIN_CHUNK_SIZE' => self::min_chunk_size,
             'MAX_CHUNK_SIZE' => self::max_chunk_size,

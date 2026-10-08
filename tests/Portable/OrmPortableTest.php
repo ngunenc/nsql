@@ -56,6 +56,17 @@ class BlogCategory extends Model
 {
 }
 
+/** Elle atanmış (UUID / doğal) birincil anahtarlı model (#88) */
+class Voucher extends Model
+{
+    protected string $table = 'p_vouchers';
+    protected string $primary_key = 'code';
+    protected array $fillable = ['code', 'label', 'amount'];
+    protected array $casts = ['amount' => 'decimal:2'];
+    protected bool $timestamps = false;
+    protected ?bool $track_exists = true;
+}
+
 class OrmPortableTest extends PortableTestCase
 {
     protected function setUp(): void
@@ -76,6 +87,124 @@ class OrmPortableTest extends PortableTestCase
         ]);
         $this->create_table('p_posts', ['author_id INT NOT NULL', 'title VARCHAR(100) NOT NULL', 'deleted_at TIMESTAMP NULL']);
         $this->create_table('p_profiles', ['author_id INT NOT NULL', 'bio VARCHAR(200) NULL']);
+        $this->db->query('DROP TABLE IF EXISTS p_vouchers');
+        $this->db->query('CREATE TABLE p_vouchers (code VARCHAR(36) PRIMARY KEY, label VARCHAR(50) NOT NULL, amount DECIMAL(15,2) NULL)');
+    }
+
+    /**
+     * @return list<string> Callback süresince çalışan sorgular
+     */
+    private function capture_queries(callable $fn): array
+    {
+        $queries = [];
+        $listener = function ($event) use (&$queries): void {
+            $queries[] = $event->sql;
+        };
+        $this->db->on_query($listener);
+        try {
+            $fn();
+        } finally {
+            (fn () => $this->query_listeners = array_values(array_filter(
+                $this->query_listeners,
+                fn ($l) => $l !== $listener
+            )))->call($this->db);
+        }
+
+        return $queries;
+    }
+
+    public function test_dirty_tracking_updates_only_changed_columns(): void
+    {
+        $id = $this->author()->get_key();
+        $author = Author::find_or_fail($id, $this->db);
+
+        $this->assertTrue($author->exists());
+        $this->assertFalse($author->is_dirty());
+
+        $author->score = 42;  // veritabanındaki '42' ile aynı: değişiklik sayılmaz
+        $this->assertFalse($author->is_dirty('score'));
+        $this->assertSame([], $this->capture_queries(fn () => $this->assertTrue($author->save())));
+
+        $author->name = 'Fatma';
+        $this->assertSame(['name'], array_keys($author->get_dirty()));
+        $queries = $this->capture_queries(fn () => $this->assertTrue($author->save()));
+
+        $this->assertCount(1, $queries);
+        $this->assertStringContainsString('name', $queries[0]);
+        $this->assertStringContainsString('updated_at', $queries[0]);
+        $this->assertStringNotContainsString('score', $queries[0]);
+        $this->assertStringNotContainsString('settings', $queries[0]);
+        $this->assertFalse($author->is_dirty());
+        $this->assertSame('Fatma', Author::find_or_fail($id, $this->db)->name);
+    }
+
+    public function test_assigned_key_model_is_inserted_and_tracked(): void
+    {
+        $voucher = new Voucher($this->db, ['code' => 'c5b1e2f0-0001', 'label' => 'Hoş geldin', 'amount' => '10.005']);
+        $this->assertFalse($voucher->exists());
+        $this->assertTrue($voucher->save());
+        $this->assertTrue($voucher->exists());
+        $this->assertSame('c5b1e2f0-0001', $voucher->get_key());
+
+        $loaded = Voucher::find_or_fail('c5b1e2f0-0001', $this->db);
+        $this->assertSame('Hoş geldin', $loaded->label);
+        $this->assertSame('10.01', $loaded->amount);
+
+        $loaded->label = 'Yeni';
+        $this->assertTrue($loaded->save());
+        $this->assertSame(1, $this->db->table('p_vouchers')->count());
+
+        $this->assertTrue($loaded->force_delete());
+        $this->assertFalse($loaded->exists());
+        $this->assertTrue($loaded->save());
+        $this->assertSame('Yeni', Voucher::find_or_fail('c5b1e2f0-0001', $this->db)->label);
+    }
+
+    public function test_unloaded_model_with_key_updates_by_default(): void
+    {
+        $id = $this->author()->get_key();
+
+        // ORM_TRACK_EXISTS=false (2.x varsayılanı): anahtarı dolu yüklenmemiş model UPDATE edilir
+        $author = new Author($this->db);
+        $author->set_attribute('id', $id)->set_attribute('name', 'Elif');
+        $this->assertTrue($author->save());
+        $this->assertSame(1, $this->db->table('p_authors')->count());
+        $this->assertSame('Elif', Author::find_or_fail($id, $this->db)->name);
+    }
+
+    public function test_changed_primary_key_updates_original_row(): void
+    {
+        (new Voucher($this->db, ['code' => 'old-code', 'label' => 'x']))->save();
+
+        $voucher = Voucher::find_or_fail('old-code', $this->db);
+        $voucher->set_attribute('code', 'new-code');
+        $this->assertTrue($voucher->save());
+
+        $this->assertNull(Voucher::find('old-code', $this->db));
+        $this->assertSame('x', Voucher::find_or_fail('new-code', $this->db)->label);
+    }
+
+    public function test_decimal_cast_rounds_without_float_error(): void
+    {
+        $cases = [
+            '10.005' => '10.01',
+            '0.1' => '0.10',
+            '9.995' => '10.00',
+            '-0.004' => '0.00',
+            '-2.345' => '-2.35',
+            '1234567890123.455' => '1234567890123.46',
+            '7' => '7.00',
+        ];
+        foreach ($cases as $input => $expected) {
+            $voucher = new Voucher($this->db, ['amount' => (string) $input]);
+            $this->assertSame($expected, $voucher->amount, "decimal:2 ← {$input}");
+        }
+
+        $this->assertSame('0.30', (new Voucher($this->db, ['amount' => 0.1 + 0.2]))->amount);
+        $this->assertSame('1000.00', (new Voucher($this->db, ['amount' => '1e3']))->amount);
+
+        $this->expectException(\InvalidArgumentException::class);
+        new Voucher($this->db, ['amount' => 'abc']);
     }
 
     protected function tearDown(): void
