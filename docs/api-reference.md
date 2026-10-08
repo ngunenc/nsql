@@ -437,6 +437,18 @@ $manager->create_migration(string $name): string
 $manager->create_seeder(string $name): string
 ```
 
+### Eşzamanlılık kilidi ve transaction (v2.3.0+)
+
+`migrate()`, `migrate_to()` ve `rollback*()` bir kilit içinde çalışır; aynı anda birden fazla sunucu/container `nsql migrate` çalıştırsa da migration'lar bir kez uygulanır. İkinci süreç kilidi `MIGRATION_LOCK_TIMEOUT` (varsayılan 60) saniye bekler, alamazsa `MigrationException` fırlatır.
+
+| Sürücü | Kilit | Migration başına transaction |
+|--------|-------|------------------------------|
+| MySQL / MariaDB | `GET_LOCK('nsql_migrations_<tablo>')` | Hayır (DDL örtük commit yapar) |
+| PostgreSQL | `pg_try_advisory_lock(hashtext(...))` | Evet: hata olursa yarım DDL ve log kaydı geri alınır |
+| SQLite | Veritabanı dosyasına bağlı dosya kilidi (`sys_get_temp_dir()`) | Evet |
+
+Kilitler oturum düzeyindedir; süreç ölürse veritabanı kilidi bırakır. Transaction içinde çalışamayan migration (ör. PostgreSQL `CREATE INDEX CONCURRENTLY`) `BaseMigration::within_transaction()` metodunu `false` döndürecek şekilde ezer.
+
 ## 🧾 Şema Doğrulama (v2.1.0+)
 
 Beklenen tablo/kolon yapısını PHP ile tanımlayıp canlı veritabanıyla karşılaştırır. Şema oluşturmaz veya değiştirmez; yalnızca farkları raporlar.

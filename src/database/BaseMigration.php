@@ -34,4 +34,14 @@ abstract class BaseMigration implements Migration
     {
         return [];
     }
+
+    /**
+     * PostgreSQL / SQLite'ta up() ve down() transaction içinde çalışır; hata olursa yarım DDL geri alınır.
+     * Transaction içinde çalışamayan işlemler (ör. PostgreSQL `CREATE INDEX CONCURRENTLY`) için false döndürün.
+     * MySQL'de DDL örtük commit yaptığından transaction kullanılmaz.
+     */
+    public function within_transaction(): bool
+    {
+        return true;
+    }
 }

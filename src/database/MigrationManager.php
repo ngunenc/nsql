@@ -30,6 +30,188 @@ class MigrationManager
     private bool $table_ready = false;
     private array $dependencies = [];
 
+    /** İç içe kilitli çağrılar (rollback() → rollback_batch()) kilidi bir kez alır */
+    private int $lock_depth = 0;
+    /** @var resource|null SQLite kilit dosyası */
+    private $lock_file = null;
+
+    /**
+     * Eşzamanlı migrate/rollback'e karşı kilit içinde çalıştırır (#87): MySQL GET_LOCK,
+     * PostgreSQL advisory lock, SQLite veritabanı dosyasına bağlı dosya kilidi.
+     * Kilit bağlantı (oturum) düzeyindedir; süreç ölürse veritabanı kilidi bırakır.
+     *
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    private function with_lock(callable $fn): mixed
+    {
+        if ($this->lock_depth > 0) {
+            $this->lock_depth++;
+            try {
+                return $fn();
+            } finally {
+                $this->lock_depth--;
+            }
+        }
+
+        $this->acquire_lock();
+        $this->lock_depth = 1;
+        try {
+            return $fn();
+        } finally {
+            $this->lock_depth = 0;
+            $this->release_lock();
+        }
+    }
+
+    private function lock_name(): string
+    {
+        // MySQL kilit adı en fazla 64 karakter
+        return substr('nsql_migrations_' . $this->migrations_table, 0, 64);
+    }
+
+    private function acquire_lock(): void
+    {
+        $timeout = max(0, (int) Config::get('migration_lock_timeout', Config::migration_lock_timeout));
+        $pdo = $this->db->get_pdo() ?? throw new exceptions\MigrationException('Migration kilidi için veritabanı bağlantısı yok.');
+        $deadline = microtime(true) + $timeout;
+
+        $acquired = match ($this->db->get_driver_name()) {
+            'mysql' => (function () use ($pdo, $timeout): bool {
+                $stmt = $pdo->prepare('SELECT GET_LOCK(?, ?)');
+                $stmt->execute([$this->lock_name(), $timeout]);
+                $result = $stmt->fetchColumn();
+                $stmt->closeCursor();
+
+                return (int) $result === 1;
+            })(),
+            'pgsql' => self::poll($deadline, function () use ($pdo): bool {
+                $stmt = $pdo->prepare('SELECT pg_try_advisory_lock(hashtext(?))');
+                $stmt->execute([$this->lock_name()]);
+                $result = $stmt->fetchColumn();
+                $stmt->closeCursor();
+
+                return $result === true || $result === 't' || $result === 1 || $result === '1';
+            }),
+            default => $this->acquire_file_lock($pdo, $deadline),
+        };
+
+        if (! $acquired) {
+            throw new exceptions\MigrationException(
+                "Migration kilidi {$timeout} sn içinde alınamadı; başka bir migrate/rollback çalışıyor olabilir "
+                . '(MIGRATION_LOCK_TIMEOUT).'
+            );
+        }
+    }
+
+    private function release_lock(): void
+    {
+        $pdo = $this->db->get_pdo();
+        try {
+            match ($this->db->get_driver_name()) {
+                'mysql' => $pdo?->prepare('SELECT RELEASE_LOCK(?)')->execute([$this->lock_name()]),
+                'pgsql' => $pdo?->prepare('SELECT pg_advisory_unlock(hashtext(?))')->execute([$this->lock_name()]),
+                default => null,
+            };
+        } catch (\PDOException) {
+            // Bağlantı koptuysa sunucu kilidi zaten bıraktı
+        } finally {
+            if (is_resource($this->lock_file)) {
+                flock($this->lock_file, LOCK_UN);
+                fclose($this->lock_file);
+            }
+            $this->lock_file = null;
+        }
+    }
+
+    /**
+     * SQLite: aynı makinedeki süreçler arası dosya kilidi (veritabanı dosya yoluna göre).
+     */
+    private function acquire_file_lock(\PDO $pdo, float $deadline): bool
+    {
+        $stmt = $pdo->query("SELECT file FROM pragma_database_list WHERE name = 'main'");
+        $file = $stmt !== false ? (string) $stmt->fetchColumn() : '';
+        $key = hash('sha256', ($file !== '' ? $file : 'memory:' . spl_object_id($pdo)) . "\0" . $this->migrations_table);
+        $handle = fopen(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_migrations_' . substr($key, 0, 16) . '.lock', 'c');
+        if ($handle === false) {
+            return false;
+        }
+
+        if (! self::poll($deadline, static fn (): bool => flock($handle, LOCK_EX | LOCK_NB))) {
+            fclose($handle);
+
+            return false;
+        }
+        $this->lock_file = $handle;
+
+        return true;
+    }
+
+    /**
+     * @param callable(): bool $attempt
+     */
+    private static function poll(float $deadline, callable $attempt): bool
+    {
+        while (true) {
+            if ($attempt()) {
+                return true;
+            }
+            if (microtime(true) >= $deadline) {
+                return false;
+            }
+            usleep(200_000);
+        }
+    }
+
+    /**
+     * PostgreSQL ve SQLite DDL'i transaction içinde destekler; yarım kalan migration geri alınır.
+     * MySQL DDL'de örtük commit yapar, transaction kullanılmaz. BaseMigration::within_transaction()
+     * false dönerse (ör. CREATE INDEX CONCURRENTLY) transaction açılmaz.
+     */
+    private function uses_transaction(Migration $migration): bool
+    {
+        if ($this->db->get_driver_name() === 'mysql') {
+            return false;
+        }
+
+        return ! $migration instanceof BaseMigration || $migration->within_transaction();
+    }
+
+    /**
+     * Migration'ı uygular ve kaydeder; hata durumunda 'failed' kaydı yazılıp exception fırlatılır.
+     */
+    private function run_up(string $name, Migration $migration, int $batch): void
+    {
+        $start_time = microtime(true);
+        $apply = function () use ($name, $migration, $batch, $start_time): void {
+            $migration->up();
+            $this->log_migration($name, $batch, 'completed', null, microtime(true) - $start_time);
+        };
+
+        try {
+            $this->uses_transaction($migration) ? $this->db->transaction($apply) : $apply();
+        } catch (\Throwable $e) {
+            $this->log_migration($name, $batch, 'failed', $e->getMessage(), microtime(true) - $start_time);
+
+            throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage(), 0, $e);
+        }
+    }
+
+    private function run_down(string $name, Migration $migration, int $batch): void
+    {
+        $revert = function () use ($name, $migration, $batch): void {
+            $migration->down();
+            $this->log_rollback($name, $batch);
+        };
+
+        try {
+            $this->uses_transaction($migration) ? $this->db->transaction($revert) : $revert();
+        } catch (\Throwable $e) {
+            throw new \RuntimeException("Rollback {$name} failed: " . $e->getMessage(), 0, $e);
+        }
+    }
+
     /**
      * @param string|null $migrations_path null ise MIGRATIONS_PATH Config'i veya <proje kökü>/database/migrations
      * @param string|null $seeds_path null ise SEEDS_PATH Config'i veya <proje kökü>/database/seeds
@@ -262,6 +444,14 @@ class MigrationManager
      */
     public function migrate(): array
     {
+        return $this->with_lock(fn (): array => $this->migrate_pending());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function migrate_pending(): array
+    {
         $this->ensure_migrations_table();
         $this->load_migrations();
         $executed = [];
@@ -278,28 +468,16 @@ class MigrationManager
         }
 
         foreach ($sorted_migrations as $name) {
-            if (! in_array($name, $applied)) {
+            if (! in_array($name, $applied, true)) {
                 // Bağımlılıkların tamamlanmış olduğunu kontrol et
                 if (! $this->check_dependencies($name, $this->dry_run ? $executed : [])) {
                     throw new \RuntimeException("Migration {$name} için bağımlılıklar karşılanmadı.");
                 }
 
-                if ($this->dry_run) {
-                    $executed[] = $name;
-
-                    continue;
+                if (! $this->dry_run) {
+                    $this->run_up($name, $this->migrations[$name], $batch);
                 }
-
-                $start_time = microtime(true);
-                try {
-                    $this->migrations[$name]->up();
-                    $this->log_migration($name, $batch, 'completed', null, microtime(true) - $start_time);
-                    $executed[] = $name;
-                } catch (\Throwable $e) {
-                    $this->log_migration($name, $batch, 'failed', $e->getMessage(), microtime(true) - $start_time);
-
-                    throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage(), 0, $e);
-                }
+                $executed[] = $name;
             }
         }
 
@@ -321,6 +499,11 @@ class MigrationManager
      * @return array Geri alınan Migration'lar
      */
     public function rollback_batch(?int $batch = null): array
+    {
+        return $this->with_lock(fn (): array => $this->rollback_batch_locked($batch));
+    }
+
+    private function rollback_batch_locked(?int $batch): array
     {
         $this->ensure_migrations_table();
         $this->load_migrations();
@@ -347,13 +530,8 @@ class MigrationManager
                     throw new \RuntimeException("Migration {$name} geri alınamaz: Bu migration'a bağımlı olan migration'lar var.");
                 }
 
-                try {
-                    $this->migrations[$name]->down();
-                    $this->log_rollback($name, $batch);
-                    $rolled_back[] = $name;
-                } catch (\Exception $e) {
-                    throw new \RuntimeException("Rollback {$name} failed: " . $e->getMessage());
-                }
+                $this->run_down($name, $this->migrations[$name], $batch);
+                $rolled_back[] = $name;
             }
         }
 
@@ -372,6 +550,11 @@ class MigrationManager
             throw new \InvalidArgumentException('Steps değeri pozitif olmalıdır.');
         }
 
+        return $this->with_lock(fn (): array => $this->rollback_steps_locked($steps));
+    }
+
+    private function rollback_steps_locked(int $steps): array
+    {
         $this->ensure_migrations_table();
         $this->load_migrations();
         $rolled_back = [];
@@ -394,14 +577,9 @@ class MigrationManager
                     throw new \RuntimeException("Migration {$name} geri alınamaz: Bu migration'a bağımlı olan migration'lar var.");
                 }
 
-                try {
-                    $this->migrations[$name]->down();
-                    $this->log_rollback($name, $migration->batch);
-                    $rolled_back[] = $name;
-                    $count++;
-                } catch (\Exception $e) {
-                    throw new \RuntimeException("Rollback {$name} failed: " . $e->getMessage());
-                }
+                $this->run_down($name, $this->migrations[$name], (int) $migration->batch);
+                $rolled_back[] = $name;
+                $count++;
             }
         }
 
@@ -416,6 +594,11 @@ class MigrationManager
      */
     public function rollback_to(string $target_migration): array
     {
+        return $this->with_lock(fn (): array => $this->rollback_to_locked($target_migration));
+    }
+
+    private function rollback_to_locked(string $target_migration): array
+    {
         $this->ensure_migrations_table();
         $this->load_migrations();
         $rolled_back = [];
@@ -427,7 +610,7 @@ class MigrationManager
 
         // Hedef migration'ın uygulanmış olup olmadığını kontrol et
         $applied = $this->get_applied_migrations();
-        if (! in_array($target_migration, $applied)) {
+        if (! in_array($target_migration, $applied, true)) {
             throw new \RuntimeException("Hedef migration henüz uygulanmamış: {$target_migration}");
         }
 
@@ -456,13 +639,8 @@ class MigrationManager
                     throw new \RuntimeException("Migration {$name} geri alınamaz: Bu migration'a bağımlı olan migration'lar var.");
                 }
 
-                try {
-                    $this->migrations[$name]->down();
-                    $this->log_rollback($name, $migration->batch);
-                    $rolled_back[] = $name;
-                } catch (\Exception $e) {
-                    throw new \RuntimeException("Rollback {$name} failed: " . $e->getMessage());
-                }
+                $this->run_down($name, $this->migrations[$name], (int) $migration->batch);
+                $rolled_back[] = $name;
             }
         }
 
@@ -481,7 +659,7 @@ class MigrationManager
 
         foreach ($this->dependencies as $dependent => $deps) {
             // Eğer bu dependent uygulanmışsa ve bağımlılıkları arasında bu migration varsa
-            if (in_array($dependent, $applied) && in_array($migration_name, $deps)) {
+            if (in_array($dependent, $applied, true) && in_array($migration_name, $deps, true)) {
                 return true;
             }
         }
@@ -628,6 +806,11 @@ PHP;
      */
     public function migrate_to(string $version): array
     {
+        return $this->with_lock(fn (): array => $this->migrate_to_locked($version));
+    }
+
+    private function migrate_to_locked(string $version): array
+    {
         $this->ensure_migrations_table();
         $this->load_migrations();
         $executed = [];
@@ -653,23 +836,12 @@ PHP;
                 break;
             }
 
-            if (! in_array($name, $applied)) {
+            if (! in_array($name, $applied, true)) {
                 if ($this->check_dependencies($name)) {
-                    $start_time = microtime(true);
-                    try {
-                        if (! $this->dry_run) {
-                            $migration->up();
-                            $duration = microtime(true) - $start_time;
-                            $this->log_migration($name, $batch, 'completed', null, $duration);
-                        }
-
-                        $executed[] = $name;
-                    } catch (\Exception $e) {
-                        $duration = microtime(true) - $start_time;
-                        $this->log_migration($name, $batch, 'failed', $e->getMessage(), $duration);
-
-                        throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage());
+                    if (! $this->dry_run) {
+                        $this->run_up($name, $migration, $batch);
                     }
+                    $executed[] = $name;
                 } else {
                     throw new \RuntimeException("Bağımlılıklar karşılanmadı: {$name}");
                 }
@@ -693,7 +865,7 @@ PHP;
 
         $applied = array_merge($this->get_applied_migrations(), $also_applied);
         foreach ($this->dependencies[$name] as $dependency) {
-            if (! in_array($dependency, $applied)) {
+            if (! in_array($dependency, $applied, true)) {
                 return false;
             }
         }
@@ -968,7 +1140,7 @@ PHP;
     public function get_statuses_by_status(string $status): array
     {
         $valid_statuses = ['pending', 'completed', 'failed', 'rolled_back'];
-        if (! in_array($status, $valid_statuses)) {
+        if (! in_array($status, $valid_statuses, true)) {
             throw new \InvalidArgumentException("Geçersiz status: {$status}");
         }
 
@@ -1064,7 +1236,7 @@ PHP;
 
         $pending_migrations = [];
         foreach ($this->migrations as $name => $migration) {
-            if (! in_array($name, $applied)) {
+            if (! in_array($name, $applied, true)) {
                 $pending_migrations[] = $name;
             }
         }
