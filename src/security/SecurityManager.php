@@ -299,17 +299,17 @@ class SecurityManager
     /**
      * Veri şifreleme
      */
-    public function encrypt(string $data): string
+    public function encrypt(string $data, string $context = ''): string
     {
-        return $this->encryption->encrypt($data);
+        return $this->encryption->encrypt($data, $context);
     }
 
     /**
      * Veri şifre çözme
      */
-    public function decrypt(string $encrypted_data): string
+    public function decrypt(string $encrypted_data, string $context = ''): string
     {
-        return $this->encryption->decrypt($encrypted_data);
+        return $this->encryption->decrypt($encrypted_data, $context);
     }
 
     /**

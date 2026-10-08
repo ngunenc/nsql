@@ -2,6 +2,8 @@
 
 namespace nsql\security;
 
+use nsql\database\Config;
+
 /**
  * AES-256-GCM şifreleme.
  *
@@ -11,7 +13,11 @@ namespace nsql\security;
  *  - "v2" ve key_id ek doğrulanmış veri (AAD) olarak bağlanır.
  *
  * v1 biçimi (<= 1.5.22): base64(iv[16] | tag[16] | ciphertext), anahtar olarak base64 metnin kendisi.
- * Yalnızca çözme için desteklenir; reencrypt() ile v2'ye taşınabilir.
+ * Yalnızca çözme için desteklenir; reencrypt() ile v2'ye taşınabilir. Taşıma bittiyse
+ * ENCRYPTION_ALLOW_V1=false ile kapatın (v2.4.0+).
+ *
+ * Bağlam (v2.4.0+): encrypt($veri, $baglam) bağlamı AAD'ye ekler (ör. 'users.ssn:42'). Değer başka bir
+ * kayda / kolona kopyalanırsa farklı bağlamla çözülemez. Boş bağlam önceki biçimle birebir uyumludur.
  */
 class Encryption
 {
@@ -26,13 +32,17 @@ class Encryption
     private string $key;
     /** @var array<string> Önceki (arşiv) anahtarlar, base64 metin */
     private array $previous_keys;
+    private bool $allow_v1;
 
     /**
      * @param string|null $key Base64 anahtar; null ise KeyManager::get_key() ve arşiv anahtarları kullanılır
      * @param array<string> $previous_keys Eski verileri çözmek için önceki anahtarlar (base64)
+     * @param bool|null $allow_v1 v1 biçimini çözme; null ise ENCRYPTION_ALLOW_V1 (2.x varsayılanı true)
      */
-    public function __construct(?string $key = null, array $previous_keys = [])
+    public function __construct(?string $key = null, array $previous_keys = [], ?bool $allow_v1 = null)
     {
+        $this->allow_v1 = $allow_v1 ?? (bool) Config::get('encryption_allow_v1', Config::encryption_allow_v1);
+
         if ($key === null) {
             $key = KeyManager::get_key();
             $previous_keys = array_merge($previous_keys, KeyManager::get_archived_keys());
@@ -46,7 +56,10 @@ class Encryption
         ));
     }
 
-    public function encrypt(string $data): string
+    /**
+     * @param string $context Doğrulanmış ek veri (AAD); çözerken aynısı verilmelidir
+     */
+    public function encrypt(string $data, string $context = ''): string
     {
         $raw_key = self::raw_key($this->key);
         $key_id = self::key_id($raw_key);
@@ -60,7 +73,7 @@ class Encryption
             OPENSSL_RAW_DATA,
             $iv,
             $tag,
-            self::aad($key_id),
+            self::aad($key_id, $context),
             self::TAG_LENGTH
         );
 
@@ -71,10 +84,22 @@ class Encryption
         return self::V2_PREFIX . base64_encode($key_id . $iv . $tag . $ciphertext);
     }
 
-    public function decrypt(string $encrypted_data): string
+    /**
+     * @param string $context encrypt() sırasında verilen bağlam
+     * @throws \RuntimeException Doğrulama başarısızsa, anahtar bulunamazsa veya v1 kapalıyken v1 verisi gelirse
+     */
+    public function decrypt(string $encrypted_data, string $context = ''): string
     {
         if (str_starts_with($encrypted_data, self::V2_PREFIX)) {
-            return $this->decrypt_v2(substr($encrypted_data, strlen(self::V2_PREFIX)));
+            return $this->decrypt_v2(substr($encrypted_data, strlen(self::V2_PREFIX)), $context);
+        }
+
+        if (! $this->allow_v1) {
+            throw new \RuntimeException('Şifre çözme hatası: v1 biçimi devre dışı (ENCRYPTION_ALLOW_V1=false)');
+        }
+        if ($context !== '') {
+            // v1 bağlam desteklemez; bağlam beklenen yerde bağlamsız veri kabul edilmez
+            throw new \RuntimeException('Şifre çözme hatası: v1 verisi bağlamla çözülemez');
         }
 
         return $this->decrypt_v1($encrypted_data);
@@ -83,9 +108,9 @@ class Encryption
     /**
      * Veriyi mevcut anahtarla v2 biçiminde yeniden şifreler (v1 veya eski anahtarlı veriyi taşımak için).
      */
-    public function reencrypt(string $encrypted_data): string
+    public function reencrypt(string $encrypted_data, string $context = ''): string
     {
-        return $this->encrypt($this->decrypt($encrypted_data));
+        return $this->encrypt($this->decrypt($encrypted_data, $context), $context);
     }
 
     /**
@@ -130,7 +155,7 @@ class Encryption
         }
     }
 
-    private function decrypt_v2(string $body): string
+    private function decrypt_v2(string $body, string $context): string
     {
         $decoded = base64_decode($body, true);
         $min_length = self::KEY_ID_LENGTH + self::IV_LENGTH + self::TAG_LENGTH;
@@ -149,7 +174,7 @@ class Encryption
                 continue;
             }
 
-            $plaintext = openssl_decrypt($ciphertext, self::CIPHER, $raw_key, OPENSSL_RAW_DATA, $iv, $tag, self::aad($key_id));
+            $plaintext = openssl_decrypt($ciphertext, self::CIPHER, $raw_key, OPENSSL_RAW_DATA, $iv, $tag, self::aad($key_id, $context));
             if ($plaintext === false) {
                 throw new \RuntimeException('Şifre çözme hatası: doğrulama başarısız (veri değiştirilmiş olabilir)');
             }
@@ -207,8 +232,9 @@ class Encryption
         return substr(hash('sha256', $raw_key, true), 0, self::KEY_ID_LENGTH);
     }
 
-    private static function aad(string $key_id): string
+    private static function aad(string $key_id, string $context = ''): string
     {
-        return 'v2' . $key_id;
+        // Boş bağlam 2.3 ve öncesiyle aynı AAD'yi üretir
+        return 'v2' . $key_id . ($context === '' ? '' : " " . $context);
     }
 }

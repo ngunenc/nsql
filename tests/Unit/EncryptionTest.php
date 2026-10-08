@@ -205,4 +205,64 @@ class EncryptionTest extends TestCase
     {
         $this->assertTrue((new Encryption(self::key()))->is_key_valid());
     }
+
+    public function test_context_binds_ciphertext(): void
+    {
+        $encryption = new Encryption(self::key());
+        $secret = $encryption->encrypt('12345678901', 'users.tckn:42');
+
+        $this->assertSame('12345678901', $encryption->decrypt($secret, 'users.tckn:42'));
+
+        foreach (['users.tckn:43', '', 'users.tckn:42 '] as $wrong) {
+            try {
+                $encryption->decrypt($secret, $wrong);
+                $this->fail("Yanlış bağlamla ('{$wrong}') çözülmemeli");
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('doğrulama', $e->getMessage());
+            }
+        }
+
+        $this->assertSame('12345678901', $encryption->decrypt($encryption->reencrypt($secret, 'users.tckn:42'), 'users.tckn:42'));
+    }
+
+    public function test_empty_context_is_compatible_with_previous_format(): void
+    {
+        $key = self::key();
+        // 2.3 biçimi: AAD = 'v2' . key_id (bağlamsız)
+        $raw = (string) base64_decode($key, true);
+        $key_id = substr(hash('sha256', $raw, true), 0, 8);
+        $iv = random_bytes(12);
+        $tag = '';
+        $ciphertext = (string) openssl_encrypt('2.3 verisi', 'aes-256-gcm', $raw, OPENSSL_RAW_DATA, $iv, $tag, 'v2' . $key_id, 16);
+        $old = 'v2:' . base64_encode($key_id . $iv . $tag . $ciphertext);
+
+        $this->assertSame('2.3 verisi', (new Encryption($key))->decrypt($old));
+    }
+
+    public function test_v1_can_be_disabled(): void
+    {
+        $key = self::key();
+        $legacy = self::legacy_encrypt('eski kayıt', $key);
+
+        $strict = new Encryption($key, [], allow_v1: false);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('ENCRYPTION_ALLOW_V1');
+        $strict->decrypt($legacy);
+    }
+
+    public function test_v1_follows_config_and_rejects_context(): void
+    {
+        $key = self::key();
+        $legacy = self::legacy_encrypt('eski kayıt', $key);
+
+        Config::set('encryption_allow_v1', false);
+        try {
+            $this->assertFalse((fn () => $this->allow_v1)->call(new Encryption($key)));
+        } finally {
+            Config::set('encryption_allow_v1', Config::encryption_allow_v1);
+        }
+
+        $this->expectException(\RuntimeException::class);
+        (new Encryption($key))->decrypt($legacy, 'bir bağlam');
+    }
 }

@@ -58,6 +58,7 @@ class Config
     public const read_write_split = false; // true: okumalar DB_READ_HOST replica'sına gider
     public const read_write_sticky = true; // yazmadan sonra aynı örnekte okumalar primary'de kalır
     public const orm_table_naming = 'inflector'; // 'legacy': BlogPost → blogposts (1.x davranışı)
+    public const encryption_allow_v1 = true; // false: Encryption v1 (<= 1.5.22) biçimini çözmez
     public const migration_lock_timeout = 60; // migrate/rollback eşzamanlılık kilidi için bekleme (saniye)
     public const orm_track_exists = false; // true: save() INSERT/UPDATE kararını yüklenmiş olmaya göre verir (3.0 varsayılanı)
     public const auto_adjust_chunk_size = true;
@@ -539,6 +540,7 @@ class Config
             'ORM_TABLE_NAMING' => self::orm_table_naming,
             'ORM_TRACK_EXISTS' => self::orm_track_exists,
             'MIGRATION_LOCK_TIMEOUT' => self::migration_lock_timeout,
+            'ENCRYPTION_ALLOW_V1' => self::encryption_allow_v1,
             'AUTO_ADJUST_CHUNK_SIZE' => self::auto_adjust_chunk_size,
             'MIN_CHUNK_SIZE' => self::min_chunk_size,
             'MAX_CHUNK_SIZE' => self::max_chunk_size,
