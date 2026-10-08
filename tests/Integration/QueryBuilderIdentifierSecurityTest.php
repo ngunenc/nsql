@@ -67,7 +67,10 @@ class QueryBuilderIdentifierSecurityTest extends DatabaseTestCase
     {
         $cases = [
             fn () => $this->builder()->table('test_table` WHERE 1=1 --'),
-            fn () => $this->builder()->table('test_table')->join('users u', 'test_table.id', '=', 'users.id'),
+            // `users u` takma ad olarak geçerlidir (v2.3.0+); takma ad da tanımlayıcı kuralına uymalı
+            fn () => $this->builder()->table('test_table')->join('users u; DROP TABLE x', 'test_table.id', '=', 'users.id'),
+            fn () => $this->builder()->table('test_table')->join('users u`--', 'test_table.id', '=', 'users.id'),
+            fn () => $this->builder()->table('test_table AS t, users'),
             fn () => $this->builder()->table('test_table')->join('users', 'test_table.id', '=', 'SLEEP(1)'),
             fn () => $this->builder()->table('test_table')->cross_join('users; DROP TABLE x'),
             fn () => $this->builder()->from($this->builder()->table('users'), 'u`, users'),

@@ -1004,21 +1004,27 @@ class QueryBuilder
         [$sql] = $this->compile_insert($rows, $counter, $params);
 
         // MySQL 8.0.20+ `VALUES(kolon)`'u deprecated sayar; 8.0.19+ satır takma adını destekler.
-        // MariaDB takma ad sözdizimini desteklemez, VALUES() ile devam eder (#91).
-        $row_alias = $driver === 'mysql' && self::mysql_supports_insert_alias($this->db->get_server_version())
-            ? $this->db->quote_identifier('nsql_new')
-            : null;
-        if ($row_alias !== null) {
-            $sql .= ' AS ' . $row_alias;
+        // Kolonlar da benzersiz adlarla takma adlandırılır: aksi halde raw ifadelerdeki çıplak kolon
+        // adı (`qty + 1`) tablo ile yeni satır arasında belirsiz olur (1052). MariaDB takma ad
+        // sözdizimini desteklemez, VALUES() ile devam eder (#91).
+        $new_columns = [];
+        if ($driver === 'mysql' && self::mysql_supports_insert_alias($this->db->get_server_version())) {
+            $first = reset($rows);
+            foreach (array_keys(is_array($first) ? $first : []) as $index => $name) {
+                $new_columns[(string) $name] = $this->db->quote_identifier('nsql_c' . $index);
+            }
+            $sql .= ' AS ' . $this->db->quote_identifier('nsql_new') . '(' . implode(', ', $new_columns) . ')';
         }
 
         $sets = [];
         foreach ($update_columns as $key => $value) {
             if (is_int($key)) {
-                $column = $this->compile_reference((string) $value);
+                $name = (string) $value;
+                $column = $this->compile_reference($name);
                 $sets[] = $column . ' = ' . match (true) {
                     $driver !== 'mysql' => "EXCLUDED.{$column}",
-                    $row_alias !== null => "{$row_alias}.{$column}",
+                    $new_columns !== [] => $new_columns[$this->unquote($name)]
+                        ?? throw new \InvalidArgumentException("upsert(): '{$name}' eklenen kolonlar arasında yok."),
                     default => "VALUES({$column})",
                 };
             } else {
