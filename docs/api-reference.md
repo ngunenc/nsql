@@ -929,6 +929,7 @@ READ_WRITE_SPLIT=true
 DB_READ_HOST=replica1,replica2   # birden fazlaysa rastgele seçilir
 # DB_READ_PORT / DB_READ_USER / DB_READ_PASS / DB_READ_NAME (verilmezse DB_* kullanılır)
 READ_WRITE_STICKY=true
+READ_WRITE_STICKY_SECONDS=0      # >0: yazmadan N sn sonra okumalar tekrar replica'ya (v2.4.0+)
 ```
 
 veya örnek bazında:
@@ -946,7 +947,7 @@ Yönlendirme kuralları:
 | `INSERT` / `UPDATE` / `DELETE` / DDL | primary |
 | Transaction içindeki her sorgu | primary |
 | `FOR UPDATE`, `FOR SHARE`, `LOCK IN SHARE MODE` | primary |
-| Bu örnekte yazma yapıldıktan sonraki okumalar (`READ_WRITE_STICKY=true`) | primary |
+| Bu örnekte yazma yapıldıktan sonraki okumalar (`READ_WRITE_STICKY=true`; `READ_WRITE_STICKY_SECONDS` > 0 ise o süre boyunca) | primary |
 
 - `stick_to_primary(true|false)` sticky durumunu elle yönetir (ör. istek başında `false`).
 - Query cache, `on_query()` dinleyicileri, PSR-3 logger ve `THROW_ON_ERROR` primary'de kalır; replica'daki hata `get_last_error()` / `QueryException` olarak primary üzerinden görünür.

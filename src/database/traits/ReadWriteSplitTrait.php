@@ -28,6 +28,8 @@ trait ReadWriteSplitTrait
     private ?self $reader = null;
     private bool $is_reader = false;
     private bool $sticky_primary = false;
+    /** Yazma sonrası sticky modun başladığı an (microtime); null = elle sabitlendi, süresiz */
+    private ?float $sticky_since = null;
 
     /**
      * Replica ayarı. Anahtarlar: host (string veya liste; birden fazlaysa rastgele seçilir),
@@ -50,6 +52,7 @@ trait ReadWriteSplitTrait
     public function stick_to_primary(bool $enabled = true): static
     {
         $this->sticky_primary = $enabled;
+        $this->sticky_since = null;
 
         return $this;
     }
@@ -61,6 +64,10 @@ trait ReadWriteSplitTrait
 
     private function should_use_reader(string $sql): bool
     {
+        if ($this->sticky_primary && $this->sticky_expired()) {
+            $this->sticky_primary = false;
+            $this->sticky_since = null;
+        }
         if ($this->is_reader || $this->sticky_primary || $this->get_transaction_level() > 0) {
             return false;
         }
@@ -95,7 +102,23 @@ trait ReadWriteSplitTrait
         }
         if ((bool) $this->setting('read_write_sticky', Config::read_write_sticky) && $this->resolve_read_config() !== null) {
             $this->sticky_primary = true;
+            $this->sticky_since = microtime(true);
         }
+    }
+
+    /**
+     * READ_WRITE_STICKY_SECONDS > 0 ise son yazmadan bu süre sonra okumalar tekrar replica'ya gider (#90).
+     * 0 (varsayılan): örnek ömrü boyunca primary. stick_to_primary(true) ile elle sabitleme süresizdir.
+     */
+    private function sticky_expired(): bool
+    {
+        if ($this->sticky_since === null) {
+            return false;
+        }
+
+        $seconds = (float) $this->setting('read_write_sticky_seconds', Config::read_write_sticky_seconds);
+
+        return $seconds > 0 && microtime(true) - $this->sticky_since >= $seconds;
     }
 
     /**
