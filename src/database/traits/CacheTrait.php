@@ -18,8 +18,10 @@ use Psr\SimpleCache\CacheInterface;
  */
 trait CacheTrait
 {
-    /** @var array<string, array{data: mixed, time: int, tags: list<string>, tables: list<string>}> */
+    /** @var array<string, array{data: mixed, time: int, tags: list<string>, tables: list<string>, versions?: array<string, mixed>|null}> */
     private array $query_cache = [];
+    /** @var array<string, array<string, true>> tablo => [ona bağımlı tablo/view => true] */
+    private array $cache_dependents = [];
     private bool $query_cache_enabled = false;
     private int $query_cache_timeout = 3600;
     private int $query_cache_size_limit = 100;
@@ -179,16 +181,48 @@ trait CacheTrait
             'tags' => array_values(array_unique(array_map('strval', $tags))),
             'tables' => array_values(array_unique(array_map(fn ($t) => strtolower(trim((string)$t)), $tables))),
         ];
+        if ($this->query_cache_store !== null) {
+            $entry['versions'] = $this->query_cache_store->put($key, $entry, $this->cache_ttl_for($entry['tables']));
+        }
         $this->remember_locally($key, $entry);
-        $this->query_cache_store?->put($key, $entry, $this->cache_ttl_for($entry['tables']));
 
         return true;
     }
 
     /**
+     * get_results() sonucunun cache'lenebileceği en fazla satır sayısı (#107).
+     * QUERY_CACHE_MAX_ROWS tanımlı değilse QUERY_CACHE_SIZE_LIMIT (2.2 davranışı).
+     */
+    private function query_cache_max_rows(): int
+    {
+        $max_rows = $this->setting('query_cache_max_rows');
+
+        return $max_rows === null || $max_rows === '' ? $this->query_cache_size_limit : (int) $max_rows;
+    }
+
+    /**
+     * Paylaşılan store varken süreç içi kayıt başka bir sürecin geçersiz kılmasından sonra
+     * kullanılmamalı (#103). Store'a yazılamamış (sürüm görüntüsü olmayan) kayıt doğrulanamaz.
+     *
+     * @param array{data: mixed, time: int, tags: list<string>, tables: list<string>, versions?: array<string, mixed>|null} $entry
+     */
+    private function local_entry_is_current(array $entry): bool
+    {
+        if ($this->query_cache_store === null || ! isset($entry['versions'])) {
+            return true;
+        }
+        $verify = $this->setting('query_cache_local_verify');
+        if ($verify !== null && ! (bool) $verify) {
+            return true;
+        }
+
+        return $this->query_cache_store->is_current($entry['tables'], $entry['tags'], $entry['versions']);
+    }
+
+    /**
      * Kaydı process içi LRU cache'e ve tablo/tag eşlemelerine ekler.
      *
-     * @param array{data: mixed, time: int, tags: list<string>, tables: list<string>} $entry
+     * @param array{data: mixed, time: int, tags: list<string>, tables: list<string>, versions?: array<string, mixed>|null} $entry
      */
     private function remember_locally(string $key, array $entry): void
     {
@@ -269,7 +303,7 @@ trait CacheTrait
 
         $cached = $this->query_cache[$key];
 
-        if (! $this->is_valid_cache($cached['time'], $cached['tables'])) {
+        if (! $this->is_valid_cache($cached['time'], $cached['tables']) || ! $this->local_entry_is_current($cached)) {
             $this->remove_cache_entry($key);
             $this->query_cache_misses++;
 
@@ -374,8 +408,7 @@ trait CacheTrait
         }
 
         $normalized = [];
-        foreach ((array)$tables as $table) {
-            $table = strtolower(trim((string)$table));
+        foreach ($this->with_cache_dependents((array) $tables) as $table) {
             $normalized[] = $table;
             foreach (array_keys($this->table_to_keys[$table] ?? []) as $key) {
                 $this->remove_cache_entry((string)$key);
@@ -386,6 +419,58 @@ trait CacheTrait
         if ($this->query_cache_store !== null && $this->in_cache_transaction()) {
             $this->deferred_store_tables += array_fill_keys($normalized, true);
         }
+    }
+
+    /**
+     * Tablo bağımlılığı tanımlar: $depends_on tablolarından biri geçersiz kılınınca $table'ın
+     * cache'i de temizlenir (#104). SQL metninden görülemeyen ilişkiler için kullanılır:
+     * view (`v_users` → `users`), FK CASCADE (`order_items` → `orders`) ve trigger'ların yazdığı tablolar.
+     *
+     * @param list<string> $depends_on
+     */
+    public function set_cache_dependency(string $table, array $depends_on): static
+    {
+        $table = strtolower(trim($table));
+        foreach ($depends_on as $source) {
+            $source = strtolower(trim((string) $source));
+            if ($source !== '' && $source !== $table) {
+                $this->cache_dependents[$source][$table] = true;
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return array<string, list<string>> tablo => ona bağımlı tablolar
+     */
+    public function get_cache_dependencies(): array
+    {
+        return array_map(static fn (array $dependents) => array_map('strval', array_keys($dependents)), $this->cache_dependents);
+    }
+
+    /**
+     * Tabloları ve onlara (dolaylı olarak da) bağımlı tabloları küçük harfli liste olarak döndürür.
+     *
+     * @param array<int|string, mixed> $tables
+     * @return list<string>
+     */
+    private function with_cache_dependents(array $tables): array
+    {
+        $result = [];
+        $queue = array_map(static fn ($t) => strtolower(trim((string) $t)), array_values($tables));
+        while ($queue !== []) {
+            $table = array_shift($queue);
+            if (isset($result[$table])) {
+                continue;
+            }
+            $result[$table] = true;
+            foreach (array_keys($this->cache_dependents[$table] ?? []) as $dependent) {
+                $queue[] = (string) $dependent;
+            }
+        }
+
+        return array_map('strval', array_keys($result));
     }
 
     /**

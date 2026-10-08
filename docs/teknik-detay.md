@@ -172,6 +172,24 @@ $stats  = $db->get_all_cache_stats();
 
 Yazma sorguları ilgili tabloların cache kayıtlarını geçersiz kılar; paylaşılan store'da bu süreçler arasında da geçerlidir.
 
+Paylaşılan store varken süreç içi (L1) isabette kaydın sürüm token'ları store'dan doğrulanır (`QUERY_CACHE_LOCAL_VERIFY=true`, varsayılan; v2.3.0+). Böylece queue worker, Swoole/RoadRunner gibi uzun ömürlü süreçler başka bir sürecin yazmasından sonra eski veriyi döndürmez. Doğrulama her isabette store'a tek bir `getMultiple` çağrısı yapar; kısa ömürlü PHP-FPM isteklerinde ek maliyeti istemiyorsanız `false` yapabilirsiniz.
+
+`get_results()` sonucu en fazla `QUERY_CACHE_MAX_ROWS` satırsa cache'lenir (tanımlı değilse `QUERY_CACHE_SIZE_LIMIT`, v2.3.0+).
+
+#### Geçersiz kılmanın sınırları
+
+Geçersiz kılma, SQL metninden tablo adlarını çıkararak yapılır. Aşağıdaki durumlarda kütüphane değişikliği **göremez**:
+
+| Durum | Örnek | Çözüm |
+|-------|-------|-------|
+| View | `SELECT ... FROM v_users` cache'lenir, `users` yazması onu temizlemez | `$db->set_cache_dependency('v_users', ['users'])` |
+| FK `ON DELETE/UPDATE CASCADE` | `orders` silinince `order_items` dolaylı değişir | `$db->set_cache_dependency('order_items', ['orders'])` |
+| Trigger | `orders` INSERT'i `audit_log`'a yazar | `$db->set_cache_dependency('audit_log', ['orders'])` |
+| Ham PDO ile yazma | `$db->get_pdo()->exec(...)` | Sonrasında `$db->invalidate_cache_by_table('tablo')` |
+| Başka uygulama / elle SQL | Veritabanına doğrudan yazan başka bir sistem | Paylaşılan store'da `invalidate_cache_by_table()` veya kısa `set_table_ttl()` |
+
+Bağımlılıklar geçişlidir (`orders` → `order_items` → `v_order_totals`) ve örnek bazında tanımlanır; uygulama başlangıcında `Nsql::connection()` örneğine bir kez tanımlayın.
+
 ### 2. Statement Cache (traits/StatementCacheTrait.php)
 
 Hazırlanmış statement'lar LRU/LFU ile önbelleklenir (`STATEMENT_CACHE_LIMIT`).

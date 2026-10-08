@@ -30,7 +30,7 @@ final class QueryCacheStore
     }
 
     /**
-     * @return array{data: mixed, time: int, tags: list<string>, tables: list<string>}|null
+     * @return array{data: mixed, time: int, tags: list<string>, tables: list<string>, versions: array<string, mixed>}|null
      */
     public function get(string $key): ?array
     {
@@ -51,29 +51,59 @@ final class QueryCacheStore
 
             $tables = array_values(array_map('strval', $entry['tables']));
             $tags = array_values(array_map('strval', $entry['tags']));
-            if ($this->versions($tables, $tags) !== $stored['versions']) {
+            $versions = $this->versions($tables, $tags);
+            if ($versions !== $stored['versions']) {
                 return null;
             }
 
-            return ['data' => $entry['data'] ?? null, 'time' => $entry['time'], 'tags' => $tags, 'tables' => $tables];
+            return ['data' => $entry['data'] ?? null, 'time' => $entry['time'], 'tags' => $tags, 'tables' => $tables, 'versions' => $versions];
         } catch (\Throwable) {
             return null;
         }
     }
 
     /**
+     * Kaydı yazar; yazılan sürüm görüntüsünü döndürür (store hatasında null).
+     *
      * @param array{data: mixed, time: int, tags: list<string>, tables: list<string>} $entry
+     * @return array<string, mixed>|null
      */
-    public function put(string $key, array $entry, int $ttl): void
+    public function put(string $key, array $entry, int $ttl): ?array
     {
         try {
+            $versions = $this->versions($entry['tables'], $entry['tags']);
             // Kayıt store'a string olarak yazılır: JSON tabanlı arka uçlarda (redis_adapter) da
             // satırlar stdClass olarak geri döner
             $this->cache->set($this->entry_key($key), [
-                'payload' => serialize($entry),
-                'versions' => $this->versions($entry['tables'], $entry['tags']),
+                'payload' => serialize([
+                    'data' => $entry['data'],
+                    'time' => $entry['time'],
+                    'tags' => $entry['tags'],
+                    'tables' => $entry['tables'],
+                ]),
+                'versions' => $versions,
             ], max(1, $ttl));
+
+            return $versions;
         } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Süreç içi kaydın sürüm görüntüsü hâlâ güncel mi? Başka bir süreç ilgili tablo/tag'i veya
+     * tüm cache'i geçersiz kıldıysa false (#103). Store okunamazsa güvenli tarafta false.
+     *
+     * @param list<string> $tables
+     * @param list<string> $tags
+     * @param array<string, mixed> $versions
+     */
+    public function is_current(array $tables, array $tags, array $versions): bool
+    {
+        try {
+            return $this->versions($tables, $tags) === $versions;
+        } catch (\Throwable) {
+            return false;
         }
     }
 

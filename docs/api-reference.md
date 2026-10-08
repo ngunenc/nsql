@@ -809,7 +809,19 @@ Eşiği aşan her sorgu `Yavaş sorgu` mesajıyla `warning` seviyesinde loglanı
 $db->set_query_cache_store($psr16Cache, prefix: 'myapp_qc_');
 ```
 
-`QUERY_CACHE_ENABLED=true` gerekir. Process içi LRU cache birinci seviye olarak kalır; ıskalamada paylaşılan store'a bakılır. Yazma sonrası tablo/tag/global geçersiz kılma tüm süreçlere yansır (store'da tutulan sürüm token'larıyla). Transaction içindeki yazmalar commit sonrası tekrar geçersiz kılınır. Store hataları sorguyu bozmaz (okuma = miss, yazma = yok sayılır).
+`QUERY_CACHE_ENABLED=true` gerekir. Process içi LRU cache birinci seviye olarak kalır; ıskalamada paylaşılan store'a bakılır. Yazma sonrası tablo/tag/global geçersiz kılma tüm süreçlere yansır (store'da tutulan sürüm token'larıyla). Process içi isabette de sürüm token'ları doğrulanır (`QUERY_CACHE_LOCAL_VERIFY=true`, v2.3.0+). Transaction içindeki yazmalar commit sonrası tekrar geçersiz kılınır. Store hataları sorguyu bozmaz (okuma = miss, yazma = yok sayılır).
+
+### Cache bağımlılıkları (v2.3.0+)
+
+SQL metninden görülemeyen ilişkiler (view, FK CASCADE, trigger) için:
+
+```php
+$db->set_cache_dependency('v_users', ['users']);          // users yazması v_users cache'ini de temizler
+$db->set_cache_dependency('order_items', ['orders']);     // ON DELETE CASCADE
+$db->get_cache_dependencies();                            // ['users' => ['v_users'], 'orders' => ['order_items']]
+```
+
+Sınırlar ve öneriler: [teknik-detay.md](teknik-detay.md#geçersiz-kılmanın-sınırları).
 
 ## 🔀 Çoklu Bağlantı ve Okuma/Yazma Ayrımı (v1.11.0+)
 
