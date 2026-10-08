@@ -254,6 +254,12 @@ $sm = Nsql::session();
 $sm->regenerate_id();
 ```
 
+> **Eşzamanlı istekler ve ID yenileme:** `regenerate_id()` (ve `regenerate_interval` ile otomatik yenileme) eski oturumu siler. Aynı anda gönderilen AJAX isteklerinden biri ID'yi yenilerken diğeri eski ID ile gelirse o istek oturumsuz kalır ve kullanıcı oturumu kapanmış görünebilir (PHP'nin bilinen davranışı).
+>
+> - ID'yi yalnızca yetki değiştiğinde yenileyin (giriş, çıkış, rol değişikliği); yoğun AJAX kullanan uygulamalarda `new SessionManager(['regenerate_interval' => 0])` ile periyodik yenilemeyi kapatın.
+> - Periyodik yenileme gerekiyorsa aralığı uzun tutun (ör. 900+ sn) ve istemcide oturum hatasında isteği bir kez tekrarlayın.
+> - `session.use_strict_mode=1` önerilir; nsql oturum fixation'a karşı geçersiz oturumda ID'yi zaten yeniler.
+
 ### Input Filtreleme
 
 ```php
