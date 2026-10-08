@@ -15,7 +15,8 @@ class ConnectOptionsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_connect_options_' . getmypid() . '.sqlite';
+        // Test başına benzersiz dosya: havuzda kalan bağlantı, silinmiş bir dosyaya yeniden verilmesin
+        $this->path = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_connect_options_' . bin2hex(random_bytes(6)) . '.sqlite';
     }
 
     protected function tearDown(): void

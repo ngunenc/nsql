@@ -144,7 +144,12 @@ class QueryBuilderIntegrationTest extends DatabaseTestCase
 
     public function test_full_join_sql_is_generated(): void
     {
-        // MySQL FULL JOIN desteklemez; yalnızca SQL üretimi doğrulanır.
+        // MySQL FULL JOIN desteklemez: SQL hatası yerine açıklayıcı hata (#101)
+        if ($this->db->get_driver_name() === 'mysql') {
+            $this->expectException(\LogicException::class);
+            $this->expectExceptionMessage('FULL JOIN');
+        }
+
         $query = $this->qb()->select('*')->from('qb_products')
             ->full_join('qb_users', 'qb_products.user_id', '=', 'qb_users.id')
             ->get_query();
