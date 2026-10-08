@@ -153,7 +153,8 @@ class Logger
     {
         $timestamp = $log_entry['timestamp'];
         $level = $log_entry['level'];
-        $message = $log_entry['message'];
+        // Mesaj kullanıcı girdisi veya çok satırlı SQL içerebilir; satır sonu kaçırılır (log injection)
+        $message = str_replace(["\r", "\n"], ['\r', '\n'], (string) $log_entry['message']);
         $context = !empty($log_entry['context']) ? ' | ' . json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE) : '';
 
         $log_line = "[$timestamp] [$level] $message$context" . PHP_EOL;

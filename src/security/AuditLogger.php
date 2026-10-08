@@ -148,16 +148,18 @@ class AuditLogger
      */
     private function write_log(array $log_entry): void
     {
+        // Metin alanları kullanıcı kontrolünde olabilir (identifier, User-Agent): satır sonu ve kontrol
+        // karakterleri kaçırılır, aksi halde sahte log satırı üretilebilir (log injection)
         $log_line = sprintf(
             "[%s] [%s] [%s] %s | IP: %s | UA: %s | SID: %s | %s\n",
             $log_entry['timestamp'],
-            strtoupper($log_entry['severity']),
-            $log_entry['event_type'],
-            $log_entry['description'],
-            $log_entry['ip_address'],
-            substr($log_entry['user_agent'], 0, 150),
-            $log_entry['session_id'],
-            json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE)
+            self::single_line(strtoupper((string) $log_entry['severity'])),
+            self::single_line((string) $log_entry['event_type']),
+            self::single_line((string) $log_entry['description']),
+            self::single_line((string) $log_entry['ip_address']),
+            self::single_line(substr((string) $log_entry['user_agent'], 0, 150)),
+            self::single_line((string) $log_entry['session_id']),
+            json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)
         );
 
         $this->rotate_if_needed($this->log_file);
@@ -173,11 +175,32 @@ class AuditLogger
         }
     }
 
+    /**
+     * `\r`, `\n`, `\t` ve diğer kontrol karakterlerini görünür kaçış dizilerine çevirir.
+     */
+    private static function single_line(string $value): string
+    {
+        return (string) preg_replace_callback(
+            '/[\x00-\x1F\x7F]/',
+            static fn (array $m): string => match ($m[0]) {
+                "\r" => '\r',
+                "\n" => '\n',
+                "\t" => '\t',
+                default => sprintf('\x%02X', ord($m[0])),
+            },
+            $value
+        );
+    }
+
     // Log yolu metodları: LogPathTrait
 
     private function rotate_if_needed(string $file): void
     {
         $max = (int)Config::get('log_max_size', 1048576); // 1MB varsayılan
+        if ($max <= 0) {
+            // Boş / geçersiz ayar her yazımda döndürmeye yol açmasın
+            $max = 1048576;
+        }
         if (is_file($file) && filesize($file) > $max) {
             $rotated = $file . '.' . date('Ymd_His');
             @rename($file, $rotated);
