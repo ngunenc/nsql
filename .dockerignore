@@ -1,0 +1,19 @@
+# İmaja girmemesi gerekenler: gizli bilgiler, anahtarlar, loglar ve geliştirme dosyaları
+.git
+.github
+.cursor
+.env
+.env.*
+!.env.example
+storage/keys/*
+!storage/keys/.gitkeep
+!storage/keys/README.md
+storage/logs/*
+!storage/logs/.gitkeep
+vendor
+coverage
+tests
+benchmarks
+.phpunit.cache
+*.log
+*.key
