@@ -20,7 +20,7 @@ RUN (pecl install redis && docker-php-ext-enable redis) || echo "redis extension
 RUN (pecl install memcached && docker-php-ext-enable memcached) || echo "memcached extension skipped"
 
 # Composer'ı yükle
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Çalışma dizinini ayarla
 WORKDIR /var/www/html
@@ -31,9 +31,12 @@ COPY . .
 # Composer bağımlılıkları — hata olursa build fail olmalı
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# İzinleri ayarla
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+# Kod root'a ait kalır (PHP süreci kendi kodunu değiştiremez); yalnızca storage/ yazılabilir.
+# Anahtar dizini başkalarınca okunamaz.
+RUN mkdir -p storage/logs storage/keys \
+    && chown -R www-data:www-data storage \
+    && chmod -R u=rwX,g=rX,o= storage \
+    && chmod 700 storage/keys
 
 # Port'u expose et
 EXPOSE 9000
