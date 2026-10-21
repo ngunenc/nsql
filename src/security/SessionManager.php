@@ -27,6 +27,8 @@ class SessionManager
         'X-Content-Type-Options' => 'nosniff',
     ];
     private const hsts_default = 'max-age=31536000; includeSubDomains';
+    /** regenerate_id() sonrası eski oturum ID'sinin geçerli kaldığı süre (eşzamanlı istekler) */
+    private const regenerate_grace = 60;
 
     /**
      * @param array $config
@@ -34,6 +36,8 @@ class SessionManager
      *   - hsts: false (varsayılan) | true | string — yalnızca HTTPS isteklerde gönderilir
      *   - fingerprint_ip: false (varsayılan) | 'prefix' (IPv4 /24, IPv6 /64) | 'full'
      *   - send_headers: bool (varsayılan true)
+     *   - auto_validate: bool (varsayılan true) — start() sonunda validate() çalışır; süresi dolmuş,
+     *     limit aşmış veya parmak izi tutmayan oturum exception yerine temiz bir oturumla değiştirilir
      */
     public function __construct(array $config = [])
     {
@@ -52,6 +56,7 @@ class SessionManager
             'secure_headers' => self::secure_headers,
             'hsts' => false,
             'send_headers' => true,
+            'auto_validate' => true,
         ], $config);
     }
 
@@ -68,6 +73,9 @@ class SessionManager
         }
 
         if (session_status() !== PHP_SESSION_ACTIVE) {
+            // Strict mode: sunucuda olmayan (istemcinin uydurduğu) oturum ID'si kabul edilmez
+            ini_set('session.use_strict_mode', '1');
+
             if (! headers_sent() && filter_var(ini_get('session.use_cookies'), FILTER_VALIDATE_BOOLEAN)) {
                 session_set_cookie_params([
                     'lifetime' => $this->config['lifetime'],
@@ -97,17 +105,51 @@ class SessionManager
                 session_regenerate_id(true);
             }
 
-            $now = time();
-            $_SESSION['_created'] = $now;
-            $_SESSION['_last_activity'] = $now;
-            $_SESSION['_regenerated_at'] = $now;
-            $_SESSION['_requests'] = 0;
-            $_SESSION['_fingerprint'] = $this->generate_fingerprint();
+            $this->mark_new_session();
         }
 
         $this->initialized = true;
 
+        if ($this->config['auto_validate']) {
+            try {
+                $this->validate();
+            } catch (RuntimeException) {
+                // validate() geçersiz oturumu yok etti; kullanıcı yeni (boş) oturumla devam eder
+                $this->start_fresh();
+            }
+        }
+
         return true;
+    }
+
+    /**
+     * Yok edilen oturumun yerine yeni ID ile boş, işaretli bir oturum açar.
+     */
+    private function start_fresh(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy();
+        }
+        if (! headers_sent() || ! filter_var(ini_get('session.use_cookies'), FILTER_VALIDATE_BOOLEAN)) {
+            session_id((string) session_create_id());
+        }
+        if (! session_start()) {
+            throw new RuntimeException('Session başlatılamadı');
+        }
+
+        $_SESSION = [];
+        $this->mark_new_session();
+        $this->initialized = true;
+    }
+
+    private function mark_new_session(): void
+    {
+        $now = time();
+        $_SESSION['_created'] = $now;
+        $_SESSION['_last_activity'] = $now;
+        $_SESSION['_regenerated_at'] = $now;
+        $_SESSION['_requests'] = 0;
+        $_SESSION['_fingerprint'] = $this->generate_fingerprint();
     }
 
     /**
@@ -158,6 +200,13 @@ class SessionManager
 
         $now = time();
 
+        // regenerate_id() sonrası eski ID: eşzamanlı istekler için kısa süre geçerli, sonra kullanılamaz
+        if (isset($_SESSION['_destroyed']) && $now - (int) $_SESSION['_destroyed'] > self::regenerate_grace) {
+            $this->destroy();
+
+            throw new RuntimeException('Session ID yenilenmiş; eski ID artık geçersiz');
+        }
+
         if ($now - $_SESSION['_created'] > $this->config['max_lifetime']) {
             $this->destroy();
 
@@ -184,7 +233,7 @@ class SessionManager
 
         $interval = (int) $this->config['regenerate_interval'];
         $regenerated_at = (int) ($_SESSION['_regenerated_at'] ?? $_SESSION['_created']);
-        if ($interval > 0 && $now - $regenerated_at >= $interval) {
+        if ($interval > 0 && $now - $regenerated_at >= $interval && ! isset($_SESSION['_destroyed'])) {
             $this->regenerate_id();
         }
 
@@ -193,24 +242,51 @@ class SessionManager
     }
 
     /**
-     * Session ID'sini güvenli şekilde yeniler
+     * Session ID'sini yeniler. Eski oturum hemen silinmez: `_destroyed` işaretiyle saklanır ve
+     * regenerate_grace (60 sn) boyunca kabul edilir; aynı anda gelen istekler (AJAX, sekmeler)
+     * oturumsuz kalmaz. Süre dolunca eski ID validate()'te geçersizdir.
+     *
+     * @param bool $delete_old true: eski oturum hemen silinir (oturum açma / yetki değişikliği; bkz. login())
      */
-    public function regenerate_id(): bool
+    public function regenerate_id(bool $delete_old = false): bool
     {
         if (! $this->initialized) {
             throw new RuntimeException('Session başlatılmamış');
         }
 
         $old_session = $_SESSION;
+        if (! $delete_old) {
+            // session_regenerate_id(false) mevcut veriyi eski ID'ye yazar; eski kopya işaretli kalır
+            $_SESSION['_destroyed'] = time();
+        }
 
-        if (! session_regenerate_id(true)) {
+        if (! session_regenerate_id($delete_old)) {
+            $_SESSION = $old_session;
+
             return false;
         }
 
         $_SESSION = $old_session;
+        unset($_SESSION['_destroyed']);
         $_SESSION['_regenerated_at'] = time();
 
         return true;
+    }
+
+    /**
+     * Oturum açıldıktan / yetki değiştikten sonra çağrılır (session fixation): oturum ID'si eski
+     * oturum silinerek yenilenir ve CSRF token'ı döndürülür. Kimlik bilgisini oturuma bundan sonra yazın.
+     */
+    public function login(): void
+    {
+        if (! $this->initialized) {
+            throw new RuntimeException('Session başlatılmamış');
+        }
+
+        if (! $this->regenerate_id(true)) {
+            throw new RuntimeException('Session ID yenilenemedi');
+        }
+        self::rotate_csrf_token();
     }
 
     /**

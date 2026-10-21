@@ -157,6 +157,147 @@ class SessionManagerTest extends TestCase
         $manager->validate();
     }
 
+    #[RunInSeparateProcess]
+    public function test_start_enables_strict_mode(): void
+    {
+        $this->prepare_session_ini();
+        ini_set('session.use_strict_mode', '0');
+
+        (new SessionManager(['send_headers' => false]))->start();
+
+        $this->assertSame('1', ini_get('session.use_strict_mode'));
+        session_destroy();
+    }
+
+    /**
+     * Önceden secure_session_start() yalnızca start() çağırıyordu; zaman aşımı hiç uygulanmıyordu.
+     */
+    #[RunInSeparateProcess]
+    public function test_start_replaces_expired_session_with_fresh_one(): void
+    {
+        $this->prepare_session_ini();
+        (new SessionManager(['send_headers' => false]))->start();
+        $_SESSION['user_id'] = 42;
+        $_SESSION['_last_activity'] = time() - 3600;
+        $id = session_id();
+        session_write_close();
+
+        session_id($id);
+        (new SessionManager(['send_headers' => false, 'lifetime' => 1800]))->start();
+
+        $this->assertSame(PHP_SESSION_ACTIVE, session_status());
+        $this->assertNotSame($id, session_id());
+        $this->assertArrayNotHasKey('user_id', $_SESSION);
+        $this->assertArrayHasKey('_fingerprint', $_SESSION);
+        session_destroy();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_start_replaces_hijacked_session(): void
+    {
+        $this->prepare_session_ini();
+        (new SessionManager(['send_headers' => false]))->start();
+        $_SESSION['user_id'] = 42;
+        $id = session_id();
+        session_write_close();
+
+        $_SERVER['HTTP_USER_AGENT'] = 'attacker-agent';
+        session_id($id);
+        (new SessionManager(['send_headers' => false]))->start();
+
+        $this->assertNotSame($id, session_id());
+        $this->assertArrayNotHasKey('user_id', $_SESSION);
+        session_destroy();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_auto_validate_can_be_disabled(): void
+    {
+        $this->prepare_session_ini();
+        (new SessionManager(['send_headers' => false]))->start();
+        $_SESSION['_last_activity'] = time() - 3600;
+        $id = session_id();
+        session_write_close();
+
+        session_id($id);
+        (new SessionManager(['send_headers' => false, 'auto_validate' => false]))->start();
+
+        $this->assertSame($id, session_id());
+        session_destroy();
+    }
+
+    /**
+     * Eski ID tolerans süresinde kullanılabilir (eşzamanlı istek), sonra geçersizdir.
+     */
+    #[RunInSeparateProcess]
+    public function test_old_id_after_regeneration_has_grace_period(): void
+    {
+        $this->prepare_session_ini();
+        $manager = new SessionManager(['send_headers' => false]);
+        $manager->start();
+        $_SESSION['user_id'] = 7;
+        $old_id = session_id();
+
+        $this->assertTrue($manager->regenerate_id());
+        $new_id = session_id();
+        $this->assertNotSame($old_id, $new_id);
+        $this->assertArrayNotHasKey('_destroyed', $_SESSION);
+        session_write_close();
+
+        // Eşzamanlı istek eski ID ile geliyor: veri yerinde, oturum geçerli
+        session_id($old_id);
+        (new SessionManager(['send_headers' => false]))->start();
+        $this->assertSame($old_id, session_id());
+        $this->assertSame(7, $_SESSION['user_id']);
+        $this->assertArrayHasKey('_destroyed', $_SESSION);
+
+        // Tolerans süresi doldu
+        $_SESSION['_destroyed'] = time() - 61;
+        session_write_close();
+        session_id($old_id);
+        (new SessionManager(['send_headers' => false]))->start();
+        $this->assertNotSame($old_id, session_id());
+        $this->assertArrayNotHasKey('user_id', $_SESSION);
+        session_destroy();
+    }
+
+    #[RunInSeparateProcess]
+    public function test_login_deletes_old_session_and_rotates_csrf(): void
+    {
+        $this->prepare_session_ini();
+        $manager = new SessionManager(['send_headers' => false]);
+        $manager->start();
+        $token = SessionManager::get_csrf_token();
+        $old_id = session_id();
+
+        $manager->login();
+        $this->assertNotSame($old_id, session_id());
+        $this->assertNotSame($token, SessionManager::get_csrf_token());
+        $_SESSION['user_id'] = 1;
+        session_write_close();
+
+        // Saldırganın bildiği eski ID'de oturum verisi yok
+        session_id($old_id);
+        session_start();
+        $this->assertArrayNotHasKey('user_id', $_SESSION);
+        $this->assertArrayNotHasKey('_fingerprint', $_SESSION);
+        session_destroy();
+    }
+
+    public function test_facade_rejects_conflicting_session_config(): void
+    {
+        \nsql\database\Nsql::end_session();
+        try {
+            \nsql\database\Nsql::session(['samesite' => 'Lax']);
+            $this->assertSame(\nsql\database\Nsql::session(), \nsql\database\Nsql::session(['samesite' => 'Lax']));
+
+            $this->expectException(\LogicException::class);
+            \nsql\database\Nsql::session(['samesite' => 'Strict']);
+        } finally {
+            (fn () => [self::$session, self::$session_config] = [null, []])->bindTo(null, \nsql\database\Nsql::class)();
+        }
+    }
+
     public function test_http_request_gets_no_hsts_and_no_xss_header(): void
     {
         $headers = (new SessionManager(['hsts' => true]))->security_headers();
