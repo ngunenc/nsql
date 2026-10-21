@@ -56,6 +56,49 @@ class SensitiveDataFilterTest extends TestCase
         );
     }
 
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function driver_messages(): array
+    {
+        return [
+            'mysql duplicate' => [
+                "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'ali@x.com' for key 'users.email'",
+                "SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry '***' for key 'users.email'",
+            ],
+            'mysql incorrect value' => [
+                "SQLSTATE[HY000]: General error: 1366 Incorrect integer value: 'gizli' for column 'age' at row 1",
+                "SQLSTATE[HY000]: General error: 1366 Incorrect integer value: '***' for column 'age' at row 1",
+            ],
+            'mysql truncated' => [
+                "1292 Truncated incorrect DOUBLE value: '4111-1111'",
+                "1292 Truncated incorrect DOUBLE value: '***'",
+            ],
+            'mysql identifiers kept' => [
+                "SQLSTATE[42S22]: Column not found: 1054 Unknown column 'missing_column' in 'field list'",
+                "SQLSTATE[42S22]: Column not found: 1054 Unknown column 'missing_column' in 'field list'",
+            ],
+            'pgsql unique' => [
+                'DETAIL:  Key (email)=(ali@x.com) already exists.',
+                'DETAIL:  Key (email)=(***) already exists.',
+            ],
+            'pgsql invalid input' => [
+                'ERROR:  invalid input syntax for type integer: "gizli"',
+                'ERROR:  invalid input syntax for type integer: "***"',
+            ],
+            'pgsql relation kept' => [
+                'ERROR:  relation "missing_table" does not exist',
+                'ERROR:  relation "missing_table" does not exist',
+            ],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('driver_messages')]
+    public function test_driver_error_messages_mask_values_but_keep_identifiers(string $message, string $expected): void
+    {
+        $this->assertSame($expected, SensitiveDataFilter::mask_error_message($message));
+    }
+
     public function test_positional_params_are_not_treated_as_keys(): void
     {
         $this->assertSame(['a', 'b'], SensitiveDataFilter::mask_array(['a', 'b']));

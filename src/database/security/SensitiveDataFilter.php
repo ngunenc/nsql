@@ -92,6 +92,28 @@ class SensitiveDataFilter
     }
 
     /**
+     * Sürücü hata mesajındaki veri değerlerini maskeler; tanımlayıcılar (kolon, tablo, anahtar adı)
+     * korunur. MySQL tanımlayıcıları da tek tırnakla yazdığından (`Unknown column 'x'`) yalnızca
+     * değer taşıyan kalıplar maskelenir:
+     * - MySQL: `Duplicate entry 'ali@x.com'`, `Incorrect integer value: 'abc'`, `Truncated incorrect … value: '…'`
+     * - PostgreSQL: `Key (email)=(ali@x.com)`, `invalid input syntax for type integer: "abc"`
+     */
+    public static function mask_error_message(string $message): string
+    {
+        $quoted = "'(?:[^'\\\\]|\\\\.|'')*'";
+
+        return (string) preg_replace(
+            [
+                '/\b(entry|value:?)(\s+)' . $quoted . '/i',
+                '/(\bKey \([^)]*\)=\()(.*?)(\)\s+(?:already exists|is not present|is still referenced))/i',
+                '/(\bfor type [\w ]+:\s*)"(?:[^"\\\\]|\\\\.)*"/i',
+            ],
+            ["$1$2'***'", '$1***$3', '$1"***"'],
+            $message
+        );
+    }
+
+    /**
      * Statik kısayol: diziyi varsayılan + yapılandırılmış anahtarlarla maskeler.
      */
     public static function mask_array(array $data): array
