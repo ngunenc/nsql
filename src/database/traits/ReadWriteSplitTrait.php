@@ -225,7 +225,8 @@ trait ReadWriteSplitTrait
                 debug: $this->debug_mode,
                 driver: $args['driver'],
                 port: isset($config['port']) ? (int) $config['port'] : $args['port'],
-                options: $this->options
+                options: $this->options,
+                dsn_params: $this->dsn_params
             );
         } catch (\Throwable $e) {
             $this->log_error('Okuma replica\'sına bağlanılamadı; sorgular primary\'de çalışıyor: ' . $e->getMessage(), [], Logger::WARNING);
