@@ -6,8 +6,9 @@ use nsql\database\exceptions\QueryException;
 use nsql\database\security\QueryAnalyzer;
 
 /**
- * Regex tabanlı sorgu denetimi (tanı aracı). Sorgu yürütmeye otomatik bağlı değildir ve SQL
- * injection koruması sağlamaz; koruma parametre bağlama ve quote_identifier() doğrulamasıdır.
+ * Regex tabanlı sorgu denetimi (tanı aracı). Varsayılan kapalıdır; enable_query_analysis() ile her
+ * sorgu çalıştırılmadan önce denetlenir ve kritik bulguda QueryException fırlatılır. SQL injection
+ * koruması sağlamaz; koruma parametre bağlama ve quote_identifier() doğrulamasıdır.
  */
 trait QueryAnalyzerTrait
 {

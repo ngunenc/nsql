@@ -283,6 +283,56 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertFalse($stopped);
     }
 
+    public function test_chunk_cursor_is_not_bypassed_by_or_where(): void
+    {
+        $seen = [];
+        $pages = 0;
+        $this->db->table('p_products')
+            ->where('category', '=', 'kirtasiye')
+            ->or_where('category', '=', 'mutfak')
+            ->chunk(1, function (array $rows) use (&$seen, &$pages) {
+                foreach ($rows as $row) {
+                    $seen[] = $row->name;
+                }
+
+                // Hata durumunda imleç OR'un bir koluna bağlanıp aynı satırları sonsuza dek döndürürdü
+                return ++$pages < 10;
+            });
+
+        $this->assertSame(['Kalem', 'Defter', 'Kupa'], $seen);
+    }
+
+    public function test_constraint_is_and_ed_with_or_conditions(): void
+    {
+        // Kısıt olmadan `price < 100 AND category = 'kirtasiye' OR category IS NULL` Lamba'yı (120) da getirirdi
+        $builder = $this->db->table('p_products')
+            ->constrain(fn ($q) => $q->where('price', '<', 100))
+            ->where('category', '=', 'kirtasiye')
+            ->or_where_null('category');
+
+        $this->assertSame(['Kalem', 'Defter'], (clone $builder)->order_by('id')->pluck('name'));
+        $this->assertSame(2, $builder->count());
+        $this->assertTrue($builder->exists());
+    }
+
+    public function test_raw_binding_repeated_and_prefixed_names(): void
+    {
+        $builder = $this->db->table('p_products')->where_raw('price = :p OR price = :p * 4', ['p' => 10]);
+        [$sql, $params] = $builder->compile();
+        $this->assertCount(2, $params, $sql);
+        $this->assertSame(['Kalem', 'Kupa'], $builder->order_by('id')->pluck('name'));
+
+        // Üretilen `:__pN` adı kullanıcı binding'iyle çakışmaz
+        $names = $this->db->table('p_products')
+            ->where_raw('price > :min AND price < :__p0', ['min' => 10, '__p0' => 50])
+            ->order_by('id')
+            ->pluck('name');
+        $this->assertSame(['Defter', 'Kupa'], $names);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->db->table('p_products')->where_raw('price > 0', ['unused' => 1])->compile();
+    }
+
     public function test_write_operations(): void
     {
         $id = $this->db->table('p_products')->insert(['sku' => 'D1', 'name' => 'Masa', 'category' => 'mobilya', 'price' => 900]);
