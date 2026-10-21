@@ -135,7 +135,18 @@ class Logger
      */
     private function write_structured_log(array $log_entry): void
     {
-        $log_line = json_encode($log_entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        // Geçersiz UTF-8 (ör. User-Agent'ta tek bir bayt) json_encode'u false yapar ve kayıt kaybolurdu;
+        // saldırgan bununla iz silebilirdi. Bozuk baytlar değiştirilir, yine de olmazsa düz metne düşülür.
+        $json = json_encode(
+            $log_entry,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR
+        );
+        if ($json === false) {
+            $this->write_text_log($log_entry);
+
+            return;
+        }
+        $log_line = $json . PHP_EOL;
 
         $result = @file_put_contents(
             $this->log_file,
@@ -157,7 +168,9 @@ class Logger
         $level = $log_entry['level'];
         // Mesaj kullanıcı girdisi veya çok satırlı SQL içerebilir; satır sonu kaçırılır (log injection)
         $message = str_replace(["\r", "\n"], ['\r', '\n'], (string) $log_entry['message']);
-        $context = !empty($log_entry['context']) ? ' | ' . json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE) : '';
+        $context = !empty($log_entry['context'])
+            ? ' | ' . json_encode($log_entry['context'], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR)
+            : '';
 
         $log_line = "[$timestamp] [$level] $message$context" . PHP_EOL;
 

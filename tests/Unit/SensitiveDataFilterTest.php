@@ -44,6 +44,18 @@ class SensitiveDataFilterTest extends TestCase
         $this->assertSame(1, $masked['nested']['ok']);
     }
 
+    public function test_sql_literals_and_driver_messages_are_masked(): void
+    {
+        $this->assertSame(
+            "SQLSTATE[23000]: Duplicate entry '***' for key '***'",
+            SensitiveDataFilter::mask_sql_literals("SQLSTATE[23000]: Duplicate entry 'ali@x.com' for key 'users.email'")
+        );
+        $this->assertSame(
+            "SELECT * FROM \"Users\" WHERE a = '***' AND b = '***' AND c = 1",
+            SensitiveDataFilter::mask_sql_literals("SELECT * FROM \"Users\" WHERE a = 'it''s' AND b = 'x\\'y' AND c = 1")
+        );
+    }
+
     public function test_positional_params_are_not_treated_as_keys(): void
     {
         $this->assertSame(['a', 'b'], SensitiveDataFilter::mask_array(['a', 'b']));

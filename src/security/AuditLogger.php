@@ -35,11 +35,22 @@ class AuditLogger
             'description' => $description,
             'ip_address' => SecurityManager::get_client_ip(),
             'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
-            'session_id' => session_id() ?: 'no_session',
+            // Ham session ID log'a yazılmaz (log sızarsa oturum ele geçirilir); ilişkilendirme için özet yeter
+            'session_id' => self::session_reference(),
             'context' => $this->sanitize_sensitive_data($context),
         ];
 
         $this->write_log($log_entry);
+    }
+
+    /**
+     * Oturumu log satırları arasında ilişkilendirmek için ID'nin kısa özeti.
+     */
+    private static function session_reference(): string
+    {
+        $id = session_id();
+
+        return $id === '' || $id === false ? 'no_session' : 'sha256:' . substr(hash('sha256', $id), 0, 16);
     }
 
     /**
@@ -204,6 +215,25 @@ class AuditLogger
         if (is_file($file) && filesize($file) > $max) {
             $rotated = $file . '.' . date('Ymd_His');
             @rename($file, $rotated);
+            $this->cleanup_rotated($file);
+        }
+    }
+
+    /**
+     * Döndürülmüş dosyalardan LOG_MAX_FILES (varsayılan 10) en yenisi kalır; disk dolmaz.
+     */
+    private function cleanup_rotated(string $file): void
+    {
+        $keep = max(1, (int) Config::get('log_max_files', 10));
+        $rotated = glob($file . '.*') ?: [];
+        if (count($rotated) <= $keep) {
+            return;
+        }
+
+        // Ad sonu tarih damgası (Ymd_His) olduğundan ters alfabetik sıra = yeniden eskiye
+        rsort($rotated, SORT_STRING);
+        foreach (array_slice($rotated, $keep) as $old) {
+            @unlink($old);
         }
     }
 }
