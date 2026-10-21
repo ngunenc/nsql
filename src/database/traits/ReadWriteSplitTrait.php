@@ -22,6 +22,10 @@ use PDOStatement;
  */
 trait ReadWriteSplitTrait
 {
+    /** Okuma gibi görünen ama primary'de çalışması gereken SELECT fonksiyonları */
+    private static string $primary_only_functions = '/\b(?:GET_LOCK|RELEASE_LOCK|RELEASE_ALL_LOCKS|IS_FREE_LOCK|IS_USED_LOCK'
+        . '|NEXTVAL|SETVAL|LASTVAL|CURRVAL|LAST_INSERT_ID|PG_(?:TRY_)?ADVISORY_\w+|SLEEP|PG_SLEEP)\s*\(/i';
+
     /** @var array<string, mixed>|null */
     private ?array $read_config = null;
     private bool $read_config_resolved = false;
@@ -86,6 +90,12 @@ trait ReadWriteSplitTrait
         // SELECT ... INTO (OUTFILE, @var, PostgreSQL'de yeni tablo) yan etkilidir; literal'de geçen
         // "into" da primary'ye gider (güvenli yön)
         if (preg_match('/\bFOR\s+(UPDATE|SHARE)\b|\bLOCK\s+IN\s+SHARE\s+MODE\b|\bINTO\b/i', $sql)) {
+            return false;
+        }
+
+        // Yan etkili / oturuma bağlı fonksiyonlar: kilit (GET_LOCK, advisory lock), sequence (nextval) ve
+        // bağlantıya özgü değerler (LAST_INSERT_ID, lastval) replica'da yanlış sunucuda çalışır
+        if (preg_match(self::$primary_only_functions, $sql)) {
             return false;
         }
 

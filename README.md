@@ -571,7 +571,15 @@ $kullanicilar = $db->get_results("SELECT * FROM kullanicilar");
 foreach ($db->get_yield("SELECT * FROM buyuk_tablo") as $row) {
     // Hafıza dostu işlemler
 }
+
+// Kullanıcı girdisiyle arama (v2.5.0+): `%` ve `_` joker değil, düz karakter olarak aranır
+$sonuc = $db->table('urunler')
+    ->where_like('ad', $_GET['q'])                 // contains (varsayılan) | starts | ends | exact
+    ->or_where_like('sku', $_GET['q'], 'starts')
+    ->get();
 ```
+
+`where('ad', 'LIKE', "%{$q}%")` kullanıcı `%` / `_` gönderdiğinde her satırla eşleşir veya pahalı taramaya yol açar; girdiyle arama için `where_like()` kullanın.
 
 ### Veri Manipülasyonu
 
@@ -664,6 +672,8 @@ Sık kullanılan sorgular için otomatik önbellekleme yapılır. LRU (Least Rec
 ### Connection Pool
 
 Bağlantılar havuzda tutulur ve gerektiğinde yeniden kullanılır, böylece performans artışı sağlanır.
+
+> **`PERSISTENT_CONNECTION=true` uyarısı:** Kalıcı bağlantı PHP-FPM worker'ı içinde istekler arasında paylaşılır; oturum durumu (`SET time_zone`, `SET @degisken`, geçici tablolar, `SET search_path`) bir sonraki isteğe taşınır. Havuza iadede yalnızca açık transaction geri alınır. Oturum ayarı değiştiren uygulamalarda kalıcı bağlantıyı kapalı tutun veya her istek başında ayarları yeniden yapın.
 
 ### Debug Modu
 
