@@ -50,8 +50,71 @@ class ValidatorTest extends TestCase
             'string' => ['s', ['string' => true], true],
             'custom callable' => [4, ['even' => fn ($v) => $v % 2 === 0], true],
             'custom callable fail' => [3, ['even' => fn ($v) => $v % 2 === 0], false],
-            'unknown non-callable rule passes' => [3, ['something' => 'x'], true],
+            'url javascript scheme' => ["javascript://x%0Aalert(1)", ['url' => true], false],
+            'url custom schemes' => ['ftp://example.com/f', ['url' => ['ftp']], true],
+            'url scheme not allowed' => ['ftp://example.com/f', ['url' => true], false],
+            'list rules' => ['a@example.com', ['required', 'email'], true],
+            'list rules fail' => ['geçersiz', ['required', 'email'], false],
+            'list required null' => [null, ['required', 'email'], false],
+            'parametrized min' => [17, ['required', 'integer', 'min:18', 'max:100'], false],
+            'parametrized ok' => [18, ['integer', 'min:18', 'max:100'], true],
+            'parametrized in' => ['b', ['in:a,b'], true],
+            'parametrized in fail' => ['c', ['in:a,b'], false],
+            'parametrized length' => ['abcd', ['max_length:3'], false],
+            'nullable null' => [null, ['nullable', 'email'], true],
+            'nullable empty string' => ['', ['nullable' => true, 'email' => true], true],
+            'nullable value checked' => ['x', ['nullable', 'email'], false],
+            'required false skips check' => [null, ['required' => false], true],
+            'invokable object' => [4, ['even' => new class () {
+                public function __invoke(mixed $v): bool
+                {
+                    return $v % 2 === 0;
+                }
+            }], true],
         ];
+    }
+
+    /**
+     * @return array<string, array{array<int|string, mixed>}>
+     */
+    public static function invalid_rule_sets(): array
+    {
+        return [
+            'unknown rule' => [['something' => 'x']],
+            'typo' => [['requird' => true]],
+            'string callable is not called' => [['format' => 'strlen']],
+            'unknown list rule' => [['requird']],
+            'closure in list' => [[fn () => true]],
+        ];
+    }
+
+    /**
+     * Yazım hatası / desteklenmeyen kural sessizce geçmez; validate_many() bunu alan hatası olarak yutmaz.
+     *
+     * @param array<int|string, mixed> $rules
+     */
+    #[DataProvider('invalid_rule_sets')]
+    public function test_unknown_rules_are_programming_errors(array $rules): void
+    {
+        try {
+            Validator::validate('x', $rules);
+            $this->fail('LogicException bekleniyordu');
+        } catch (\LogicException $e) {
+            $this->assertNotInstanceOf(InvalidArgumentException::class, $e);
+        }
+
+        $this->expectException(\LogicException::class);
+        Validator::validate_many(['f' => 'x'], ['f' => $rules]);
+    }
+
+    public function test_documented_list_rules_report_errors(): void
+    {
+        $errors = Validator::validate_many(
+            ['email' => 'geçersiz', 'age' => 5],
+            ['email' => ['required', 'email'], 'age' => ['required', 'integer', 'min:18', 'max:100']]
+        );
+
+        $this->assertSame(['email', 'age'], array_keys($errors));
     }
 
     /**

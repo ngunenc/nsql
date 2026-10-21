@@ -22,10 +22,22 @@ class Validator
      * @param mixed $value Validasyon edilecek değer
      * @param array $rules Validation kuralları
      * @return bool
-     * @throws InvalidArgumentException
+     * @throws InvalidArgumentException Değer bir kurala uymuyorsa
+     * @throws \LogicException Kural bilinmiyorsa (yazım hatası) veya kural listesi geçersizse
      */
     public static function validate(mixed $value, array $rules): bool
     {
+        $rules = self::normalize_rules($rules);
+
+        // nullable: boş değerde diğer kurallar uygulanmaz (required ayrıca verilmediyse)
+        if (array_key_exists('nullable', $rules)) {
+            $nullable = (bool) $rules['nullable'];
+            unset($rules['nullable']);
+            if ($nullable && ($value === null || $value === '') && empty($rules['required'])) {
+                return true;
+            }
+        }
+
         foreach ($rules as $rule => $constraint) {
             if (!self::apply_rule($value, $rule, $constraint)) {
                 throw new InvalidArgumentException("Validation failed for rule: $rule");
@@ -36,12 +48,44 @@ class Validator
     }
 
     /**
+     * Kuralları `kural => kısıt` biçimine çevirir: liste öğesi `'email'` → `['email' => true]`,
+     * `'min:18'` → `['min' => '18']`, `'in:a,b'` → `['in' => ['a', 'b']]`.
+     *
+     * @param array<int|string, mixed> $rules
+     * @return array<string, mixed>
+     */
+    private static function normalize_rules(array $rules): array
+    {
+        $normalized = [];
+        foreach ($rules as $rule => $constraint) {
+            if (is_string($rule)) {
+                $normalized[$rule] = $constraint;
+                continue;
+            }
+
+            // Liste öğesi: closure/nesne özel kural olamaz (adı yok)
+            if (! is_string($constraint) || trim($constraint) === '') {
+                throw new \LogicException('Doğrulama kuralı adı string olmalıdır (liste öğesi: ' . get_debug_type($constraint) . ')');
+            }
+
+            [$name, $argument] = array_pad(explode(':', trim($constraint), 2), 2, null);
+            $normalized[$name] = match (true) {
+                $argument === null => true,
+                in_array($name, ['in', 'not_in'], true) => explode(',', $argument),
+                default => $argument,
+            };
+        }
+
+        return $normalized;
+    }
+
+    /**
      * Validation kuralını uygular
      */
     private static function apply_rule(mixed $value, string $rule, mixed $constraint): bool
     {
         return match ($rule) {
-            'required' => self::validate_required($value),
+            'required' => $constraint === false || self::validate_required($value),
             'type' => self::validate_type($value, $constraint),
             'min' => self::validate_min($value, $constraint),
             'max' => self::validate_max($value, $constraint),
@@ -51,7 +95,7 @@ class Validator
             'in' => self::validate_in($value, $constraint),
             'not_in' => self::validate_not_in($value, $constraint),
             'email' => self::validate_email($value),
-            'url' => self::validate_url($value),
+            'url' => self::validate_url($value, $constraint),
             'numeric' => self::validate_numeric($value),
             'integer' => self::validate_integer($value),
             'float' => self::validate_float($value),
@@ -178,12 +222,17 @@ class Validator
     /**
      * URL validation
      */
-    private static function validate_url(mixed $value): bool
+    private static function validate_url(mixed $value, mixed $schemes = true): bool
     {
-        if (!is_string($value)) {
+        if (!is_string($value) || filter_var($value, FILTER_VALIDATE_URL) === false) {
             return false;
         }
-        return filter_var($value, FILTER_VALIDATE_URL) !== false;
+
+        // Varsayılan http/https: `javascript://…%0A…` gibi değerler FILTER_VALIDATE_URL'den geçer (XSS)
+        $allowed = is_array($schemes) ? $schemes : ['http', 'https'];
+        $scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+
+        return in_array($scheme, array_map(static fn ($s) => strtolower((string) $s), $allowed), true);
     }
 
     /**
@@ -239,10 +288,14 @@ class Validator
      */
     private static function validate_custom(mixed $value, string $rule, mixed $constraint): bool
     {
-        if (is_callable($constraint)) {
+        // Yalnızca closure / invokable nesne: `'format' => 'strlen'` gibi string callable'lar çağrılmaz
+        if (is_object($constraint) && is_callable($constraint)) {
             return (bool)$constraint($value);
         }
-        return true; // Bilinmeyen kural varsayılan olarak geçer
+
+        // Yazım hatası veya desteklenmeyen kural sessizce geçmez. LogicException: validate_many()
+        // bunu alan hatası olarak yutmaz (InvalidArgumentException onun alt sınıfıdır, yakalanır)
+        throw new \LogicException("Bilinmeyen doğrulama kuralı: {$rule}");
     }
 
     /**

@@ -460,8 +460,10 @@ $rules = [
     'age' => ['required', 'integer', 'min:18', 'max:100'],
 ];
 
-if (!Validator::validate_many($_POST, $rules)) {
-    throw new ValidationException('Invalid input');
+// Hata yoksa boş dizi döner; dolu dizi alan => mesaj eşlemesidir
+$errors = Validator::validate_many($_POST, $rules);
+if ($errors !== []) {
+    throw new ValidationException('Invalid input: ' . implode(', ', array_keys($errors)));
 }
 ```
 
