@@ -1,5 +1,18 @@
 # Yükseltme Rehberi
 
+## 2.4.0 → 2.4.1
+
+Patch sürüm; hata ve güvenlik düzeltmeleri. Kontrol edilecek davranış farkları:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| Soft delete ve ilişki anahtarı koşulları kullanıcı koşullarından ayrı AND'lenir: `(deleted_at IS NULL) AND (a OR b)` | Soft delete'li modelde `or_where()` ile silinmiş kayıtları (hatalı davranışla) alan kod; derlenen SQL'i metin olarak karşılaştıran testler | Silinmişler dahil sorgu için `query_with_trashed()` kullanın; SQL'de kısıtlar artık parantezli ve en başta |
+| Raw SQL'de geçmeyen binding `InvalidArgumentException` verir | `where_raw()`, `having_raw()`, `QueryBuilder::raw()` çağrısına SQL'de kullanılmayan binding veren kod | Kullanılmayan binding'i kaldırın (önceden sorgu çalışırken PDO hatası veriyordu) |
+| Aynı raw binding adı her geçişte ayrı placeholder alır | `get_params()` çıktısının sayısını kontrol eden testler | İşlem gerekmez |
+| `enable_query_analysis()` her sorgudan önce çalışır | Analizi açık bırakıp DDL / WHERE'siz `DELETE` çalıştıran kod (migration dahil) | Analizi yalnızca gerekli bölümde açın veya `disable_query_analysis()` ile kapatın |
+| `Model::to_json()` kodlama hatasında `JsonException` fırlatır | Geçersiz UTF-8 içeren attribute'larda boş string bekleyen kod | Veriyi düzeltin veya exception'ı yakalayın |
+| `commit()` exception'ında açık transaction geri alınır | Başarısız commit sonrası aynı bağlantıda transaction'a devam etmeye çalışan kod | İşlemi baştan tekrarlayın (`transaction()` deadlock'ta bunu zaten yapar) |
+
 ## 2.3.0 → 2.4.0
 
 Minor sürüm; yeni özellikler isteğe bağlıdır. Kontrol edilecek davranış farkları:
