@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.4.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.5.0
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -118,6 +118,8 @@
 >
 > **v2.4.1**: Güvenlik ve hata düzeltmeleri: soft delete / `has_many` scope'unda `or_where()` silinmiş veya başka ebeveynin kayıtlarını getirmez; `chunk()` OR koşulunda sonsuz döngüye girmez; `get_row()`/`get_results()` cache karışması; `enable_query_analysis()` artık etkin; raw binding'de tekrarlanan ad. Geçiş: [UPGRADE.md](UPGRADE.md#240--241)
 >
+> **v2.5.0**: Güvenlik: `Nsql::connect()` DSN'deki `sslmode`/`sslrootcert`'ü korur (TLS), `Validator` liste kurallarını uygular ve bilinmeyen kuralı reddeder, `ENCRYPTION_KEY` ile rotasyon veri kaybına yol açmaz, `secure_session_start()` zaman aşımlarını otomatik uygular ve strict mode açar, log kaydı geçersiz UTF-8 ile silinemez, Docker örneği `.env`'i web'e açmaz. Yeni: `where_like()`, `Nsql::session_login()`, `DB_SSLMODE` / `DB_SSL_CA`, `ENCRYPTION_PREVIOUS_KEYS`. Geçiş: [UPGRADE.md](UPGRADE.md#241--250)
+>
 > **v2.3.0**: ORM değişiklik takibi ve `exists()` (yalnızca değişen kolonlar yazılır), `decimal:N` cast; QueryBuilder tablo takma adı, `distinct()`, `where_column()`, `lock_for_update()`, `increment()`, `chunk()`; migration eşzamanlılık kilidi ve PostgreSQL/SQLite'ta transaction; replica koptuğunda primary'ye düşme; paylaşılan query cache'te süreç içi sürüm doğrulaması ve `set_cache_dependency()`; `RateLimiter::purge()`; MySQL 8 upsert sözdizimi. Geçiş: [UPGRADE.md](UPGRADE.md#223--230)
 >
 > **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
@@ -187,7 +189,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.4.1 --prefer-dist
+composer require ngunenc/nsql:^2.5.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -207,13 +209,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.4.1"
+        "ngunenc/nsql": "^2.5.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.4.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.5.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası

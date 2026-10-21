@@ -4,6 +4,48 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.5.0] - 2026-10-21
+
+Minor sürüm: ikinci güvenlik analizinin bulguları. Güvenlik amaçlı davranış farkları: [UPGRADE.md](UPGRADE.md#241--250).
+
+### Security
+- `Nsql::connect()` DSN'deki `sslmode`, `sslrootcert`, `application_name`, `unix_socket` gibi parametreleri artık atmıyor. Önceden `sslmode=verify-full` ile verilen bağlantı sertifika doğrulamasız kuruluyordu (MITM riski). DSN'deki `user`/`password` kullanılıyor; DSN değerlerinde `;` reddediliyor (parametre enjeksiyonu).
+- `Validator`:
+  - `['required', 'email']` ve `'min:18'` biçimindeki kurallar uygulanıyor. Önceden hiçbiri çalışmıyor, her değer geçiyordu.
+  - Bilinmeyen kural `LogicException` fırlatıyor.
+  - `url` kuralı yalnızca http/https kabul ediyor (`javascript:` XSS).
+- Anahtar rotasyonu: anahtar `ENCRYPTION_KEY` ortam değişkeninden veya `.env`'den geliyorsa `rotate_key()` reddediliyor. Önceden rotasyondan sonra şifrelenen veri diğer süreçlerde çözülemiyordu (veri kaybı). Anahtar dosyaları atomik ve 0600 izniyle yazılıyor.
+- Oturum:
+  - `secure_session_start()` zaman aşımı ve parmak izi kontrollerini otomatik uyguluyor.
+  - `session.use_strict_mode` açılıyor.
+  - `regenerate_id()` sonrası eski ID 60 sn geçerli kalıyor (eşzamanlı istekler).
+  - `SecurityManager` CSRF yardımcıları güvenli cookie ayarlarıyla başlatıyor.
+- Log ve audit:
+  - Geçersiz UTF-8 log kaydını artık silemiyor.
+  - Audit log'a ham session ID yazılmıyor.
+  - Sürücü hata mesajındaki ve yavaş sorgu SQL'indeki tek tırnaklı değerler maskeleniyor.
+  - Şüpheli parametrenin değeri log'a yazılmıyor.
+- `.env` önce giriş betiğinin konumundan aranıyor. Herkesin yazabildiği çalışma dizinindeki `.env` (ör. `/tmp/.env`) yüklenmiyor.
+- Docker geliştirme ortamı: web kökü `docker/public` (önceden `.env`, anahtar ve loglar web'den indirilebiliyordu); `.dockerignore` eklendi; portlar yalnızca `127.0.0.1`.
+- Okuma/yazma ayrımı: `GET_LOCK`, `pg_advisory_*`, `nextval`, `LAST_INSERT_ID` içeren SELECT'ler primary'de çalışıyor.
+- Monitoring token'ı en az 16 karakter; `TRUSTED_PROXY_HEADERS` ile yalnızca proxy'nin yazdığı IP başlıkları okunuyor.
+
+### Added
+- `QueryBuilder::where_like()` / `or_where_like()` / `where_not_like()`: kullanıcı girdisindeki `%` ve `_` kaçırılıyor.
+- `SessionManager::login()` / `Nsql::session_login()` (session fixation); `auto_validate` seçeneği.
+- `DB_SSLMODE`, `DB_SSLROOTCERT`, `DB_SSLCERT`, `DB_SSLKEY` (PostgreSQL); `DB_SSL_CA`, `DB_SSL_CERT`, `DB_SSL_KEY`, `DB_SSL_VERIFY` (MySQL).
+- `ENCRYPTION_PREVIOUS_KEYS`, `KeyManager::key_source()` / `get_decryption_keys()`, `Config::is_production()` (`prod` da production sayılır).
+- `SensitiveDataFilter::mask_sql_literals()`, `TRUSTED_PROXY_HEADERS`, `Validator` `nullable` kuralı.
+
+### Fixed
+- `get_yield(unbuffered: false)` / `get_chunk()`: sorgu `;` veya `-- yorum` ile bitiyorsa aynı satırlar tekrar tekrar dönüyordu. ORDER BY yoksa uyarı veriliyor.
+- `RedisAdapter`: tag kümesi süresi yalnızca uzatılıyor (kısa TTL'li kayıt, uzun ömürlü kayıtların tag'ini erken siliyordu); başarısız AUTH bağlantı sayılmıyor.
+- `RateLimiter`: uzun kimlik / istek tipi özetleniyor (PostgreSQL hatası, MySQL'de kesilip kova paylaşımı); yeni MySQL tablolarında büyük/küçük harf duyarlı kolonlar.
+- `MigrationManager::load_migrations()`: silinen dosyanın bağımlılığı grafikte kalmıyor.
+- `AuditLogger` döndürülen dosyalardan `LOG_MAX_FILES` kadarını tutuyor.
+- `Nsql::session()` farklı ayarla ikinci kez çağrılınca `LogicException` fırlatıyor (ayarlar sessizce yok sayılıyordu).
+- `SecurityManager` bileşenleri tembel oluşturuluyor; yalnızca rate limit için şifreleme anahtarı gerekmiyor.
+
 ## [2.4.1] - 2026-10-21
 
 Patch sürüm: hata ve güvenlik düzeltmeleri. Davranış farkları: [UPGRADE.md](UPGRADE.md#240--241).

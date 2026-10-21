@@ -1,5 +1,32 @@
 # Yükseltme Rehberi
 
+## 2.4.1 → 2.5.0
+
+Minor sürüm; güvenlik düzeltmeleri bazı davranışları değiştirir. Kontrol edilecek farklar:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `Validator` liste / parametreli kuralları (`['required','email']`, `'min:18'`) uygular | Bu biçimi kullanan ve (hatalı olarak) her girdiyi kabul eden formlar | Girdi artık gerçekten doğrulanır; boş bırakılabilen alanlara `nullable` ekleyin |
+| Bilinmeyen `Validator` kuralı `LogicException` | Yazım hatalı kural adı veya `'kural' => 'strlen'` gibi string callable kullanan kod | Kural adını düzeltin; özel kural için closure / invokable nesne verin. `validate_many()` bu hatayı yakalamaz |
+| `url` kuralı yalnızca http/https | `ftp://`, `mailto:` vb. kabul etmesi gereken alanlar | `'url' => ['http', 'https', 'ftp']` |
+| `secure_session_start()` oturum kontrollerini otomatik uygular | 30 dk boşta kalan, 12 saati aşan veya User-Agent'ı değişen oturumlar | Kullanıcı yeni (boş) oturumla devam eder. Süreleri `lifetime` / `max_lifetime` ile ayarlayın; eski davranış: `'auto_validate' => false` |
+| `session.use_strict_mode=1` | Sunucuda olmayan oturum ID'sini kendisi üreten / ileten entegrasyonlar | ID'yi PHP'ye üretin (`session_create_id()`) |
+| `Nsql::session()` farklı ayarla tekrar çağrılınca `LogicException` | Ayarları birden fazla yerde veren kod | Ayarları ilk `secure_session_start()` çağrısında verin |
+| Anahtar `ENCRYPTION_KEY` / `.env`'den geliyorsa `rotate_key()` `LogicException` | Bu durumda `rotate_key()` çağıran betikler | Elle döndürün: yeni anahtar `ENCRYPTION_KEY`, eskiler `ENCRYPTION_PREVIOUS_KEYS` (bkz. `storage/keys/README.md`). Önceki rotasyonlarda dosyaya yazılan anahtar otomatik olarak çözme listesine eklenir |
+| `Nsql::connect()` DSN parametrelerini korur | `sslmode=require` vb. DSN'i olup TLS'siz çalışan bağlantılar | Sunucu TLS desteklemiyorsa DSN'den kaldırın; bağlantı artık istenen modda kurulur |
+| `Nsql::connect()` argüman verilmezse DSN'deki `user`/`password`'ü kullanır | DSN'de kimlik bilgisi olup `DB_USER`/`DB_PASS`'in kullanılmasına güvenen kod | İstenen kimliği argüman olarak verin |
+| DSN değerinde `;` → `InvalidArgumentException` | `;` içeren veritabanı / host adı | Adı değiştirin (PDO DSN'inde kaçış yoktur) |
+| `.env` önce giriş betiğinin dizininden aranır; herkesin yazabildiği CWD atlanır | Betiği başka bir projenin dizininden çalıştırıp CWD'deki `.env`'e güvenen kurulumlar | `NSQL_PROJECT_ROOT` veya `Config::set_project_root()` kullanın |
+| Monitoring token'ı en az 16 karakter | Kısa `NSQL_MONITORING_TOKEN` | Uzun rastgele token üretin: `php -r "echo bin2hex(random_bytes(24));"` |
+| Audit log `SID` alanı `sha256:` özeti | Audit satırındaki session ID'yi oturum deposuyla eşleştiren araçlar | `substr(hash('sha256', $id), 0, 16)` ile karşılaştırın |
+| Sürücü hata mesajı / yavaş sorgu SQL'i log'da maskeli | Log'daki değerden hata ayıklayan süreçler | Değer `QueryException` mesajında ve `get_last_error()`'da duruyor |
+| `get_yield(unbuffered: false)` ORDER BY yoksa WARNING loglar | Sırasız buffered akış | Benzersiz kolona göre `ORDER BY` ekleyin veya `chunk_by_id()` kullanın |
+| `GET_LOCK`, `pg_advisory_*`, `nextval`, `LAST_INSERT_ID` içeren SELECT primary'de | Read replica kullananlar | İşlem gerekmez; kilitler ve sequence'ler artık doğru sunucuda |
+| RateLimiter: 128 karakterden uzun kimlik özetlenir; yeni MySQL tablosunda büyük/küçük harf duyarlı | Uzun kimlik veya kimliği yalnızca harf büyüklüğüyle ayrılan istemciler | Uzun kimliklerin kovası bir kez sıfırlanır. Mevcut tabloda harf duyarlılığı için: `ALTER TABLE rate_limits MODIFY identifier VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL` |
+| Docker örneği: web kökü `docker/public`, nginx `127.0.0.1:8080` | `docker-compose.yml` ile geliştirme yapanlar | Adres `http://localhost:8080`; uygulama dosyalarınızı `docker/public` altından çağırın |
+
+Yeni ve isteğe bağlı: `where_like()`, `Nsql::session_login()`, `DB_SSLMODE` / `DB_SSL_CA` ailesi, `ENCRYPTION_PREVIOUS_KEYS`, `TRUSTED_PROXY_HEADERS`, `Validator` `nullable`.
+
 ## 2.4.0 → 2.4.1
 
 Patch sürüm; hata ve güvenlik düzeltmeleri. Kontrol edilecek davranış farkları:
