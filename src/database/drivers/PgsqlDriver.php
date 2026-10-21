@@ -7,66 +7,88 @@ namespace nsql\database\drivers;
  */
 class PgsqlDriver implements DriverInterface
 {
+    use DsnParamsTrait;
+
+    /** parse_dsn()'in ayrı alan olarak döndürdüğü anahtarlar; diğerleri `params` */
+    private const KNOWN_KEYS = ['host', 'port', 'dbname', 'user', 'password'];
+
+    /**
+     * @param array{host?: string, port?: int, dbname?: string, charset?: string, params?: array<string, mixed>} $config
+     *        `params`: ek DSN parametreleri (`sslmode`, `sslrootcert`, `application_name` …).
+     *        `params.options` verilirse client_encoding yoksa ona eklenir.
+     */
     public function build_dsn(array $config): string
     {
         $host = $config['host'] ?? 'localhost';
         $port = $config['port'] ?? 5432;
         $dbname = $config['dbname'] ?? '';
         $charset = $config['charset'] ?? 'UTF8';
+        $params = $config['params'] ?? [];
 
-        $dsn = "pgsql:host={$host}";
+        $dsn = 'pgsql:host=' . self::dsn_value('host', $host);
 
         if (isset($config['port'])) {
-            $dsn .= ";port={$port}";
+            $dsn .= ';port=' . (int) $port;
         }
 
         if ($dbname) {
-            $dsn .= ";dbname={$dbname}";
+            $dsn .= ';dbname=' . self::dsn_value('dbname', $dbname);
         }
 
-        if ($charset) {
-            $dsn .= ";options='--client_encoding={$charset}'";
+        $options = trim((string) ($params['options'] ?? ''), " '\"");
+        unset($params['options']);
+        if ($charset && ! str_contains($options, 'client_encoding')) {
+            $options = trim('--client_encoding=' . self::dsn_value('charset', $charset) . ' ' . $options);
+        }
+        if ($options !== '') {
+            $dsn .= ";options='" . self::dsn_value('options', $options) . "'";
         }
 
-        return $dsn;
+        return $dsn . self::dsn_params($params);
     }
 
+    /**
+     * @return array{driver: string, host: string, port: int, dbname: ?string, charset: string, user?: string, password?: string, params: array<string, string>}
+     */
     public function parse_dsn(string $dsn): array
     {
         if (! str_starts_with($dsn, 'pgsql:')) {
             throw new \InvalidArgumentException('Geçersiz PostgreSQL DSN formatı');
         }
 
-        $parts = [];
-        foreach (explode(';', substr($dsn, 6)) as $pair) {
-            [$key, $value] = array_pad(explode('=', $pair, 2), 2, '');
-            if (trim($key) !== '') {
-                $parts[strtolower(trim($key))] = trim($value);
-            }
-        }
-
-        $host = $parts['host'] ?? '';
-        $port = $parts['port'] ?? '';
+        $parts = self::parse_pairs(substr($dsn, 6));
         // Eski host:port yazımı
-        if ($port === '' && preg_match('/^([^:]+):(\d+)$/', $host, $m)) {
-            [$host, $port] = [$m[1], $m[2]];
-        }
+        [$host, $port] = self::split_host_port($parts['host'] ?? '', $parts['port'] ?? '');
         if ($host === '') {
             throw new \InvalidArgumentException('Geçersiz PostgreSQL DSN formatı');
         }
 
         $charset = 'UTF8';
-        if (preg_match('/--client_encoding=([^\'"\s]+)/', $parts['options'] ?? '', $m)) {
+        $params = array_diff_key($parts, array_flip(self::KNOWN_KEYS));
+        if (preg_match('/--client_encoding=([^\'"\s]+)/', $params['options'] ?? '', $m)) {
             $charset = $m[1];
+            // Yalnızca client_encoding içeren options charset'e dönüşür; başka seçenek varsa korunur
+            $rest = trim((string) preg_replace('/--client_encoding=[^\'"\s]+/', '', trim($params['options'], " '\"")));
+            if ($rest === '') {
+                unset($params['options']);
+            }
         }
 
-        return [
+        $parsed = [
             'driver' => 'pgsql',
             'host' => $host,
             'port' => ctype_digit($port) ? (int) $port : 5432,
             'dbname' => ($parts['dbname'] ?? '') !== '' ? $parts['dbname'] : null,
             'charset' => $charset,
+            'params' => $params,
         ];
+        foreach (['user', 'password'] as $credential) {
+            if (isset($parts[$credential])) {
+                $parsed[$credential] = $parts[$credential];
+            }
+        }
+
+        return $parsed;
     }
 
     public function get_pdo_options(): array
