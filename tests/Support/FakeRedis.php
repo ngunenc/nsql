@@ -55,9 +55,24 @@ final class FakeRedis
         return array_keys($this->data[$key] ?? []);
     }
 
+    /** @var array<string, int> anahtar => saniye (expire() ile verilen son süre) */
+    public array $ttls = [];
+
     public function expire(string $key, int $ttl): bool
     {
+        $this->ttls[$key] = $ttl;
+
         return true;
+    }
+
+    /** Gerçek TTL gibi: anahtar yoksa -2, süresizse -1 */
+    public function ttl(string $key): int
+    {
+        if (! array_key_exists($key, $this->data)) {
+            return -2;
+        }
+
+        return $this->ttls[$key] ?? -1;
     }
 
     /**

@@ -40,6 +40,59 @@ class VendorRootDetectionTest extends TestCase
         );
     }
 
+    /**
+     * `cd /tmp && php /var/www/app/cron.php`: /tmp/.env yüklenmemeli (gerçek ortam değişkenlerini ezer).
+     */
+    public function test_env_in_world_writable_cwd_is_not_used(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('POSIX izinleri gerekli');
+        }
+
+        $base = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_root_' . bin2hex(random_bytes(4));
+        $shared = $base . DIRECTORY_SEPARATOR . 'shared';
+        $app = $base . DIRECTORY_SEPARATOR . 'app';
+        mkdir($shared . DIRECTORY_SEPARATOR . 'run', 0755, true);
+        mkdir($app, 0755, true);
+        chmod($shared, 0777);
+        file_put_contents($shared . DIRECTORY_SEPARATOR . '.env', "DB_HOST=attacker.example\n");
+        file_put_contents($app . DIRECTORY_SEPARATOR . '.env', "DB_HOST=db.internal\n");
+        file_put_contents($app . DIRECTORY_SEPARATOR . 'cron.php', '<?php');
+
+        $cwd = (string) getcwd();
+        $script = $_SERVER['SCRIPT_FILENAME'] ?? null;
+        $detect = new \ReflectionMethod(Config::class, 'detect_project_root');
+        $override = new \ReflectionProperty(Config::class, 'project_root_override');
+        $previous_override = $override->getValue();
+        $override->setValue(null, null);
+        $env_root = getenv('NSQL_PROJECT_ROOT');
+        putenv('NSQL_PROJECT_ROOT');
+
+        try {
+            chdir($shared . DIRECTORY_SEPARATOR . 'run');
+
+            // Giriş betiğinin uygulaması CWD'den önce gelir
+            $_SERVER['SCRIPT_FILENAME'] = $app . DIRECTORY_SEPARATOR . 'cron.php';
+            $this->assertSame(realpath($app), realpath((string) $detect->invoke(null)));
+
+            // Betik bilinmese de herkesin yazabildiği dizindeki .env kök sayılmaz
+            unset($_SERVER['SCRIPT_FILENAME']);
+            $this->assertNotSame(realpath($shared), realpath((string) $detect->invoke(null)));
+        } finally {
+            chdir($cwd);
+            $script !== null ? $_SERVER['SCRIPT_FILENAME'] = $script : null;
+            $override->setValue(null, $previous_override);
+            $env_root !== false ? putenv('NSQL_PROJECT_ROOT=' . $env_root) : null;
+            foreach ([$shared . '/.env', $app . '/.env', $app . '/cron.php'] as $file) {
+                @unlink($file);
+            }
+            @rmdir($shared . '/run');
+            @rmdir($shared);
+            @rmdir($app);
+            @rmdir($base);
+        }
+    }
+
     public function test_set_project_root_escapes_vendor_package_path(): void
     {
         $app = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_vendor_escape_' . uniqid('', true);

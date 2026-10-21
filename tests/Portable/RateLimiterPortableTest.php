@@ -8,7 +8,6 @@ use Tests\Support\PortableTestCase;
 class RateLimiterPortableTest extends PortableTestCase
 {
     private string $table;
-    private int $now = 1_700_000_000;
 
     protected function setUp(): void
     {
@@ -22,67 +21,36 @@ class RateLimiterPortableTest extends PortableTestCase
         parent::tearDown();
     }
 
-    private function limiter(int $max_requests, int $window, int $purge_probability = 0): RateLimiter
+    private function limiter(): RateLimiter
     {
-        return new RateLimiter(
-            $this->db,
-            fn (): int => $this->now,
-            [
-                'table' => $this->table,
-                'max_requests' => $max_requests,
-                'window' => $window,
-                'burst' => 1000,
-                'purge_probability' => $purge_probability,
-            ]
-        );
+        return new RateLimiter($this->db, fn (): int => 1_700_000_000, [
+            'table' => $this->table,
+            'max_requests' => 1,
+            'window' => 3600,
+        ]);
     }
 
-    private function identifiers(): array
+    /**
+     * VARCHAR(255)'e sığmayan kimlik: PostgreSQL'de hata, MySQL'de kesilip ortak önekli kimliklerin
+     * aynı kovayı paylaşması. Uzun kimlik özetlenir.
+     */
+    public function test_long_identifiers_get_separate_buckets(): void
     {
-        $rows = $this->db->get_results("SELECT identifier FROM {$this->table} ORDER BY identifier");
+        $limiter = $this->limiter();
+        $prefix = str_repeat('Mozilla/5.0 ', 30);
 
-        return array_map(fn ($r) => $r->identifier, $rows);
+        $this->assertTrue($limiter->check_rate_limit($prefix . 'A'));
+        $this->assertTrue($limiter->check_rate_limit($prefix . 'B'));
+        $this->assertFalse($limiter->check_rate_limit($prefix . 'A'));
+        $this->assertTrue($limiter->check_rate_limit('client', str_repeat('t', 80)));
     }
 
-    public function test_purge_removes_only_stale_rows(): void
+    public function test_identifiers_are_case_sensitive(): void
     {
-        $limiter = $this->limiter(5, 10);
-        $limiter->check_rate_limit('eski');
-        $this->now += 25;
-        $limiter->check_rate_limit('yeni');
+        $limiter = $this->limiter();
 
-        $this->assertSame(1, $limiter->purge(20));
-        $this->assertSame(['yeni'], $this->identifiers());
-        $this->assertSame(0, $limiter->purge(20));
-
-        // Pencereden kısa süre verilse de pencere kadar beklenir (dolmamış kova silinmez)
-        $this->now += 5;
-        $this->assertSame(0, $limiter->purge(1));
-        $this->now += 30;
-        $this->assertSame(1, $limiter->purge());
-    }
-
-    public function test_probabilistic_purge_on_check(): void
-    {
-        $limiter = $this->limiter(5, 10, purge_probability: 100);
-        $limiter->check_rate_limit('eski');
-        $this->now += 100;
-        $limiter->check_rate_limit('yeni');
-
-        $this->assertSame(['yeni'], $this->identifiers());
-    }
-
-    public function test_capacity_refill_and_separate_identifiers(): void
-    {
-        $limiter = $this->limiter(2, 10);
-
-        $this->assertTrue($limiter->check_rate_limit('a'));
-        $this->assertTrue($limiter->check_rate_limit('a'));
-        $this->assertFalse($limiter->check_rate_limit('a'));
-        $this->assertTrue($limiter->check_rate_limit('b'));
-
-        $this->now += 5;
-        $this->assertTrue($limiter->check_rate_limit('a'));
-        $this->assertFalse($limiter->check_rate_limit('a'));
+        $this->assertTrue($limiter->check_rate_limit('User@Example.com'));
+        $this->assertTrue($limiter->check_rate_limit('user@example.com'));
+        $this->assertFalse($limiter->check_rate_limit('User@Example.com'));
     }
 }

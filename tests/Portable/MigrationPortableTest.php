@@ -75,6 +75,27 @@ PHP);
         }
     }
 
+    public function test_reloading_drops_removed_file_dependencies_and_keeps_manual_ones(): void
+    {
+        $this->write_migration('2025_01_01_000001_a.php', 'p_mig_a');
+        $this->write_migration('2025_01_01_000002_b.php', 'p_mig_b', ['2025_01_01_000001_a.php']);
+        $manager = $this->manager();
+        $manager->add_dependency('2025_01_01_000003_c.php', '2025_01_01_000001_a.php');
+        $manager->load_migrations();
+
+        $this->assertSame(['2025_01_01_000001_a.php'], $manager->get_dependency_graph()['2025_01_01_000002_b.php'] ?? null);
+
+        // b dosyası kaldırıldı: eski bağımlılığı grafikte kalmamalı (resolve/check yanlış sonuç verirdi)
+        unlink($this->dir . '/migrations/2025_01_01_000002_b.php');
+        $manager->load_migrations();
+        $manager->load_migrations();
+
+        $this->assertSame(
+            ['2025_01_01_000003_c.php' => ['2025_01_01_000001_a.php']],
+            $manager->get_dependency_graph()
+        );
+    }
+
     public function test_concurrent_migrate_waits_for_lock(): void
     {
         Config::set('migration_lock_timeout', 0);
