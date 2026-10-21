@@ -220,6 +220,62 @@ class QueryBuilder
     }
 
     /**
+     * Kullanıcı girdisiyle güvenli LIKE araması: `%`, `_` ve kaçış karakteri kaçırılır, yani girdi
+     * joker karakter olarak yorumlanmaz (`where('ad', 'LIKE', "%$q%")` ile `%`/`_` gönderen kullanıcı
+     * her şeyle eşleşir veya pahalı tarama yaptırır). Büyük/küçük harf duyarlılığı kolonun
+     * collation'ına bağlıdır (PostgreSQL'de duyarlı).
+     *
+     * @param 'contains'|'starts'|'ends'|'exact' $mode
+     */
+    public function where_like(string $column, string|int|float $value, string $mode = 'contains'): self
+    {
+        $this->add_where($this->like_part($column, (string) $value, $mode, false));
+
+        return $this;
+    }
+
+    /**
+     * @param 'contains'|'starts'|'ends'|'exact' $mode
+     */
+    public function or_where_like(string $column, string|int|float $value, string $mode = 'contains'): self
+    {
+        return $this->with_or(fn () => $this->where_like($column, $value, $mode));
+    }
+
+    /**
+     * @param 'contains'|'starts'|'ends'|'exact' $mode
+     */
+    public function where_not_like(string $column, string|int|float $value, string $mode = 'contains'): self
+    {
+        $this->add_where($this->like_part($column, (string) $value, $mode, true));
+
+        return $this;
+    }
+
+    /**
+     * @return list<string|array>
+     */
+    private function like_part(string $column, string $value, string $mode, bool $not): array
+    {
+        // `!` kaçış karakteri: `\` MySQL string literal'inde kendisi kaçış karakteridir, PostgreSQL'de
+        // değildir; `ESCAPE '!'` üç sürücüde de aynı anlamdadır
+        $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $value);
+        $pattern = match ($mode) {
+            'contains' => '%' . $escaped . '%',
+            'starts' => $escaped . '%',
+            'ends' => '%' . $escaped,
+            'exact' => $escaped,
+            default => throw new \InvalidArgumentException("Geçersiz LIKE modu: {$mode} (contains, starts, ends, exact)"),
+        };
+
+        return [
+            $this->compile_column($column) . ($not ? ' NOT LIKE ' : ' LIKE '),
+            ['kind' => 'value', 'value' => $pattern, 'type' => \PDO::PARAM_STR],
+            " ESCAPE '!'",
+        ];
+    }
+
+    /**
      * WHERE kolon BETWEEN min AND max
      */
     public function where_between(string $column, mixed $min, mixed $max): self

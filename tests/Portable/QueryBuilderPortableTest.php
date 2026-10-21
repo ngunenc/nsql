@@ -315,6 +315,33 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertTrue($builder->exists());
     }
 
+    public function test_where_like_escapes_wildcards(): void
+    {
+        $this->db->table('p_products')->insert_many([
+            ['sku' => 'L1', 'name' => '100% pamuk', 'category' => 'tekstil', 'price' => 50],
+            ['sku' => 'L2', 'name' => '100 pamuk', 'category' => 'tekstil', 'price' => 60],
+            ['sku' => 'L3', 'name' => 'a_b!c', 'category' => 'tekstil', 'price' => 70],
+            ['sku' => 'L4', 'name' => 'axb', 'category' => 'tekstil', 'price' => 80],
+        ]);
+        $names = fn ($builder) => $builder->order_by('id')->pluck('name');
+
+        // Kullanıcının `%` / `_` / `!` girdisi joker değil, düz karakter
+        $this->assertSame(['100% pamuk'], $names($this->db->table('p_products')->where_like('name', '0% p')));
+        $this->assertSame(['a_b!c'], $names($this->db->table('p_products')->where_like('name', '_b!', 'contains')));
+        $this->assertSame([], $names($this->db->table('p_products')->where_like('name', '%')->where('category', '=', 'mutfak')));
+        $this->assertSame(['a_b!c'], $names($this->db->table('p_products')->where_like('name', 'a_', 'starts')));
+        $this->assertSame(['100% pamuk', '100 pamuk'], $names($this->db->table('p_products')->where_like('name', 'pamuk', 'ends')));
+        $this->assertSame(['axb'], $names($this->db->table('p_products')->where_like('name', 'axb', 'exact')));
+        $this->assertSame(
+            ['Kupa', 'axb'],
+            $names($this->db->table('p_products')->where_like('name', 'Kup', 'starts')->or_where_like('name', 'xb', 'ends'))
+        );
+        $this->assertSame(4, $this->db->table('p_products')->where('category', '=', 'tekstil')->where_not_like('name', '%', 'exact')->count());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->db->table('p_products')->where_like('name', 'x', 'regex');
+    }
+
     public function test_raw_binding_repeated_and_prefixed_names(): void
     {
         $builder = $this->db->table('p_products')->where_raw('price = :p OR price = :p * 4', ['p' => 10]);

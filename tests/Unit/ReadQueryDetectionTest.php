@@ -29,6 +29,14 @@ class ReadQueryDetectionTest extends TestCase
             'lowercase into' => ['select id into @x from users limit 1', false],
             'for update' => ['SELECT * FROM users FOR UPDATE', false],
             'insert' => ['INSERT INTO users (name) VALUES (?)', false],
+            'mysql named lock' => ["SELECT GET_LOCK('job', 10)", false],
+            'mysql release lock' => ["SELECT release_lock('job')", false],
+            'pg advisory lock' => ['SELECT pg_advisory_lock(42)', false],
+            'pg try advisory xact lock' => ['SELECT pg_try_advisory_xact_lock(42)', false],
+            'sequence' => ["SELECT nextval('orders_id_seq')", false],
+            'connection last id' => ['SELECT LAST_INSERT_ID()', false],
+            'sleep' => ['SELECT SLEEP(1)', false],
+            'column named like function' => ['SELECT next_value, lock_name FROM jobs', true],
         ];
     }
 
