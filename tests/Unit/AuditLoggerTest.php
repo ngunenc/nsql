@@ -102,6 +102,64 @@ class AuditLoggerTest extends TestCase
         $this->assertStringContainsString('UA: Mozilla\r\n', $lines[0]);
     }
 
+    #[\PHPUnit\Framework\Attributes\RunInSeparateProcess]
+    public function test_session_id_is_not_written_in_plain_text(): void
+    {
+        ini_set('session.use_cookies', '0');
+        ini_set('session.save_path', sys_get_temp_dir());
+        session_id('plainsessionid0123456789abcdefgh');
+        session_start();
+        try {
+            (new AuditLogger($this->file))->log_security_event('login', 'Giriş');
+        } finally {
+            session_destroy();
+        }
+
+        $line = $this->lines()[0];
+        $this->assertStringNotContainsString('plainsessionid0123456789abcdefgh', $line);
+        $this->assertStringContainsString('SID: sha256:' . substr(hash('sha256', 'plainsessionid0123456789abcdefgh'), 0, 16), $line);
+    }
+
+    public function test_rotation_keeps_only_log_max_files(): void
+    {
+        Config::set('log_max_size', 200);
+        Config::set('log_max_files', 2);
+        mkdir($this->dir, 0775, true);
+        try {
+            // Önceki döndürmelerden kalan dosyalar
+            foreach (['20200101_000000', '20200102_000000', '20200103_000000'] as $stamp) {
+                touch($this->file . '.' . $stamp);
+            }
+            $logger = new AuditLogger($this->file);
+            for ($i = 0; $i < 3; $i++) {
+                $logger->log_security_event('event_' . $i, str_repeat('x', 150));
+            }
+        } finally {
+            Config::set('log_max_files', null);
+        }
+
+        $rotated = glob($this->file . '.*') ?: [];
+        $this->assertCount(2, $rotated);
+        $this->assertNotContains($this->file . '.20200101_000000', $rotated, 'En eski dosya silinmeli');
+    }
+
+    public function test_suspicious_param_value_is_not_logged(): void
+    {
+        $previous = Config::get('audit_log_file');
+        Config::set('audit_log_file', $this->file);
+        try {
+            \nsql\security\SecurityManager::validate_sql_params(['password' => "Gizli;Parola--1"]);
+            \nsql\security\SecurityManager::check_query_security("SELECT 1; DELETE FROM users WHERE email = 'ali@x.com'");
+        } finally {
+            Config::set('audit_log_file', $previous);
+        }
+
+        $log = (string) file_get_contents($this->file);
+        $this->assertStringContainsString('param_suspicious', $log);
+        $this->assertStringNotContainsString('Gizli', $log);
+        $this->assertStringNotContainsString('ali@x.com', $log);
+    }
+
     public function test_rotates_when_file_exceeds_max_size(): void
     {
         Config::set('log_max_size', 200);

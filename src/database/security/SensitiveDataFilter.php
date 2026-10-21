@@ -82,6 +82,16 @@ class SensitiveDataFilter
     }
 
     /**
+     * SQL metnindeki / sürücü hata mesajındaki tek tırnaklı değerleri maskeler:
+     * `WHERE email = 'ali@x.com'` → `WHERE email = '***'`, `Duplicate entry 'ali@x.com'` → `'***'`.
+     * Çift tırnak (PostgreSQL tanımlayıcısı) korunur.
+     */
+    public static function mask_sql_literals(string $text): string
+    {
+        return (string) preg_replace("/'(?:[^'\\\\]|\\\\.|'')*'/s", "'***'", $text);
+    }
+
+    /**
      * Statik kısayol: diziyi varsayılan + yapılandırılmış anahtarlarla maskeler.
      */
     public static function mask_array(array $data): array

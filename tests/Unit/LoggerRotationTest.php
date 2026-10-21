@@ -100,6 +100,28 @@ class LoggerRotationTest extends TestCase
         $this->assertCount(1, $this->rotated_files());
     }
 
+    /**
+     * Geçersiz UTF-8 baytı json_encode'u false yapıyor, kayıt boş satır olarak yazılıyordu (iz silme).
+     */
+    public function test_invalid_utf8_does_not_drop_entry(): void
+    {
+        $_SERVER['HTTP_USER_AGENT'] = "evil\xB1agent";
+        try {
+            (new Logger($this->file, Logger::DEBUG, true))->error("Giriş başarısız \xB1", ['user' => "ad\xB1min"]);
+            (new Logger($this->file, Logger::DEBUG, false))->error('Metin biçimi', ['user' => "ad\xB1min"]);
+        } finally {
+            unset($_SERVER['HTTP_USER_AGENT']);
+        }
+
+        $lines = array_values(array_filter(explode(PHP_EOL, (string) file_get_contents($this->file))));
+        $this->assertCount(2, $lines);
+        $entry = json_decode($lines[0], true);
+        $this->assertIsArray($entry);
+        $this->assertStringStartsWith('Giriş başarısız', $entry['message']);
+        $this->assertStringStartsWith('evil', $entry['user_agent']);
+        $this->assertStringContainsString('Metin biçimi | {"user":"ad', $lines[1]);
+    }
+
     public function test_text_format_keeps_entry_on_single_line(): void
     {
         $logger = new Logger($this->file, Logger::DEBUG, false);
