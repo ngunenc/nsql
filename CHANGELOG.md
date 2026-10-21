@@ -23,7 +23,7 @@ Minor sürüm: ikinci güvenlik analizinin bulguları. Güvenlik amaçlı davran
 - Log ve audit:
   - Geçersiz UTF-8 log kaydını artık silemiyor.
   - Audit log'a ham session ID yazılmıyor.
-  - Sürücü hata mesajındaki ve yavaş sorgu SQL'indeki tek tırnaklı değerler maskeleniyor.
+  - Sürücü hata mesajındaki veri değerleri (`Duplicate entry '…'`, PostgreSQL `Key (…)=(…)`) ve yavaş sorgu SQL'indeki tek tırnaklı değerler maskeleniyor; kolon/tablo adları korunuyor.
   - Şüpheli parametrenin değeri log'a yazılmıyor.
 - `.env` önce giriş betiğinin konumundan aranıyor. Herkesin yazabildiği çalışma dizinindeki `.env` (ör. `/tmp/.env`) yüklenmiyor.
 - Docker geliştirme ortamı: web kökü `docker/public` (önceden `.env`, anahtar ve loglar web'den indirilebiliyordu); `.dockerignore` eklendi; portlar yalnızca `127.0.0.1`.
@@ -35,7 +35,7 @@ Minor sürüm: ikinci güvenlik analizinin bulguları. Güvenlik amaçlı davran
 - `SessionManager::login()` / `Nsql::session_login()` (session fixation); `auto_validate` seçeneği.
 - `DB_SSLMODE`, `DB_SSLROOTCERT`, `DB_SSLCERT`, `DB_SSLKEY` (PostgreSQL); `DB_SSL_CA`, `DB_SSL_CERT`, `DB_SSL_KEY`, `DB_SSL_VERIFY` (MySQL).
 - `ENCRYPTION_PREVIOUS_KEYS`, `KeyManager::key_source()` / `get_decryption_keys()`, `Config::is_production()` (`prod` da production sayılır).
-- `SensitiveDataFilter::mask_sql_literals()`, `TRUSTED_PROXY_HEADERS`, `Validator` `nullable` kuralı.
+- `SensitiveDataFilter::mask_sql_literals()` / `mask_error_message()`, `TRUSTED_PROXY_HEADERS`, `Validator` `nullable` kuralı.
 
 ### Fixed
 - `get_yield(unbuffered: false)` / `get_chunk()`: sorgu `;` veya `-- yorum` ile bitiyorsa aynı satırlar tekrar tekrar dönüyordu. ORDER BY yoksa uyarı veriliyor.

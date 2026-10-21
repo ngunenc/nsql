@@ -218,7 +218,7 @@ trait QueryExecutionTrait
         $this->last_pdo_exception = $e;
         $this->last_error = $e->getMessage();
         // Sürücü mesajı veri içerebilir (`Duplicate entry 'ali@x.com'`); log'a maskeli yazılır
-        $this->log_error(SensitiveDataFilter::mask_sql_literals($this->last_error));
+        $this->log_error(SensitiveDataFilter::mask_error_message($this->last_error));
         $this->last_results = [];
     }
 
@@ -229,7 +229,7 @@ trait QueryExecutionTrait
     {
         $this->last_pdo_exception = $e;
         $this->last_error = $e->getMessage();
-        $this->log_error(SensitiveDataFilter::mask_sql_literals($this->last_error));
+        $this->log_error(SensitiveDataFilter::mask_error_message($this->last_error));
         $this->last_results = [];
     }
 
