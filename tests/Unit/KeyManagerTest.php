@@ -49,6 +49,16 @@ class KeyManagerTest extends TestCase
         }
     }
 
+    public function test_prod_alias_counts_as_production(): void
+    {
+        Config::set_environment('PROD');
+        $this->assertTrue(Config::is_production());
+        $this->assertFalse(KeyManager::auto_generate_allowed());
+
+        Config::set_environment('staging');
+        $this->assertFalse(Config::is_production());
+    }
+
     public function test_production_generates_when_explicitly_allowed(): void
     {
         Config::set_environment('production');

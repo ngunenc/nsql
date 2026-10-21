@@ -61,6 +61,56 @@ class KeyManager
     }
 
     /**
+     * get_key()'in anahtarı nereden aldığı (anahtar üretmeden): `env` (ENCRYPTION_KEY ortam değişkeni),
+     * `config` (.env / Config::set), `storage` (anahtar dosyası) veya `none` (get_key() üretecek).
+     *
+     * @return 'env'|'config'|'storage'|'none'
+     */
+    public static function key_source(): string
+    {
+        if (! empty(getenv('ENCRYPTION_KEY'))) {
+            return 'env';
+        }
+        if (! empty(\nsql\database\Config::get('encryption_key'))) {
+            return 'config';
+        }
+
+        return self::load_key_from_storage() !== null ? 'storage' : 'none';
+    }
+
+    /**
+     * Mevcut anahtar dışında çözme için denenecek anahtarlar: ENCRYPTION_PREVIOUS_KEYS (virgülle
+     * ayrılmış), arşiv ve — anahtar env/config'den geliyorsa — anahtar dosyası (önceki sürümlerde
+     * rotate_key() yeni anahtarı oraya yazıyordu; o veriler okunabilir kalır).
+     *
+     * @return array<string> Base64 anahtarlar
+     */
+    public static function get_decryption_keys(): array
+    {
+        $keys = [];
+        $configured = \nsql\database\Config::get('encryption_previous_keys');
+        if (is_string($configured)) {
+            $configured = explode(',', $configured);
+        }
+        foreach (is_array($configured) ? $configured : [] as $key) {
+            if (is_string($key) && trim($key) !== '') {
+                $keys[] = self::validate_key($key);
+            }
+        }
+
+        array_push($keys, ...self::get_archived_keys());
+
+        if (in_array(self::key_source(), ['env', 'config'], true)) {
+            $stored = self::load_key_from_storage();
+            if ($stored !== null) {
+                $keys[] = $stored;
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /**
      * Anahtar yokken dosyaya yeni anahtar üretilebilir mi? ENCRYPTION_KEY_AUTO_GENERATE verilmezse
      * production dışındaki ortamlarda evet.
      */
@@ -68,7 +118,7 @@ class KeyManager
     {
         $flag = \nsql\database\Config::get('encryption_key_auto_generate');
         if ($flag === null || $flag === '') {
-            return \nsql\database\Config::get_environment() !== 'production';
+            return ! \nsql\database\Config::is_production();
         }
 
         return filter_var($flag, FILTER_VALIDATE_BOOLEAN);
@@ -106,22 +156,7 @@ class KeyManager
             }
         }
 
-        // Dosya izinlerini kontrol et
-        if (file_exists($storage_path)) {
-            $current_perms = fileperms($storage_path);
-            if (($current_perms & 0777) !== 0600) {
-                chmod($storage_path, 0600);
-            }
-        }
-
-        $result = file_put_contents($storage_path, $key, LOCK_EX);
-
-        if ($result === false) {
-            throw new RuntimeException("Key storage dosyasına yazılamadı: {$storage_path}");
-        }
-
-        // Dosya izinlerini güvenli hale getir
-        chmod($storage_path, 0600);
+        self::write_private_file($storage_path, $key);
 
         return true;
     }
@@ -219,24 +254,85 @@ class KeyManager
      */
     public static function rotate_key(?string $old_key = null): array
     {
-        if ($old_key === null) {
-            $old_key = self::get_key();
+        $source = self::key_source();
+        if ($source === 'env' || $source === 'config') {
+            // Yeni anahtar dosyaya yazılsa da diğer süreçler ENCRYPTION_KEY'i kullanmaya devam eder;
+            // rotasyondan sonra şifrelenen veri onlarda (ve yeniden başlatınca burada) çözülemezdi.
+            throw new \LogicException(
+                'Encryption key ' . ($source === 'env' ? 'ENCRYPTION_KEY ortam değişkeninden' : 'yapılandırmadan (.env)')
+                . ' geliyor; rotasyon dosyaya yapılamaz. Elle döndürün: yeni anahtarı ENCRYPTION_KEY\'e, '
+                . 'eskisini ENCRYPTION_PREVIOUS_KEYS\'e yazın ve tüm süreçleri yeniden başlatın.'
+            );
         }
 
-        // Yeni key oluştur
-        $new_key = self::generate_key();
+        $lock = self::acquire_rotation_lock();
+        try {
+            if ($old_key === null) {
+                $old_key = self::get_key();
+            }
 
-        // Eski key'i arşivle
-        self::archive_key($old_key);
+            // Yeni key oluştur
+            $new_key = self::generate_key();
 
-        // Yeni key'i kaydet
-        self::save_key_to_storage($new_key);
+            // Eski key'i arşivle
+            self::archive_key($old_key);
+
+            // Yeni key'i kaydet
+            self::save_key_to_storage($new_key);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
 
         return [
             'new_key' => $new_key,
             'old_key' => $old_key,
             'rotation_date' => date('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * Eşzamanlı rotasyonları tekilleştiren kilit (anahtar dizininde `.rotate.lock`).
+     *
+     * @return resource
+     */
+    private static function acquire_rotation_lock()
+    {
+        $dir = dirname(self::get_storage_path());
+        if (! is_dir($dir) && ! mkdir($dir, 0700, true) && ! is_dir($dir)) {
+            throw new RuntimeException("Key storage dizini oluşturulamadı: {$dir}");
+        }
+
+        $handle = fopen($dir . DIRECTORY_SEPARATOR . '.rotate.lock', 'c');
+        if ($handle === false || ! flock($handle, LOCK_EX)) {
+            throw new RuntimeException("Key rotasyon kilidi alınamadı: {$dir}");
+        }
+
+        return $handle;
+    }
+
+    /**
+     * Dosyayı hiçbir an başkalarınca okunabilir olmadan yazar: geçici dosya umask 0077 ile
+     * oluşturulur, 0600 yapılır ve hedefin üzerine atomik olarak taşınır (yarım dosya okunmaz).
+     */
+    private static function write_private_file(string $path, string $contents): void
+    {
+        $temp = $path . '.tmp.' . bin2hex(random_bytes(6));
+        $previous_umask = umask(0077);
+        try {
+            if (file_put_contents($temp, $contents, LOCK_EX) === false) {
+                throw new RuntimeException("Key dosyasına yazılamadı: {$path}");
+            }
+            chmod($temp, 0600);
+            if (! rename($temp, $path)) {
+                throw new RuntimeException("Key dosyası yerine taşınamadı: {$path}");
+            }
+        } finally {
+            umask($previous_umask);
+            if (is_file($temp)) {
+                @unlink($temp);
+            }
+        }
     }
 
     /**
@@ -257,11 +353,7 @@ class KeyManager
         $microseconds = sprintf('%06d', (int) (fmod(microtime(true), 1) * 1_000_000));
         $archive_file = $archive_dir . '/key_' . date('Y-m-d_His') . '_' . $microseconds . '_' . bin2hex(random_bytes(2)) . '.key';
 
-        if (file_put_contents($archive_file, $key, LOCK_EX) === false) {
-            throw new RuntimeException("Key arşiv dosyasına yazılamadı: {$archive_file}");
-        }
-
-        chmod($archive_file, 0600);
+        self::write_private_file($archive_file, $key);
 
         return true;
     }
