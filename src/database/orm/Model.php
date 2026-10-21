@@ -204,7 +204,10 @@ abstract class Model implements \JsonSerializable
     {
         $builder = $this->db->table($this->table);
 
-        return $this->soft_deletes ? $builder->where_null($this->deleted_at_column) : $builder;
+        // Kısıt: scope içindeki or_where() silinmiş kayıtları geri getiremez
+        return $this->soft_deletes
+            ? $builder->constrain(fn (QueryBuilder $q) => $q->where_null($this->deleted_at_column))
+            : $builder;
     }
 
     /**
@@ -368,7 +371,7 @@ abstract class Model implements \JsonSerializable
     {
         $rows = [];
         foreach (array_chunk($values, self::eager_chunk_size) as $chunk) {
-            $builder = $related->query()->where_in($column, $chunk);
+            $builder = $related->query()->constrain(fn (QueryBuilder $q) => $q->where_in($column, $chunk));
             if ($scope !== null) {
                 $scope($builder);
             }
@@ -964,7 +967,7 @@ abstract class Model implements \JsonSerializable
      */
     public function to_json(): string
     {
-        return (string) json_encode($this->to_array());
+        return json_encode($this->to_array(), JSON_THROW_ON_ERROR);
     }
 
     public function jsonSerialize(): array
@@ -1082,7 +1085,10 @@ abstract class Model implements \JsonSerializable
         $foreign_key ??= $this->default_foreign_key();
         $local_value = $this->attributes[$local_key ?? $this->primary_key] ?? null;
 
-        return $local_value === null ? null : $related->query()->where($foreign_key, '=', $local_value);
+        // Kısıt: has_many scope'undaki or_where() başka ebeveynin kayıtlarını getiremez
+        return $local_value === null
+            ? null
+            : $related->query()->constrain(fn (QueryBuilder $q) => $q->where($foreign_key, '=', $local_value));
     }
 
     private static function short_name(string $class): string

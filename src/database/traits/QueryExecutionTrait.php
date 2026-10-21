@@ -46,6 +46,9 @@ trait QueryExecutionTrait
             );
         }
 
+        // enable_query_analysis() açıksa kritik riskli sorgu çalıştırılmadan QueryException fırlatılır
+        $this->before_execute_query($sql);
+
         if ($this->should_use_reader($sql)) {
             return $this->execute_on_reader($sql, $params, $fetch_mode, ...$fetch_mode_args);
         }

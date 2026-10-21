@@ -4,6 +4,24 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [Unreleased]
+
+### Security
+- ORM soft delete: scope içindeki `or_where()` silinmiş kayıtları geri getirmez (`WHERE deleted_at IS NULL AND a OR b` yerine `(deleted_at IS NULL) AND (a OR b)`). `has_many` scope'u ve `eager_load()` de başka ebeveynin kayıtlarını getirmez.
+
+### Added
+- `QueryBuilder::constrain()` (@internal): kullanıcının OR koşullarından bağımsız, her zaman AND ile bağlanan koşul.
+
+### Fixed
+- `QueryBuilder::chunk()`: OR içeren sorguda imleç koşulu yalnızca bir kola bağlanıp aynı satırları sonsuza dek döndürüyordu.
+- Query cache: `LIMIT` içeren aynı sorgu `get_row()` sonra `get_results()` ile çağrıldığında `TypeError` (tek satır ve satır listesi aynı anahtarı paylaşıyordu).
+- `enable_query_analysis()` etkisizdi; artık her sorgu çalıştırılmadan önce denetlenir.
+- Raw binding: aynı ad birden çok geçtiğinde her geçişe ayrı placeholder verilir (MySQL native prepare'de `HY093`); `:__pN` adlı binding üretilen placeholder ile çakışmaz; PostgreSQL `::tip` cast'i eşleşmez; SQL'de geçmeyen binding açıklayıcı `InvalidArgumentException` verir.
+- `commit()` exception fırlatırsa açık transaction geri alınır ve ertelenmiş cache invalidation'ları sonraki transaction'a taşınmaz; `transaction()` içinde rollback de başarısız olursa sunucudaki transaction kapatılır.
+- `preload_query()` süresi dolmuş kaydı yeniden yükler.
+- `Model::to_json()` kodlama hatasında boş string yerine `JsonException` fırlatır.
+- Örnek bazlı ayar önbelleği ilk çağrının varsayılan değerini sonraki çağrılara uygulamıyor.
+
 ## [2.4.0] - 2026-10-08
 
 Minor sürüm: yeni özellikler isteğe bağlı. Davranış farkları: [UPGRADE.md](UPGRADE.md#230--240).

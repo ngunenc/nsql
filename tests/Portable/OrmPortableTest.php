@@ -31,6 +31,13 @@ class Author extends Model
     {
         return $this->has_one(Profile::class);
     }
+
+    /** OR içeren scope: yalnızca bu yazarın kayıtlarına uygulanmalı */
+    /** @return list<Post> */
+    public function featured_posts(): array
+    {
+        return $this->has_many(Post::class, scope: fn ($q) => $q->where('title', '=', 'ilk')->or_where('title', '=', 'başka')->order_by('id'));
+    }
 }
 
 class Post extends Model
@@ -478,6 +485,30 @@ class OrmPortableTest extends PortableTestCase
 
         $this->assertTrue($post->force_delete());
         $this->assertSame(0, (new Post($this->db))->query_with_trashed()->count());
+    }
+
+    public function test_soft_delete_and_relation_key_survive_or_where_scope(): void
+    {
+        $author = $this->author();
+        $other = $this->author('Mehmet');
+        (new Post($this->db, ['author_id' => $author->get_key(), 'title' => 'ilk']))->save();
+        $trashed = new Post($this->db, ['author_id' => $author->get_key(), 'title' => 'başka']);
+        $trashed->save();
+        $trashed->delete();
+        (new Post($this->db, ['author_id' => $other->get_key(), 'title' => 'başka']))->save();
+
+        $titles = fn (array $posts) => array_map(fn (Post $p) => $p->title . '#' . $p->author_id, $posts);
+        $scope = fn ($q) => $q->where('title', '=', 'ilk')->or_where('title', '=', 'başka')->order_by('id');
+
+        // Silinmiş kayıt or_where ile geri gelmez
+        $this->assertSame(['ilk#' . $author->get_key(), 'başka#' . $other->get_key()], $titles(Post::get($scope, $this->db)));
+        $this->assertSame('ilk', Post::first(fn ($q) => $q->where('title', '=', 'yok')->or_where('title', '=', 'ilk'), $this->db)?->title);
+
+        // has_many scope'undaki or_where başka yazarın kaydını getirmez (tembel ve toplu yükleme)
+        $this->assertSame(['ilk#' . $author->get_key()], $titles($author->featured_posts));
+        $authors = Author::eager_load([$author, $other], 'featured_posts');
+        $this->assertSame(['ilk#' . $author->get_key()], $titles($authors[0]->featured_posts));
+        $this->assertSame(['başka#' . $other->get_key()], $titles($authors[1]->featured_posts));
     }
 
     public function test_static_query_helpers(): void
