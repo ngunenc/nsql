@@ -1514,21 +1514,26 @@ Nsql::secure_session_start();
 Bu fonksiyon (`SessionManager`);
 - Oturum çerezini `HttpOnly` ve `SameSite=Strict` olarak ayarlar; `secure` verilmezse isteğin HTTPS olup olmadığına göre belirlenir (yerel HTTP geliştirmede çerez çalışır).
 - Uygulama oturumu zaten başlattıysa oturumu **yok etmez**; mevcut oturumu kullanır.
-- Güvenli oturum ilk kez kurulurken session ID yenilenir (session fixation koruması, v2.1.1); oturum verisi korunur. Yetki değişikliğinden (login) sonra `regenerate_id()` çağırmaya devam edin.
+- `session.use_strict_mode` açılır (v2.5.0): sunucuda olmayan, istemcinin uydurduğu oturum ID'si kabul edilmez. Güvenli oturum ilk kez kurulurken de session ID yenilenir; oturum verisi korunur.
+- **Her istekte `validate()` otomatik çalışır (v2.5.0):** boşta kalma (`lifetime`, 1800 sn), en uzun oturum (`max_lifetime`, 12 saat), istek sayısı ve parmak izi kontrol edilir; geçersiz oturum exception yerine yeni, boş bir oturumla değiştirilir (kullanıcı çıkış yapmış olur). Eski davranış: `'auto_validate' => false` (bu durumda `validate()`'i kendiniz çağırın).
 - `X-Frame-Options` ve `X-Content-Type-Options` gönderir. HSTS yalnızca HTTPS'te ve `hsts` açıkça verilirse gönderilir; artık önerilmeyen `X-XSS-Protection` gönderilmez.
 - Parmak izi varsayılan olarak IP içermez (mobil kullanıcılar atılmaz). İsteğe bağlı: `'fingerprint_ip' => 'prefix'` (IPv4 /24, IPv6 /64) veya `'full'`.
-- `validate()` session ID'yi `regenerate_interval` saniyede bir yeniler.
+- Session ID `regenerate_interval` (300 sn) saniyede bir yenilenir. Eski ID 60 saniye daha geçerlidir; aynı anda gelen istekler (AJAX, sekmeler) oturumsuz kalmaz.
 
 ```php
 Nsql::secure_session_start([
     'hsts' => true,               // veya 'max-age=31536000; includeSubDomains; preload'
     'fingerprint_ip' => 'prefix',
 ]);
-Nsql::session()->validate();      // her istekte
-Nsql::session()->regenerate_id(); // login sonrası
+
+// Kullanıcı adı/şifre doğrulandıktan hemen sonra, kimliği oturuma yazmadan önce:
+Nsql::session_login();            // eski oturum silinir, yeni ID + yeni CSRF token
+$_SESSION['user_id'] = $user->id;
 ```
 
-CSRF token'ın süresi `CSRF_TOKEN_TTL` (varsayılan 7200 sn, `0` = süresiz) sonunda dolar ve yenilenir; login gibi yetki değişikliklerinden sonra `SessionManager::rotate_csrf_token()` çağırın.
+Ayarlar ilk `secure_session_start()` / `Nsql::session()` çağrısında verilir; sonraki bir çağrıda farklı ayar verilirse `LogicException` (önceden sessizce yok sayılıyordu).
+
+CSRF token'ın süresi `CSRF_TOKEN_TTL` (varsayılan 7200 sn, `0` = süresiz) sonunda dolar ve yenilenir; `session_login()` token'ı da döndürür. Başka yetki değişikliklerinden sonra `SessionManager::rotate_csrf_token()` çağırın. `SecurityManager::generate_csrf_token()` / `validate_csrf_token()` oturum yoksa onu `secure_session_start()` ile (güvenli cookie ayarlarıyla) başlatır.
 
 > v1.5.30+: `SecurityManager::secure_session_start()` kullanımdan kaldırıldı (deprecated) ve `nsql::secure_session_start()`'a delege ediyor; tek session API'si `SessionManager`.
 

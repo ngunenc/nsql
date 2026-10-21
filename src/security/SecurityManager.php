@@ -8,20 +8,19 @@ use nsql\database\Nsql;
 
 class SecurityManager
 {
-    private RateLimiter $rate_limiter;
-    private SensitiveDataFilter $data_filter;
-    private Encryption $encryption;
-    private AuditLogger $audit_logger;
+    private ?RateLimiter $rate_limiter = null;
+    private ?SensitiveDataFilter $data_filter = null;
+    private ?Encryption $encryption = null;
+    private ?AuditLogger $audit_logger = null;
 
     /**
+     * Bileşenler ilk kullanımda oluşturulur: yalnızca rate limit veya filtre kullanan uygulama için
+     * şifreleme anahtarı gerekmez.
+     *
      * @param Nsql|null $db check_rate_limit() için gerekli (rate_limits tablosu bu bağlantıda tutulur)
      */
-    public function __construct(?Nsql $db = null)
+    public function __construct(private ?Nsql $db = null)
     {
-        $this->rate_limiter = new RateLimiter($db);
-        $this->data_filter = new SensitiveDataFilter();
-        $this->encryption = new Encryption();
-        $this->audit_logger = new AuditLogger();
     }
 
     /**
@@ -76,11 +75,19 @@ class SecurityManager
      */
     public static function generate_csrf_token(): string
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
+        self::ensure_session();
 
         return SessionManager::get_csrf_token();
+    }
+
+    /**
+     * Oturum yoksa güvenli cookie ayarlarıyla başlatır (çıplak session_start() httponly/samesite/secure'u atlar).
+     */
+    private static function ensure_session(): void
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            Nsql::secure_session_start();
+        }
     }
 
     /**
@@ -90,9 +97,7 @@ class SecurityManager
      */
     public static function validate_csrf_token(mixed $token, bool $consume = false): bool
     {
-        if (session_status() !== PHP_SESSION_ACTIVE) {
-            session_start();
-        }
+        self::ensure_session();
 
         return SessionManager::validate_csrf_token($token, $consume);
     }
@@ -285,7 +290,7 @@ class SecurityManager
      */
     public function check_rate_limit(string $identifier, string $request_type = 'default'): bool
     {
-        return $this->rate_limiter->check_rate_limit($identifier, $request_type);
+        return ($this->rate_limiter ??= new RateLimiter($this->db))->check_rate_limit($identifier, $request_type);
     }
 
     /**
@@ -293,7 +298,7 @@ class SecurityManager
      */
     public function filter_sensitive_data(mixed $data): mixed
     {
-        return $this->data_filter->filter($data);
+        return ($this->data_filter ??= new SensitiveDataFilter())->filter($data);
     }
 
     /**
@@ -301,7 +306,7 @@ class SecurityManager
      */
     public function encrypt(string $data, string $context = ''): string
     {
-        return $this->encryption->encrypt($data, $context);
+        return ($this->encryption ??= new Encryption())->encrypt($data, $context);
     }
 
     /**
@@ -309,7 +314,7 @@ class SecurityManager
      */
     public function decrypt(string $encrypted_data, string $context = ''): string
     {
-        return $this->encryption->decrypt($encrypted_data, $context);
+        return ($this->encryption ??= new Encryption())->decrypt($encrypted_data, $context);
     }
 
     /**
@@ -317,7 +322,7 @@ class SecurityManager
      */
     public function log_security_event(string $event, array $context = []): void
     {
-        $this->audit_logger->log_security_event($event, 'Security event', $context, 'info');
+        ($this->audit_logger ??= new AuditLogger())->log_security_event($event, 'Security event', $context, 'info');
     }
 
     /**
