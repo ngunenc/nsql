@@ -155,7 +155,7 @@ class SecurityManager
                 throw new \InvalidArgumentException('Tehlikeli SQL kalıbı tespit edildi.');
             }
             self::log_event('sql_pattern_warning', 'Tehlikeli SQL kalıbı tespit edildi', [
-                'query' => $query,
+                'query' => SensitiveDataFilter::mask_sql_literals($query),
             ]);
         }
 
@@ -170,11 +170,12 @@ class SecurityManager
         // Hassas bilgileri maskele
         $masked_context = self::mask_sensitive_data($context);
 
+        // Mesaj çok satırlı / kullanıcı girdili olabilir: satır sonu kaçırılır (log injection)
         $log_entry = sprintf(
             "[%s] %s %s\n",
             date('Y-m-d H:i:s'),
-            $message,
-            ! empty($masked_context) ? json_encode($masked_context, JSON_UNESCAPED_UNICODE) : ''
+            str_replace(["\r", "\n"], ['\\r', '\\n'], $message),
+            ! empty($masked_context) ? json_encode($masked_context, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE) : ''
         );
 
         $path = Config::resolve_log_path($log_file);
@@ -211,7 +212,7 @@ class SecurityManager
                     throw new \InvalidArgumentException('Doğrudan değer kullanımı tespit edildi. Prepared statements kullanın.');
                 }
                 self::log_event('prepared_stmt_warning', 'Doğrudan değer kullanımı tespit edildi', [
-                    'sql' => $sql,
+                    'sql' => SensitiveDataFilter::mask_sql_literals($sql),
                 ]);
 
                 break;
@@ -248,7 +249,7 @@ class SecurityManager
                 throw new \RuntimeException('Potansiyel SQL Enjeksiyon tespit edildi!');
             }
             self::log_event('sql_injection_warning', 'Potansiyel SQL Enjeksiyon tespit edildi', [
-                'sql' => $sql,
+                'sql' => SensitiveDataFilter::mask_sql_literals($sql),
             ]);
         }
     }
@@ -273,9 +274,10 @@ class SecurityManager
                     if (Config::get('security_strict_mode', false)) {
                         throw new \InvalidArgumentException('Şüpheli parametre içeriği tespit edildi');
                     }
+                    // Değerin kendisi (parola olabilir) yazılmaz
                     self::log_event('param_suspicious', 'Şüpheli parametre içeriği tespit edildi', [
                         'param' => $key,
-                        'value_preview' => mb_substr($value, 0, 64),
+                        'value_length' => mb_strlen($value),
                     ]);
                 }
             }

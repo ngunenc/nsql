@@ -63,7 +63,7 @@ trait QueryEventsTrait
 
         if ($is_slow) {
             $this->log_error('Yavaş sorgu', [
-                'sql' => $sql,
+                'sql' => SensitiveDataFilter::mask_sql_literals($sql),
                 'params' => $masked,
                 'duration_ms' => round($duration_ms, 2),
                 'threshold_ms' => $threshold,
