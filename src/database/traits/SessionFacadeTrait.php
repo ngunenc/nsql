@@ -10,17 +10,34 @@ use nsql\security\SessionManager;
 trait SessionFacadeTrait
 {
     private static ?SessionManager $session = null;
+    /** @var array<string, mixed> */
+    private static array $session_config = [];
 
     /**
-     * Session manager'ı başlatır veya mevcut instance'ı döndürür
+     * Session manager'ı başlatır veya mevcut instance'ı döndürür.
+     *
+     * @throws \LogicException Örnek zaten farklı ayarlarla oluşturulduysa (ayarlar sessizce yok sayılmaz)
      */
     public static function session(array $config = []): SessionManager
     {
         if (self::$session === null) {
             self::$session = new SessionManager($config);
+            self::$session_config = $config;
+        } elseif ($config !== [] && $config !== self::$session_config) {
+            throw new \LogicException(
+                'Session manager zaten farklı ayarlarla oluşturuldu; ayarları ilk secure_session_start() / session() çağrısında verin.'
+            );
         }
 
         return self::$session;
+    }
+
+    /**
+     * Oturum açıldıktan sonra çağırın: oturum ID'si ve CSRF token'ı yenilenir (session fixation).
+     */
+    public static function session_login(): void
+    {
+        self::session()->login();
     }
 
     /**
@@ -39,6 +56,7 @@ trait SessionFacadeTrait
         if (self::$session !== null) {
             self::$session->destroy();
             self::$session = null;
+            self::$session_config = [];
         }
     }
 
