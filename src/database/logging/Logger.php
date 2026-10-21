@@ -76,9 +76,11 @@ class Logger
      */
     private function get_environment_log_level(): int
     {
-        $env = Config::get_environment();
+        if (Config::is_production()) {
+            return self::WARNING;
+        }
 
-        return match ($env) {
+        return match (Config::get_environment()) {
             'production' => self::WARNING, // Production'da sadece WARNING ve üzeri
             'testing' => self::DEBUG, // Testing'de tüm loglar
             'development' => self::INFO, // Development'da INFO ve üzeri

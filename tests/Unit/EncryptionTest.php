@@ -11,22 +11,39 @@ class EncryptionTest extends TestCase
 {
     private string $dir;
 
+    private string|false $env_key = false;
+
     protected function setUp(): void
     {
         $this->dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nsql_keys_' . bin2hex(random_bytes(4));
         mkdir($this->dir, 0700, true);
         Config::set('encryption_key_storage', $this->dir . DIRECTORY_SEPARATOR . 'encryption.key');
+        $this->env_key = getenv('ENCRYPTION_KEY');
     }
 
     protected function tearDown(): void
     {
         Config::set('encryption_key_storage', 'storage/keys/encryption.key');
+        Config::set('encryption_previous_keys', null);
+        Config::set('encryption_key', null);
+        $this->env_key !== false ? putenv('ENCRYPTION_KEY=' . $this->env_key) : putenv('ENCRYPTION_KEY');
         $this->remove_dir($this->dir);
+    }
+
+    /**
+     * Anahtar yalnızca dosyada (rotasyonun desteklendiği tek kaynak).
+     */
+    private function use_storage_key_only(): void
+    {
+        putenv('ENCRYPTION_KEY');
+        Config::set('encryption_key', null);
     }
 
     private function remove_dir(string $dir): void
     {
-        foreach (glob($dir . '/*') ?: [] as $path) {
+        // scandir: rotasyon kilidi (.rotate.lock) gibi gizli dosyalar da silinir
+        foreach (array_diff(scandir($dir) ?: [], ['.', '..']) as $name) {
+            $path = $dir . DIRECTORY_SEPARATOR . $name;
             is_dir($path) ? $this->remove_dir($path) : unlink($path);
         }
         if (is_dir($dir)) {
@@ -151,6 +168,7 @@ class EncryptionTest extends TestCase
 
     public function test_rotation_keeps_old_data_readable(): void
     {
+        $this->use_storage_key_only();
         $old_key = self::key();
         KeyManager::save_key_to_storage($old_key);
 
@@ -174,8 +192,86 @@ class EncryptionTest extends TestCase
         $this->assertSame('rotation öncesi', $default->decrypt($v2_old));
     }
 
+    public function test_data_encrypted_after_rotation_is_readable_by_other_processes(): void
+    {
+        $this->use_storage_key_only();
+        KeyManager::save_key_to_storage(self::key());
+
+        $rotating = new Encryption();
+        $before = $rotating->encrypt('önce');
+        $rotating->rotate_key();
+        $after = $rotating->encrypt('sonra');
+
+        // Başka süreç / yeniden başlatma: varsayılan constructor dosyadaki yeni anahtarı ve arşivi kullanır
+        $other = new Encryption();
+        $this->assertSame('önce', $other->decrypt($before));
+        $this->assertSame('sonra', $other->decrypt($after));
+    }
+
+    /**
+     * ENCRYPTION_KEY varken rotasyon dosyaya yapılırsa diğer süreçler yeni anahtarı göremez (veri kaybı).
+     */
+    public function test_rotation_is_refused_when_key_comes_from_environment(): void
+    {
+        putenv('ENCRYPTION_KEY=' . self::key());
+        $this->assertSame('env', KeyManager::key_source());
+
+        try {
+            (new Encryption())->rotate_key();
+            $this->fail('LogicException bekleniyordu');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('ENCRYPTION_PREVIOUS_KEYS', $e->getMessage());
+        }
+        $this->assertFileDoesNotExist($this->dir . DIRECTORY_SEPARATOR . 'encryption.key');
+
+        putenv('ENCRYPTION_KEY');
+        Config::set('encryption_key', self::key());
+        $this->assertSame('config', KeyManager::key_source());
+        $this->expectException(\LogicException::class);
+        KeyManager::rotate_key();
+    }
+
+    public function test_manual_rotation_with_previous_keys_setting(): void
+    {
+        $old = self::key();
+        putenv('ENCRYPTION_KEY=' . $old);
+        $legacy = (new Encryption())->encrypt('eski anahtarla');
+
+        $new = self::key();
+        putenv('ENCRYPTION_KEY=' . $new);
+        Config::set('encryption_previous_keys', 'not-used-but-valid-below,' . $old);
+        try {
+            new Encryption();
+            $this->fail('Geçersiz önceki anahtar reddedilmeliydi');
+        } catch (\RuntimeException) {
+        }
+
+        Config::set('encryption_previous_keys', ' ' . $old . ' ');
+        $current = new Encryption();
+        $this->assertSame('eski anahtarla', $current->decrypt($legacy));
+        $this->assertTrue($current->needs_reencrypt($legacy));
+    }
+
+    public function test_key_storage_written_without_world_readable_window(): void
+    {
+        $path = $this->dir . DIRECTORY_SEPARATOR . 'encryption.key';
+        $previous = umask(0022);
+        try {
+            KeyManager::save_key_to_storage(self::key());
+        } finally {
+            umask($previous);
+        }
+
+        if (PHP_OS_FAMILY !== 'Windows') {
+            $this->assertSame(0600, fileperms($path) & 0777);
+        }
+        // Geçici dosya kalmaz
+        $this->assertSame([$path], glob($this->dir . DIRECTORY_SEPARATOR . 'encryption.key*'));
+    }
+
     public function test_archived_keys_are_newest_first_and_private(): void
     {
+        $this->use_storage_key_only();
         $first = self::key();
         KeyManager::save_key_to_storage($first);
         $second = KeyManager::rotate_key($first)['new_key'];

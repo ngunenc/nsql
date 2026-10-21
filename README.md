@@ -794,8 +794,9 @@ $enc = new Encryption();
 $crypted = $enc->encrypt('gizli veri');   // "v2:..." (AES-256-GCM, ham 32 byte anahtar, 12 byte IV, key_id)
 $plain = $enc->decrypt($crypted);         // v1 (<= 1.5.22) verileri de çözülür
 
-// Anahtar rotation: eski anahtar storage/keys/archive/ altına (0600) taşınır,
-// v2 verisi key_id ile doğru (arşiv) anahtarla çözülür.
+// Anahtar rotation (yalnızca anahtar dosyadaysa): eski anahtar storage/keys/archive/ altına (0600)
+// taşınır, v2 verisi key_id ile doğru (arşiv) anahtarla çözülür. Anahtar ENCRYPTION_KEY / .env'den
+// geliyorsa LogicException (aşağıdaki elle rotasyona bakın).
 $info = $enc->rotate_key();
 
 // Eski verileri mevcut anahtara taşımak
@@ -803,11 +804,11 @@ if ($enc->needs_reencrypt($crypted)) {
     $crypted = $enc->reencrypt($crypted);
 }
 
-// Anahtarı açıkça verip arşivi eklemek
-$enc = new Encryption($key, KeyManager::get_archived_keys());
+// Anahtarı açıkça verip önceki anahtarları (ENCRYPTION_PREVIOUS_KEYS + arşiv) eklemek
+$enc = new Encryption($key, KeyManager::get_decryption_keys());
 ```
 
-> `ENCRYPTION_KEY` env ile verilen anahtar storage'dan önce gelir; rotation sonrası yeni anahtarı env'e de yazmanız gerekir. Eski anahtarlar `storage/keys/archive/` altında kaldığı sürece eski veriler çözülebilir.
+> **Elle rotasyon (`ENCRYPTION_KEY` ortam değişkeni / `.env`, v2.5.0+):** Yeni anahtarı `ENCRYPTION_KEY`'e, eskisini virgülle ayrılmış `ENCRYPTION_PREVIOUS_KEYS`'e yazın ve tüm süreçleri yeniden başlatın; eski veriler çözülür, `needs_reencrypt()` / `reencrypt()` ile taşınır. v2.5.0 öncesinde `rotate_key()` bu durumda yeni anahtarı yalnızca dosyaya yazıyordu ve diğer süreçler onu göremiyordu; o dönemde şifrelenen veriler için anahtar dosyası otomatik olarak çözme listesine eklenir.
 
 #### Monitoring (health / metrics)
 

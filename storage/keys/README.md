@@ -35,7 +35,7 @@ $key = KeyManager::get_key(); // yoksa üretir ve storage'a yazar
 
 ### Anahtar rotation
 
-Eski anahtarla şifrelenmiş veriler yeni anahtarla açılamaz. Rotate öncesi verileri çözüp yeniden şifreleyin:
+**Anahtar dosyadaysa** `rotate_key()` yeni anahtarı yazar, eskisini `archive/` altına (0600) taşır; eski veriler arşivdeki anahtarla çözülmeye devam eder. Eşzamanlı rotasyonlar `.rotate.lock` ile tekilleştirilir.
 
 ```php
 use nsql\security\KeyManager;
@@ -43,6 +43,15 @@ use nsql\security\KeyManager;
 $info = KeyManager::rotate_key();
 // $info['old_key'], $info['new_key'], $info['rotation_date']
 ```
+
+**Anahtar `ENCRYPTION_KEY` ortam değişkeninden veya `.env`'den geliyorsa** (v2.5.0+) `rotate_key()` `LogicException` fırlatır: dosyaya yazılan anahtarı diğer süreçler göremez ve rotasyondan sonra şifrelenen veri çözülemez hale gelirdi. Elle döndürün:
+
+```env
+ENCRYPTION_KEY=yeni-base64-anahtar
+ENCRYPTION_PREVIOUS_KEYS=eski-base64-anahtar,daha-eski-base64-anahtar
+```
+
+Tüm süreçleri yeniden başlatın; eski veriler çözülür, `Encryption::needs_reencrypt()` / `reencrypt()` ile yeni anahtara taşınabilir.
 
 ## Güvenlik notu (v1.5.3)
 

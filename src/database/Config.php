@@ -115,6 +115,15 @@ class Config
     }
 
     /**
+     * Production ortamı mı? `production` ve `prod` (büyük/küçük harf duyarsız) kabul edilir;
+     * `ENV=prod` yazımı anahtar üretimi gibi production korumalarını devre dışı bırakmaz.
+     */
+    public static function is_production(): bool
+    {
+        return in_array(strtolower(trim(self::$environment)), ['production', 'prod'], true);
+    }
+
+    /**
      * Geçerli ortamı döndürür
      */
     public static function get_environment(): string

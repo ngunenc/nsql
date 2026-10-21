@@ -45,7 +45,7 @@ class Encryption
 
         if ($key === null) {
             $key = KeyManager::get_key();
-            $previous_keys = array_merge($previous_keys, KeyManager::get_archived_keys());
+            $previous_keys = array_merge($previous_keys, KeyManager::get_decryption_keys());
         }
 
         self::raw_key($key);
