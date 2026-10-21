@@ -77,7 +77,20 @@ trait TransactionTrait
         $this->transaction_level--;
 
         if ($this->transaction_level === 0) {
-            $committed = $pdo->commit();
+            try {
+                $committed = $pdo->commit();
+            } catch (\PDOException $e) {
+                // Commit sonucu belirsiz: sunucuda açık kalan transaction geri alınır, ertelenmiş
+                // invalidation'lar bir sonraki transaction'a taşınmaz (tekrar geçersiz kılmak güvenli yön)
+                try {
+                    $pdo->rollBack();
+                } catch (\PDOException) {
+                    // Açık transaction yok veya bağlantı kopmuş; havuz iadesinde atılır
+                }
+                $this->flush_deferred_cache_invalidations(true);
+
+                throw $e;
+            }
             $this->flush_deferred_cache_invalidations($committed);
 
             return $committed;
@@ -156,6 +169,17 @@ trait TransactionTrait
                         } catch (\Throwable) {
                             // Deadlock sunucuda transaction'ı zaten geri almış olabilir (savepoint yok)
                             $this->transaction_level = $outer_level;
+                            if ($outer_level === 0) {
+                                // Sunucuda hâlâ açık transaction varsa sonraki işlemlere sızmasın
+                                try {
+                                    if ($this->pdo?->inTransaction()) {
+                                        $this->pdo->rollBack();
+                                    }
+                                } catch (\Throwable) {
+                                    // Bağlantı kopmuş olabilir; havuz iadesinde atılır
+                                }
+                                $this->flush_deferred_cache_invalidations(false);
+                            }
                         }
                     }
 

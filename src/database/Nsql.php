@@ -364,12 +364,13 @@ class Nsql
         $this->set_last_called_method();
         $query = $this->with_single_row_limit($query);
 
-        // Cache anahtarı yalnızca cache kullanılabilirken hesaplanır
-        $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key($query, $params) : null;
+        // Cache anahtarı yalnızca cache kullanılabilirken hesaplanır. Tek satır sonucu ayrı anahtarla
+        // saklanır: LIMIT içeren aynı sorgu get_results() ile çağrıldığında satır listesi beklenir.
+        $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key('row:' . $query, $params) : null;
         if ($cache_key !== null) {
             $cached = $this->get_from_query_cache($cache_key);
-            if ($cached !== null) {
-                return is_array($cached) && ! empty($cached) ? (object)$cached[0] : $cached;
+            if (is_object($cached)) {
+                return $cached;
             }
         }
 
@@ -400,7 +401,7 @@ class Nsql
         $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key($query, $params) : null;
         if ($cache_key !== null) {
             $cached = $this->get_from_query_cache($cache_key);
-            if ($cached !== null) {
+            if (is_array($cached)) {
                 return $cached;
             }
         }
@@ -474,8 +475,8 @@ class Nsql
 
         $cache_key = $this->generate_query_cache_key($query, $params);
 
-        // Zaten cache'de varsa true döndür
-        if (! $force && isset($this->query_cache[$cache_key])) {
+        // Zaten cache'de geçerli bir kayıt varsa true döndür (süresi dolmuş kayıt yeniden yüklenir)
+        if (! $force && $this->get_from_query_cache($cache_key) !== null) {
             return true;
         }
 

@@ -33,6 +33,13 @@ class QueryBuilder
     private array $where_bools = [];
     /** @var 'AND'|'OR' */
     private string $next_where_bool = 'AND';
+    /**
+     * Kullanıcı koşullarından bağımsız, her zaman AND ile bağlanan koşullar (soft delete, chunk
+     * imleci, ilişki anahtarı). Kullanıcının OR koşulları bunları devre dışı bırakamaz.
+     *
+     * @var list<list<string|array>>
+     */
+    private array $constraints = [];
     /** table() ile verilen düz tablo adı (yazma işlemleri için); subquery FROM'da null */
     private ?string $table_name = null;
     /** @var list<string> */
@@ -260,29 +267,96 @@ class QueryBuilder
     }
 
     /**
+     * $fn'in eklediği koşulları kısıt olarak ekler: derlenen sorguda `kısıtlar AND (kullanıcı
+     * koşulları)` biçiminde, kullanıcının or_where() koşullarından etkilenmeden uygulanır.
+     *
+     * @internal ORM (soft delete, ilişki anahtarı) ve chunk() kullanır
+     * @param callable(self): mixed $fn
+     */
+    public function constrain(callable $fn): self
+    {
+        $part = $this->group_part($fn);
+        if ($part !== null) {
+            $this->constraints[] = $part;
+        }
+
+        return $this;
+    }
+
+    /**
      * Parantezli WHERE grubu: $fn koşulları geçici bir builder'a ekler.
      */
     private function where_group(callable $fn): self
+    {
+        $part = $this->group_part($fn);
+        if ($part !== null) {
+            $this->add_where($part);
+        }
+
+        return $this;
+    }
+
+    /**
+     * $fn'in geçici builder'a eklediği koşulları parantezli tek parçaya çevirir (koşul yoksa null).
+     *
+     * @return list<string|array>|null
+     */
+    private function group_part(callable $fn): ?array
     {
         $group = new self($this->db);
         $group->allow_empty_string = $this->allow_empty_string;
         $fn($group);
 
-        if ($group->where === []) {
-            return $this;
+        $conditions = $group->where_conditions();
+        if ($conditions === []) {
+            return null;
         }
 
         $part = ['('];
-        foreach ($group->where as $i => $condition) {
+        foreach ($conditions as $i => [$bool, $condition]) {
             if ($i > 0) {
-                $part[] = ' ' . $group->where_bools[$i] . ' ';
+                $part[] = ' ' . $bool . ' ';
             }
             array_push($part, ...$condition);
         }
         $part[] = ')';
-        $this->add_where($part);
 
-        return $this;
+        return $part;
+    }
+
+    /**
+     * Derlenecek WHERE koşulları: kısıtlar AND ile, ardından kullanıcı koşulları. Kısıt varken
+     * OR içeren kullanıcı koşulları parantezlenir; böylece `a OR b` kısıtı atlatamaz.
+     *
+     * @return list<array{0: 'AND'|'OR', 1: list<string|array>}>
+     */
+    private function where_conditions(): array
+    {
+        $conditions = [];
+        foreach ($this->constraints as $constraint) {
+            $conditions[] = ['AND', $constraint];
+        }
+
+        $user = $this->where;
+        if ($conditions !== [] && in_array('OR', array_slice($this->where_bools, 1), true)) {
+            $grouped = ['('];
+            foreach ($user as $i => $condition) {
+                if ($i > 0) {
+                    $grouped[] = ' ' . $this->where_bools[$i] . ' ';
+                }
+                array_push($grouped, ...$condition);
+            }
+            $grouped[] = ')';
+            $conditions[] = ['AND', $grouped];
+
+            return $conditions;
+        }
+
+        foreach ($user as $i => $condition) {
+            $conditions[] = [$i === 0 ? 'AND' : $this->where_bools[$i], $condition];
+        }
+
+        return $conditions;
     }
 
     private function between(string $column, mixed $min, mixed $max, bool $not): self
@@ -813,7 +887,8 @@ class QueryBuilder
         for ($page = 1;; $page++) {
             $query = clone $this;
             if ($last !== null) {
-                $query->where($column, '>', $last);
+                // Kısıt: kullanıcının or_where() koşulları imleci atlatıp sonsuz döngü üretmez
+                $query->constrain(fn (self $q) => $q->where($column, '>', $last));
             }
             $rows = array_values($query->order_by($column)->limit($size)->get());
             if ($rows === []) {
@@ -1119,7 +1194,7 @@ class QueryBuilder
             throw new \LogicException("{$operation}(): JOIN, UNION, GROUP BY, HAVING, ORDER BY, LIMIT ve OFFSET desteklenmez.");
         }
 
-        if (in_array($operation, ['update', 'delete'], true) && ! $allow_without_where && $this->where === []) {
+        if (in_array($operation, ['update', 'delete'], true) && ! $allow_without_where && $this->where === [] && $this->constraints === []) {
             throw new \LogicException(
                 "{$operation}(): WHERE koşulu yok; tüm tabloyu etkilemek için {$operation}(…, true) kullanın."
             );
@@ -1250,14 +1325,15 @@ class QueryBuilder
      */
     private function compile_where(int &$counter, array &$params): string
     {
-        if ($this->where === []) {
+        $conditions = $this->where_conditions();
+        if ($conditions === []) {
             return '';
         }
 
         $sql = '';
-        foreach ($this->where as $i => $part) {
+        foreach ($conditions as $i => [$bool, $part]) {
             if ($i > 0) {
-                $sql .= ' ' . $this->where_bools[$i] . ' ';
+                $sql .= ' ' . $bool . ' ';
             }
             $sql .= $this->render($part, $counter, $params);
         }
@@ -1312,9 +1388,30 @@ class QueryBuilder
      */
     private function render_raw(string $sql, array $bindings, int &$counter, array &$params): string
     {
-        foreach ($bindings as $name => $value) {
-            $placeholder = $this->bind($value, $this->get_param_type($value), $counter, $params);
-            $sql = preg_replace('/:' . preg_quote($name, '/') . '\b/', $placeholder, $sql) ?? $sql;
+        if ($bindings === []) {
+            return $sql;
+        }
+
+        // Tek geçiş: üretilen `:__pN` yeniden taranmaz; aynı ad birden çok geçiyorsa her geçişe ayrı
+        // placeholder verilir (native prepare'de tekrarlanan isimli parametre HY093 verir).
+        // `::tip` (PostgreSQL cast) eşleşmez.
+        $names = array_map(static fn ($name) => preg_quote((string) $name, '/'), array_keys($bindings));
+        usort($names, static fn (string $a, string $b) => strlen($b) <=> strlen($a));
+        $used = [];
+        $sql = (string) preg_replace_callback(
+            '/(?<!:):(' . implode('|', $names) . ')\b/',
+            function (array $m) use ($bindings, &$counter, &$params, &$used): string {
+                $value = $bindings[$m[1]];
+                $used[$m[1]] = true;
+
+                return $this->bind($value, $this->get_param_type($value), $counter, $params);
+            },
+            $sql
+        );
+
+        $unused = array_diff(array_map('strval', array_keys($bindings)), array_keys($used));
+        if ($unused !== []) {
+            throw new \InvalidArgumentException('Raw SQL içinde kullanılmayan binding: :' . implode(', :', $unused));
         }
 
         return $sql;

@@ -22,10 +22,11 @@ trait HotSettingsTrait
             $this->hot_settings_revision = $revision;
         }
 
+        // Tanımsız anahtar null olarak saklanır; varsayılan her çağrıda kendi $default'u olur
         if (! array_key_exists($key, $this->hot_settings)) {
-            $this->hot_settings[$key] = Config::get($key, $default);
+            $this->hot_settings[$key] = Config::has($key) ? Config::get($key) : null;
         }
 
-        return $this->hot_settings[$key];
+        return $this->hot_settings[$key] ?? $default;
     }
 }
