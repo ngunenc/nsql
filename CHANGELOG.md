@@ -4,7 +4,9 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
-## [Unreleased]
+## [2.4.1] - 2026-10-21
+
+Patch sürüm: hata ve güvenlik düzeltmeleri. Davranış farkları: [UPGRADE.md](UPGRADE.md#240--241).
 
 ### Security
 - ORM soft delete: scope içindeki `or_where()` silinmiş kayıtları geri getirmez (`WHERE deleted_at IS NULL AND a OR b` yerine `(deleted_at IS NULL) AND (a OR b)`). `has_many` scope'u ve `eager_load()` de başka ebeveynin kayıtlarını getirmez.
