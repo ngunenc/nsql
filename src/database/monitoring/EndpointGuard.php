@@ -13,6 +13,8 @@ namespace nsql\database\monitoring;
 class EndpointGuard
 {
     public const HEADER_TOKEN = 'X-NSQL-Monitoring-Token';
+    /** Daha kısa token (ör. `123`) tahmin edilebilir; endpoint kapalı sayılır */
+    public const MIN_TOKEN_LENGTH = 16;
 
     /**
      * Endpoint'i korur; yetkisizse JSON yanıt yazıp script'i sonlandırır.
@@ -39,6 +41,11 @@ class EndpointGuard
         $configured = self::get_configured_token();
         if ($configured === null || $configured === '') {
             return self::denial(403, 'Monitoring token not configured');
+        }
+        if (strlen($configured) < self::MIN_TOKEN_LENGTH) {
+            error_log(sprintf('[nsql monitoring] NSQL_MONITORING_TOKEN en az %d karakter olmalı; endpoint kapalı.', self::MIN_TOKEN_LENGTH));
+
+            return self::denial(403, 'Monitoring token too short');
         }
 
         $provided = self::extract_request_token();

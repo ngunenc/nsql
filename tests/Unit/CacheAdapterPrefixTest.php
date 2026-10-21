@@ -62,6 +62,22 @@ class CacheAdapterPrefixTest extends TestCase
         $this->assertSame(2, $adapter->get('k2'));
     }
 
+    /**
+     * Kısa TTL'li kayıt tag kümesinin süresini kısaltırsa uzun ömürlü kayıt tag ile silinemez (bayat veri).
+     */
+    public function test_redis_tag_ttl_is_only_extended(): void
+    {
+        $redis = new FakeRedis();
+        $adapter = new RedisAdapter(prefix: 'app1_', client: $redis);
+
+        $adapter->set('long', 'a', 3600, ['users']);
+        $adapter->set('short', 'b', 60, ['users']);
+        $this->assertSame(3600, $redis->ttl('app1_tag:users'));
+
+        $adapter->set('longer', 'c', 7200, ['users']);
+        $this->assertSame(7200, $redis->ttl('app1_tag:users'));
+    }
+
     public function test_empty_prefix_is_rejected(): void
     {
         $this->expectException(\InvalidArgumentException::class);

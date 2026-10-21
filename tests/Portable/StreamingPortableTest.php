@@ -57,6 +57,51 @@ class StreamingPortableTest extends PortableTestCase
         $this->assertSame(25, $count);
     }
 
+    /**
+     * Sondaki `;` veya satır yorumu eklenen LIMIT/OFFSET'i etkisiz bırakıyor, aynı satırlar
+     * MAX_RESULT_SET_SIZE'a kadar tekrar tekrar dönüyordu.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function terminated_queries(): array
+    {
+        return [
+            'semicolon' => ['SELECT id FROM p_events ORDER BY id;'],
+            'semicolon and spaces' => ["SELECT id FROM p_events ORDER BY id ;  \n"],
+            'line comment' => ['SELECT id FROM p_events ORDER BY id -- son yorum'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('terminated_queries')]
+    public function test_buffered_paging_is_not_broken_by_query_terminators(string $query): void
+    {
+        Config::set('default_chunk_size', 10);
+        Config::set('auto_adjust_chunk_size', false);
+        try {
+            $ids = [];
+            foreach ($this->db->get_yield($query, [], unbuffered: false) as $row) {
+                $ids[] = (int) $row->id;
+                if (count($ids) > 30) {
+                    break;
+                }
+            }
+
+            $chunks = [];
+            foreach ($this->db->get_chunk($query, [], 10) as $chunk) {
+                $chunks[] = count($chunk);
+                if (count($chunks) > 3) {
+                    break;
+                }
+            }
+        } finally {
+            Config::set('default_chunk_size', null);
+            Config::set('auto_adjust_chunk_size', null);
+        }
+
+        $this->assertSame(range(1, 25), $ids);
+        $this->assertSame([10, 10, 5], $chunks);
+    }
+
     public function test_chunk_by_id_visits_every_row(): void
     {
         $seen = [];

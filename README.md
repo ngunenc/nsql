@@ -815,7 +815,7 @@ $enc = new Encryption($key, KeyManager::get_decryption_keys());
 Örnek endpoint'ler `examples/monitoring/health.php` ve `examples/monitoring/metrics.php` içindedir (pakete dahil değildir; kendi `public/` dizininize kopyalayın). **Token zorunludur**:
 
 ```env
-NSQL_MONITORING_TOKEN=uzun-rastgele-secret
+NSQL_MONITORING_TOKEN=uzun-rastgele-secret   # en az 16 karakter (v2.5.0+); daha kısası 403
 # NSQL_MONITORING_ENABLED=false  # endpoint'leri kapatır
 ```
 

@@ -29,6 +29,8 @@ class MigrationManager
     private bool $dry_run = false;
     private bool $table_ready = false;
     private array $dependencies = [];
+    /** @var array<string, list<string>> add_dependency() ile elle eklenenler (load_migrations() korur) */
+    private array $manual_dependencies = [];
 
     /** İç içe kilitli çağrılar (rollback() → rollback_batch()) kilidi bir kez alır */
     private int $lock_depth = 0;
@@ -357,6 +359,9 @@ class MigrationManager
     public function load_migrations(): void
     {
         $this->migrations = [];
+        // Dosyalardan gelen bağımlılıklar her yüklemede yeniden kurulur: silinen / değişen migration'ın
+        // eski bağımlılığı kalmaz
+        $this->dependencies = $this->manual_dependencies;
 
         if (! is_dir($this->migrations_path)) {
             return;
@@ -969,10 +974,12 @@ PHP;
      */
     public function add_dependency(string $migration, string $depends_on): void
     {
-        if (! isset($this->dependencies[$migration])) {
-            $this->dependencies[$migration] = [];
+        foreach (['manual_dependencies', 'dependencies'] as $property) {
+            $this->{$property}[$migration] ??= [];
+            if (! in_array($depends_on, $this->{$property}[$migration], true)) {
+                $this->{$property}[$migration][] = $depends_on;
+            }
         }
-        $this->dependencies[$migration][] = $depends_on;
     }
 
     /**

@@ -17,13 +17,24 @@ final class IpResolver
     private bool $trust_immediate_peer;
     /** @var array<string, mixed> */
     private array $server;
+    /** @var list<string> Okunacak istemci IP başlıkları (küçük harf) */
+    private array $headers;
+
+    public const DEFAULT_HEADERS = ['x-forwarded-for', 'x-real-ip', 'cf-connecting-ip'];
 
     /**
      * @param array<string> $trusted_proxies IP veya CIDR (IPv4/IPv6). '*' isteği gönderen eşe güvenir.
      * @param array<string, mixed>|null $server null ise $_SERVER
+     * @param list<string>|null $headers Güvenilir proxy'nin gerçekten yazdığı başlıklar; listede olmayan
+     *        başlık okunmaz (ör. nginx yalnızca X-Forwarded-For yazıyorsa istemcinin gönderdiği
+     *        CF-Connecting-IP sahte olabilir). null: DEFAULT_HEADERS
      */
-    public function __construct(array $trusted_proxies = [], ?array $server = null)
+    public function __construct(array $trusted_proxies = [], ?array $server = null, ?array $headers = null)
     {
+        $this->headers = array_values(array_filter(array_map(
+            static fn ($h) => strtolower(trim((string) $h)),
+            $headers ?? self::DEFAULT_HEADERS
+        )));
         $this->trust_immediate_peer = in_array('*', $trusted_proxies, true);
         $this->trusted_proxies = array_values(array_filter(
             array_map('trim', $trusted_proxies),
@@ -42,7 +53,12 @@ final class IpResolver
         $value = Config::get('TRUSTED_PROXIES', '');
         $list = is_array($value) ? $value : explode(',', (string) $value);
 
-        return new self(array_map('strval', $list), $server);
+        $headers = Config::get('TRUSTED_PROXY_HEADERS');
+        if (is_string($headers) && trim($headers) !== '') {
+            $headers = explode(',', $headers);
+        }
+
+        return new self(array_map('strval', $list), $server, is_array($headers) ? array_values(array_map('strval', $headers)) : null);
     }
 
     public function client_ip(): string
@@ -56,12 +72,17 @@ final class IpResolver
             return $remote;
         }
 
-        $forwarded_for = trim((string) ($this->server['HTTP_X_FORWARDED_FOR'] ?? ''));
+        $forwarded_for = in_array('x-forwarded-for', $this->headers, true)
+            ? trim((string) ($this->server['HTTP_X_FORWARDED_FOR'] ?? ''))
+            : '';
         if ($forwarded_for !== '') {
             return $this->resolve_forwarded_chain(explode(',', $forwarded_for), $remote);
         }
 
-        foreach (['HTTP_X_REAL_IP', 'HTTP_CF_CONNECTING_IP'] as $header) {
+        foreach (['x-real-ip' => 'HTTP_X_REAL_IP', 'cf-connecting-ip' => 'HTTP_CF_CONNECTING_IP'] as $name => $header) {
+            if (! in_array($name, $this->headers, true)) {
+                continue;
+            }
             $ip = $this->normalize((string) ($this->server[$header] ?? ''));
             if ($ip !== null) {
                 return $ip;

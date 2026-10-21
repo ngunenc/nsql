@@ -87,6 +87,32 @@ class IpResolverTest extends TestCase
         ]))->client_ip());
     }
 
+    /**
+     * Proxy yalnızca X-Forwarded-For yazıyorsa, XFF'siz istekte istemcinin gönderdiği X-Real-IP /
+     * CF-Connecting-IP sahte olabilir; TRUSTED_PROXY_HEADERS ile kapatılır.
+     */
+    public function test_unlisted_headers_are_ignored(): void
+    {
+        $server = ['REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_REAL_IP' => '198.51.100.8', 'HTTP_CF_CONNECTING_IP' => '198.51.100.9'];
+
+        $this->assertSame('10.0.0.5', (new IpResolver(['10.0.0.5'], $server, ['x-forwarded-for']))->client_ip());
+        $this->assertSame('198.51.100.9', (new IpResolver(['10.0.0.5'], $server, ['CF-Connecting-IP']))->client_ip());
+        // Listede olmayan X-Forwarded-For okunmaz
+        $this->assertSame(
+            '198.51.100.8',
+            (new IpResolver(['10.0.0.5'], $server + ['HTTP_X_FORWARDED_FOR' => '203.0.113.1'], ['x-real-ip']))->client_ip()
+        );
+
+        Config::set('TRUSTED_PROXIES', '10.0.0.5');
+        Config::set('TRUSTED_PROXY_HEADERS', 'x-forwarded-for');
+        try {
+            $this->assertSame('10.0.0.5', IpResolver::from_config($server)->client_ip());
+        } finally {
+            Config::set('TRUSTED_PROXIES', null);
+            Config::set('TRUSTED_PROXY_HEADERS', null);
+        }
+    }
+
     public function test_ipv6_ranges_and_bracketed_ports(): void
     {
         $resolver = new IpResolver(['2001:db8::/32'], [

@@ -34,6 +34,14 @@ class RateLimiterSchemaTest extends TestCase
         RateLimiter::schema_sql('x; DROP TABLE users');
     }
 
+    public function test_mysql_identifier_columns_are_case_sensitive(): void
+    {
+        $ddl = RateLimiter::schema_statements('rate_limits', 'mysql')[0];
+
+        $this->assertStringContainsString('identifier VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin', $ddl);
+        $this->assertStringContainsString('request_type VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin', $ddl);
+    }
+
     public function test_valid_table_produces_ddl(): void
     {
         $statements = RateLimiter::schema_statements('custom_limits', 'sqlite');
