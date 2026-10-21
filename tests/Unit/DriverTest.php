@@ -35,11 +35,11 @@ class DriverTest extends TestCase
         $driver = new \nsql\database\drivers\MysqlDriver();
 
         $this->assertSame(
-            ['driver' => 'mysql', 'host' => 'db', 'port' => 3307, 'dbname' => 'app', 'charset' => 'utf8'],
+            ['driver' => 'mysql', 'host' => 'db', 'port' => 3307, 'dbname' => 'app', 'charset' => 'utf8', 'params' => []],
             $driver->parse_dsn('mysql:host=db;port=3307;dbname=app;charset=utf8')
         );
         $this->assertSame(
-            ['driver' => 'mysql', 'host' => 'localhost', 'port' => 3306, 'dbname' => 'app', 'charset' => 'utf8mb4'],
+            ['driver' => 'mysql', 'host' => 'localhost', 'port' => 3306, 'dbname' => 'app', 'charset' => 'utf8mb4', 'params' => []],
             $driver->parse_dsn('mysql:host=localhost;dbname=app')
         );
         $this->assertSame(3308, $driver->parse_dsn('mysql:host=db:3308;dbname=app')['port']);
@@ -47,6 +47,70 @@ class DriverTest extends TestCase
             $driver->parse_dsn($driver->build_dsn(['host' => 'db', 'port' => 3309, 'dbname' => 'app'])),
             ['host' => 1, 'port' => 1, 'dbname' => 1]
         )));
+    }
+
+    public function test_pgsql_keeps_tls_and_extra_params(): void
+    {
+        $driver = new PgsqlDriver();
+        $dsn = 'pgsql:host=db;dbname=app;sslmode=verify-full;sslrootcert=/etc/ca.pem;application_name=api;user=u;password=p';
+        $parsed = $driver->parse_dsn($dsn);
+
+        $this->assertSame(['sslmode' => 'verify-full', 'sslrootcert' => '/etc/ca.pem', 'application_name' => 'api'], $parsed['params']);
+        $this->assertSame(['u', 'p'], [$parsed['user'], $parsed['password']]);
+
+        $rebuilt = $driver->build_dsn(['host' => 'db', 'dbname' => 'app', 'charset' => 'UTF8', 'params' => $parsed['params']]);
+        $this->assertStringContainsString(';sslmode=verify-full;sslrootcert=/etc/ca.pem;application_name=api', $rebuilt);
+
+        // client_encoding dışındaki options korunur
+        $with_options = $driver->parse_dsn("pgsql:host=db;options='--client_encoding=LATIN1 -c search_path=app'");
+        $this->assertSame('LATIN1', $with_options['charset']);
+        $this->assertStringContainsString(
+            "options='--client_encoding=LATIN1 -c search_path=app'",
+            $driver->build_dsn(['host' => 'db', 'charset' => 'LATIN1', 'params' => $with_options['params']])
+        );
+    }
+
+    public function test_mysql_unix_socket_and_extra_params(): void
+    {
+        $driver = new \nsql\database\drivers\MysqlDriver();
+        $parsed = $driver->parse_dsn('mysql:unix_socket=/run/mysqld/mysqld.sock;dbname=app');
+
+        $this->assertSame(['unix_socket' => '/run/mysqld/mysqld.sock'], $parsed['params']);
+        $this->assertStringEndsWith(
+            ';unix_socket=/run/mysqld/mysqld.sock',
+            $driver->build_dsn(['host' => $parsed['host'], 'dbname' => 'app', 'params' => $parsed['params']])
+        );
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function injected_dsn_values(): array
+    {
+        return [
+            'dbname' => [['host' => 'db', 'dbname' => 'tenant;sslmode=disable']],
+            'host' => [['host' => 'db;port=1']],
+            'param value' => [['host' => 'db', 'params' => ['application_name' => 'x;sslmode=disable']]],
+            'param name' => [['host' => 'db', 'params' => ['bad name' => 'x']]],
+        ];
+    }
+
+    /**
+     * Kiracı adı gibi dışarıdan gelen değer `;` ile yeni DSN parametresi ekleyemez.
+     *
+     * @param array<string, mixed> $config
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('injected_dsn_values')]
+    public function test_dsn_values_cannot_inject_parameters(array $config): void
+    {
+        foreach ([new PgsqlDriver(), new \nsql\database\drivers\MysqlDriver()] as $driver) {
+            try {
+                $driver->build_dsn($config);
+                $this->fail(get_class($driver) . ' değeri reddetmeliydi');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('DSN', $e->getMessage());
+            }
+        }
     }
 
     public function test_pgsql_rejects_invalid_dsn(): void

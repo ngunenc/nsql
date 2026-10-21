@@ -7,6 +7,15 @@ namespace nsql\database\drivers;
  */
 class MysqlDriver implements DriverInterface
 {
+    use DsnParamsTrait;
+
+    /** parse_dsn()'in ayrı alan olarak döndürdüğü anahtarlar; diğerleri `params` */
+    private const KNOWN_KEYS = ['host', 'port', 'dbname', 'charset', 'user', 'password'];
+
+    /**
+     * @param array{host?: string, port?: int, dbname?: string, charset?: string, params?: array<string, mixed>} $config
+     *        `params`: ek DSN parametreleri (`unix_socket` …)
+     */
     public function build_dsn(array $config): string
     {
         $host = $config['host'] ?? 'localhost';
@@ -14,52 +23,53 @@ class MysqlDriver implements DriverInterface
         $dbname = $config['dbname'] ?? '';
         $charset = $config['charset'] ?? 'utf8mb4';
 
-        $dsn = "mysql:host={$host}";
+        $dsn = 'mysql:host=' . self::dsn_value('host', $host);
 
         if (isset($config['port'])) {
-            $dsn .= ";port={$port}";
+            $dsn .= ';port=' . (int) $port;
         }
 
         if ($dbname) {
-            $dsn .= ";dbname={$dbname}";
+            $dsn .= ';dbname=' . self::dsn_value('dbname', $dbname);
         }
 
-        $dsn .= ";charset={$charset}";
+        $dsn .= ';charset=' . self::dsn_value('charset', $charset);
 
-        return $dsn;
+        return $dsn . self::dsn_params($config['params'] ?? []);
     }
 
+    /**
+     * @return array{driver: string, host: string, port: int, dbname: ?string, charset: string, user?: string, password?: string, params: array<string, string>}
+     */
     public function parse_dsn(string $dsn): array
     {
         if (! str_starts_with($dsn, 'mysql:')) {
             throw new \InvalidArgumentException('Geçersiz MySQL DSN formatı');
         }
 
-        $parts = [];
-        foreach (explode(';', substr($dsn, 6)) as $pair) {
-            [$key, $value] = array_pad(explode('=', $pair, 2), 2, '');
-            if (trim($key) !== '') {
-                $parts[strtolower(trim($key))] = trim($value);
-            }
-        }
-
-        $host = $parts['host'] ?? '';
-        $port = $parts['port'] ?? '';
+        $parts = self::parse_pairs(substr($dsn, 6));
         // Eski host:port yazımı
-        if ($port === '' && preg_match('/^([^:]+):(\d+)$/', $host, $m)) {
-            [$host, $port] = [$m[1], $m[2]];
-        }
-        if ($host === '') {
+        [$host, $port] = self::split_host_port($parts['host'] ?? '', $parts['port'] ?? '');
+        if ($host === '' && ($parts['unix_socket'] ?? '') === '') {
             throw new \InvalidArgumentException('Geçersiz MySQL DSN formatı');
         }
 
-        return [
+        $parsed = [
             'driver' => 'mysql',
-            'host' => $host,
+            // unix_socket verildiğinde host yok sayılır
+            'host' => $host !== '' ? $host : 'localhost',
             'port' => ctype_digit($port) ? (int) $port : 3306,
             'dbname' => ($parts['dbname'] ?? '') !== '' ? $parts['dbname'] : null,
             'charset' => ($parts['charset'] ?? '') !== '' ? $parts['charset'] : 'utf8mb4',
+            'params' => array_diff_key($parts, array_flip(self::KNOWN_KEYS)),
         ];
+        foreach (['user', 'password'] as $credential) {
+            if (isset($parts[$credential])) {
+                $parsed[$credential] = $parts[$credential];
+            }
+        }
+
+        return $parsed;
     }
 
     public function get_pdo_options(): array

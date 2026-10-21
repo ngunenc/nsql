@@ -81,6 +81,8 @@ class Nsql
     private ?string $user = null;
     private ?string $pass = null;
     private ?DriverInterface $driver = null;
+    /** @var array<string, mixed> Ek DSN parametreleri (replica bağlantısına da aktarılır) */
+    private array $dsn_params = [];
     /** @var array{host: string, db: string, user: string, pass: string, charset: string, driver: string, port: int} */
     private array $connection_args;
 
@@ -109,7 +111,8 @@ class Nsql
         ?bool $debug = null,
         ?string $driver = null,
         ?int $port = null,
-        ?array $options = null
+        ?array $options = null,
+        ?array $dsn_params = null
     ) {
         // Driver belirle (varsayılan: mysql)
         $driver_name = $driver ?? Config::get('db_driver', 'mysql');
@@ -145,6 +148,8 @@ class Nsql
             unset($config['host'], $config['charset']);
         } else {
             $config['port'] = $port;
+            $this->dsn_params = ($dsn_params ?? []) + $this->configured_dsn_params($this->driver->get_driver_name());
+            $config['params'] = $this->dsn_params;
         }
 
         $this->dsn = $this->driver->build_dsn($config);
@@ -156,6 +161,7 @@ class Nsql
         $this->options = [
             \PDO::ATTR_PERSISTENT => (int)(bool)Config::get('persistent_connection', Config::persistent_connection),
         ] + $this->driver->get_pdo_options();
+        $this->options = self::configured_ssl_options($this->driver->get_driver_name()) + $this->options;
         foreach ($options ?? [] as $attribute => $value) {
             $this->options[$attribute] = $value;
         }
@@ -176,6 +182,72 @@ class Nsql
         $this->initialize_pool();
         $this->initialize_connection();
         $this->load_cache_config();
+    }
+
+    /**
+     * PostgreSQL TLS ayarları (DB_SSLMODE, DB_SSLROOTCERT, DB_SSLCERT, DB_SSLKEY) → DSN parametreleri.
+     * Çağıranın veya DSN'in verdiği parametre önceliklidir.
+     *
+     * @return array<string, string>
+     */
+    private function configured_dsn_params(string $driver): array
+    {
+        if ($driver !== 'pgsql') {
+            return [];
+        }
+
+        $params = [];
+        foreach (['sslmode' => 'db_sslmode', 'sslrootcert' => 'db_sslrootcert', 'sslcert' => 'db_sslcert', 'sslkey' => 'db_sslkey'] as $param => $key) {
+            $value = Config::get($key);
+            if (is_string($value) && trim($value) !== '') {
+                $params[$param] = trim($value);
+            }
+        }
+
+        return $params;
+    }
+
+    /**
+     * MySQL TLS ayarları (DB_SSL_CA, DB_SSL_CERT, DB_SSL_KEY, DB_SSL_VERIFY) → PDO seçenekleri.
+     *
+     * @return array<int, mixed>
+     */
+    private static function configured_ssl_options(string $driver): array
+    {
+        if ($driver !== 'mysql') {
+            return [];
+        }
+
+        $options = [];
+        foreach (['ssl_ca' => 'SSL_CA', 'ssl_cert' => 'SSL_CERT', 'ssl_key' => 'SSL_KEY'] as $key => $attribute) {
+            $value = Config::get('db_' . $key);
+            $constant = self::mysql_attribute($attribute);
+            if ($constant !== null && is_string($value) && trim($value) !== '') {
+                $options[$constant] = trim($value);
+            }
+        }
+
+        $verify = Config::get('db_ssl_verify');
+        $constant = self::mysql_attribute('SSL_VERIFY_SERVER_CERT');
+        if ($constant !== null && $verify !== null && $verify !== '') {
+            $options[$constant] = filter_var($verify, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return $options;
+    }
+
+    /**
+     * `Pdo\Mysql::ATTR_*` (PHP 8.4+) veya `PDO::MYSQL_ATTR_*`; pdo_mysql yüklü değilse null.
+     */
+    private static function mysql_attribute(string $name): ?int
+    {
+        foreach (['Pdo\\Mysql::ATTR_' . $name, 'PDO::MYSQL_ATTR_' . $name] as $constant) {
+            if (defined($constant)) {
+                return (int) constant($constant);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -232,13 +304,16 @@ class Nsql
             host: $parsed['host'] ?? null,
             // SQLite'ta dbname yalnızca dosya adıdır (basename); tam yol kullanılmalı (#98)
             db: $parsed['driver'] === 'sqlite' ? ($parsed['path'] ?? null) : ($parsed['dbname'] ?? null),
-            user: $username,
-            pass: $password,
+            // Argüman verilmezse DSN'deki user/password; ikisi de yoksa Config (DB_USER/DB_PASS)
+            user: $username ?? $parsed['user'] ?? null,
+            pass: $password ?? $parsed['password'] ?? null,
             charset: $parsed['charset'] ?? null,
             driver: $parsed['driver'],
             port: isset($parsed['port']) ? (int) $parsed['port'] : null,
             // Bağlantı kurulmadan uygulanır: ATTR_PERSISTENT, ATTR_TIMEOUT, SSL vb. ancak böyle etkilidir (#98)
-            options: $options
+            options: $options,
+            // sslmode, sslrootcert, unix_socket … atılmaz (önceden TLS'siz bağlanılıyordu)
+            dsn_params: $parsed['params'] ?? null
         );
 
         return $instance;

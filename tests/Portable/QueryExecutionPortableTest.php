@@ -64,6 +64,32 @@ class QueryExecutionPortableTest extends PortableTestCase
         $this->assertCount(3, $db->get_results($sql));
     }
 
+    public function test_connect_passes_extra_dsn_params_to_server(): void
+    {
+        if (self::driver() !== 'pgsql') {
+            $this->markTestSkipped('application_name yalnızca PostgreSQL DSN parametresi');
+        }
+
+        // Kimlik bilgisi yalnızca DSN'de; argüman verilmez (önceden DB_USER/DB_PASS'e düşülüyordu)
+        $dsn = sprintf(
+            'pgsql:host=%s;port=%d;dbname=%s;application_name=nsql_dsn_probe;sslmode=disable;user=%s;password=%s',
+            (string) Config::get('db_host', 'localhost'),
+            (int) Config::get('db_port', 5432),
+            (string) Config::get('db_name', 'nsql_test_db'),
+            (string) Config::get('db_user', 'postgres'),
+            (string) Config::get('db_pass', '')
+        );
+        $previous = Config::get('db_user');
+        Config::set('db_user', 'nsql_wrong_user');
+        try {
+            $db = Nsql::connect($dsn);
+        } finally {
+            Config::set('db_user', $previous);
+        }
+
+        $this->assertSame('nsql_dsn_probe', $db->get_row('SHOW application_name')?->application_name);
+    }
+
     public function test_enabled_query_analysis_blocks_critical_query_before_execution(): void
     {
         $this->db->enable_query_analysis();
