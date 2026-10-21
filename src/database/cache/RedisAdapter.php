@@ -75,8 +75,11 @@ class RedisAdapter implements CacheAdapterInterface
                 return false;
             }
 
-            if ($this->password !== null) {
-                $this->redis->auth($this->password);
+            // Başarısız AUTH sonrası her komut NOAUTH ile düşer; bağlantı kurulmuş sayılmaz
+            if ($this->password !== null && ! $this->redis->auth($this->password)) {
+                $this->redis = null;
+
+                return false;
             }
 
             if ($this->database > 0) {
@@ -146,7 +149,11 @@ class RedisAdapter implements CacheAdapterInterface
             foreach ($tags as $tag) {
                 $tag_key = $this->tag_key((string) $tag);
                 $redis->sAdd($tag_key, $full_key);
-                $redis->expire($tag_key, $ttl);
+                // Süre yalnızca uzatılır: kısa TTL'li yeni kayıt, uzun ömürlü kayıtların tag kümesini erken
+                // silerse invalidate_by_tag() onları bulamaz ve bayat veri döner
+                if ((int) $redis->ttl($tag_key) < $ttl) {
+                    $redis->expire($tag_key, $ttl);
+                }
             }
 
             return $result;

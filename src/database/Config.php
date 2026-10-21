@@ -285,9 +285,20 @@ class Config
             }
         }
 
+        // Giriş betiğinin konumu CWD'den önce gelir: `cd /tmp && php /var/www/app/cron.php` çalıştırılınca
+        // /tmp/.env yüklenmez (.env gerçek ortam değişkenlerini ezdiğinden DB_HOST vb. ele geçirilebilirdi)
+        $script = $_SERVER['SCRIPT_FILENAME'] ?? null;
+        if (is_string($script) && $script !== '' && is_file($script)) {
+            $script_dir = dirname((string) (realpath($script) ?: $script));
+            $fromScript = self::find_application_root_upwards($script_dir);
+            if ($fromScript !== null) {
+                return $fromScript;
+            }
+        }
+
         $cwd = getcwd();
         if ($cwd !== false) {
-            $fromCwd = self::find_application_root_upwards($cwd);
+            $fromCwd = self::find_application_root_upwards($cwd, skip_world_writable: true);
             if ($fromCwd !== null) {
                 return $fromCwd;
             }
@@ -378,11 +389,11 @@ class Config
      * Yukarı doğru uygulama kökü ara (.env veya composer.json + vendor/autoload.php).
      * Composer paket dizinleri aday olarak reddedilir.
      */
-    private static function find_application_root_upwards(string $start): ?string
+    private static function find_application_root_upwards(string $start, bool $skip_world_writable = false): ?string
     {
         $dir = rtrim($start, '/\\');
         for ($i = 0; $i < 16; $i++) {
-            if (! self::is_vendor_package_path($dir)) {
+            if (! self::is_vendor_package_path($dir) && ! ($skip_world_writable && self::is_world_writable_dir($dir))) {
                 $hasEnv = is_file($dir . DIRECTORY_SEPARATOR . '.env');
                 $hasComposerApp = is_file($dir . DIRECTORY_SEPARATOR . 'composer.json')
                     && is_file($dir . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php');
@@ -400,6 +411,21 @@ class Config
         }
 
         return null;
+    }
+
+    /**
+     * Herkesin yazabildiği dizin mi (`/tmp` gibi)? Böyle bir dizindeki `.env` başka bir kullanıcı
+     * tarafından bırakılmış olabilir; kök adayı olarak kullanılmaz. Windows'ta izinler raporlanmaz.
+     */
+    private static function is_world_writable_dir(string $dir): bool
+    {
+        if (PHP_OS_FAMILY === 'Windows' || ! is_dir($dir)) {
+            return false;
+        }
+
+        $perms = @fileperms($dir);
+
+        return $perms !== false && ($perms & 0002) === 0002;
     }
 
     /** .env dosyasını okuyup self::$config içine yükler (stream-based okuma ile optimize edilmiş) */

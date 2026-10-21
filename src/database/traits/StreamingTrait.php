@@ -36,14 +36,19 @@ trait StreamingTrait
             return;
         }
 
-        if ($this->has_top_level_limit($query)) {
-            throw new \InvalidArgumentException('get_yield() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
+        $query = $this->pageable_query($query, 'get_yield');
+        if (! $this->has_top_level_order_by($query)) {
+            // OFFSET sayfalamada sıra garanti değilse parçalar arasında satır atlanır veya tekrarlanır
+            $this->log_error(
+                'get_yield(unbuffered: false): sorguda ORDER BY yok; parçalar arasında satır atlanabilir veya tekrarlanabilir. '
+                . 'Benzersiz bir kolona göre sıralayın veya chunk_by_id() kullanın.',
+                [],
+                \nsql\database\logging\Logger::WARNING
+            );
         }
 
         $offset = 0;
-        $chunk_size = max(1, (int) Config::get('default_chunk_size', Config::default_chunk_size));
-        $cleanup_interval = max(1, (int) Config::get('generator_cleanup_interval', 1000));
-        $gc_interval = Config::default_chunk_size * max(1, (int) Config::get('generator_gc_interval_multiplier', 5));
+        MemoryMonitor::set_chunk_size((int) Config::get('default_chunk_size', Config::default_chunk_size));
         $total_rows = 0;
         $stmt = null;
 
@@ -58,7 +63,7 @@ trait StreamingTrait
         try {
             while (true) {
                 $this->check_memory_status();
-                $this->adjust_chunk_size();
+                $chunk_size = $this->adjust_chunk_size();
 
                 // Önceki statement'ı temizle (memory leak önleme)
                 if ($stmt !== null) {
@@ -66,8 +71,7 @@ trait StreamingTrait
                     $stmt = null;
                 }
 
-                // Chunk sorgusu oluştur ve çalıştır
-                $chunk_query = $query . " LIMIT " . $chunk_size . " OFFSET " . $offset;
+                $chunk_query = self::paged_query($query, $chunk_size, $offset);
                 // Satırlar tembel okunur; döngüdeki aynı sorgu bu statement'ı paylaşmamalı (#96)
                 $stmt = $this->execute_query_uncached($chunk_query, $params);
 
@@ -81,10 +85,6 @@ trait StreamingTrait
                     $found_rows = true;
                     $total_rows++;
 
-                    if ($total_rows % $cleanup_interval === 0) {
-                        $this->cleanup_resources();
-                    }
-
                     yield $row;
                 }
 
@@ -94,6 +94,9 @@ trait StreamingTrait
                 }
 
                 $offset += $chunk_size;
+                // Query cache'e dokunulmaz (önceden her 1000 satırda tüm cache boşaltılıyordu); bellek
+                // eşiğinde check_memory_status() temizler
+                gc_collect_cycles();
 
                 // Maksimum limit kontrolü
                 if ($offset >= $this->max_result_set_size()) {
@@ -103,11 +106,6 @@ trait StreamingTrait
                             $this->max_result_set_size()
                         )
                     );
-                }
-
-                // Her chunk'tan sonra GC çağır (daha agresif cleanup)
-                if ($offset % $gc_interval === 0) {
-                    gc_collect_cycles();
                 }
             }
         } finally {
@@ -127,12 +125,49 @@ trait StreamingTrait
      */
     private function has_top_level_limit(string $query): bool
     {
-        $stripped = (string) preg_replace('/\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|`[^`]*`/s', "''", $query);
+        return preg_match('/\b(LIMIT|OFFSET)\b/i', self::top_level_sql($query)) === 1;
+    }
+
+    /**
+     * LIMIT/OFFSET eklenecek sorguyu hazırlar. Sondaki `;` kaldırılır: aksi halde eklenen LIMIT ikinci
+     * ifadeye düşer (SQLite yok sayar ve her parça aynı satırları döndürür; MySQL/PostgreSQL'de hata).
+     *
+     * @throws \InvalidArgumentException Sorgunun kendi LIMIT/OFFSET'i varsa
+     */
+    private function pageable_query(string $query, string $method): string
+    {
+        $query = rtrim($query, " \t\n\r\0\x0B;");
+        if ($this->has_top_level_limit($query)) {
+            throw new \InvalidArgumentException("{$method}() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.");
+        }
+
+        return $query;
+    }
+
+    /**
+     * Yeni satır: sorgu `-- yorum` / `# yorum` ile bitiyorsa LIMIT yorumun içinde kalıp yok sayılmaz.
+     */
+    private static function paged_query(string $query, int $limit, int $offset): string
+    {
+        return $query . "\nLIMIT " . $limit . ' OFFSET ' . $offset;
+    }
+
+    private function has_top_level_order_by(string $query): bool
+    {
+        return preg_match('/\bORDER\s+BY\b/i', self::top_level_sql($query)) === 1;
+    }
+
+    /**
+     * Literal, yorum ve parantez içi (subquery) çıkarılmış sorgu.
+     */
+    private static function top_level_sql(string $query): string
+    {
+        $stripped = (string) preg_replace('/\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|`[^`]*`|--[^\n]*|#[^\n]*|\/\*.*?\*\//s', "''", $query);
         do {
             $stripped = (string) preg_replace('/\([^()]*\)/', ' ', $stripped, -1, $count);
         } while ($count > 0);
 
-        return preg_match('/\b(LIMIT|OFFSET)\b/i', $stripped) === 1;
+        return $stripped;
     }
 
     /**
@@ -312,9 +347,7 @@ trait StreamingTrait
     {
         $this->set_last_called_method();
 
-        if ($this->has_top_level_limit($query)) {
-            throw new \InvalidArgumentException('get_chunk() metodu LIMIT veya OFFSET içeren sorgularla kullanılamaz.');
-        }
+        $query = $this->pageable_query($query, 'get_chunk');
 
         $offset = 0;
         MemoryMonitor::set_chunk_size($chunk_size !== null && $chunk_size > 0
@@ -332,12 +365,12 @@ trait StreamingTrait
 
                 // Chunk size sabit belirtilmemişse auto-adjust kullan
                 if ($use_auto_adjust) {
-                    $this->adjust_chunk_size();
+                    MemoryMonitor::set_chunk_size($this->adjust_chunk_size());
                 }
 
                 // Chunk sorgusu oluştur
                 $current_chunk_size = MemoryMonitor::chunk_size();
-                $chunk_query = $query . " LIMIT " . $current_chunk_size . " OFFSET " . $offset;
+                $chunk_query = self::paged_query($query, $current_chunk_size, $offset);
 
                 $stmt = $this->execute_query($chunk_query, $params);
                 if ($stmt === false) {
@@ -368,11 +401,8 @@ trait StreamingTrait
                     );
                 }
 
-                // Bellek optimizasyonu
-                if ($offset % (Config::default_chunk_size * 10) === 0) {
-                    $this->cleanup_resources();
-                    gc_collect_cycles();
-                }
+                // Query cache'e dokunulmaz; bellek eşiğinde check_memory_status() temizler
+                gc_collect_cycles();
             }
         } finally {
             gc_collect_cycles();
@@ -403,11 +433,14 @@ trait StreamingTrait
         return MemoryMonitor::max_result_set_size();
     }
 
-    private function adjust_chunk_size(): void
+    /**
+     * Parça boyutu: AUTO_ADJUST_CHUNK_SIZE açıksa belleğe göre ayarlanır, kapalıysa DEFAULT_CHUNK_SIZE.
+     */
+    private function adjust_chunk_size(): int
     {
-        MemoryMonitor::adjust_chunk_size(
+        return max(1, MemoryMonitor::adjust_chunk_size(
             $this->debug_mode ? fn (string $message, string $data) => $this->log_debug_info($message, $data) : null
-        );
+        ));
     }
 
     private function cleanup_resources(): void

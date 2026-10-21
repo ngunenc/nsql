@@ -85,6 +85,15 @@ class RateLimiter implements RateLimiterInterface
         };
     }
 
+    /**
+     * Kolona sığmayan değer (ör. tam User-Agent) özetlenir: aksi halde MySQL keser ve farklı
+     * kimlikler aynı kovayı paylaşır, PostgreSQL ise hata verir. Kısa değerler okunabilir kalır.
+     */
+    private static function column_value(string $value, int $max): string
+    {
+        return strlen($value) <= $max ? $value : 'h_' . substr(hash('sha256', $value), 0, min(64, $max - 2));
+    }
+
     private static function assert_table_name(string $table): string
     {
         if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table)) {
@@ -120,9 +129,16 @@ class RateLimiter implements RateLimiterInterface
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP";
 
         if ($driver === 'mysql') {
+            // utf8mb4_bin: tablo varsayılanı (unicode_ci) `ABC` ile `abc`'yi ve sondaki boşluğu aynı sayar
+            $binary = str_replace(
+                ['identifier VARCHAR(255)', 'request_type VARCHAR(50)'],
+                ['identifier VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin', 'request_type VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin'],
+                $columns
+            );
+
             return ["CREATE TABLE IF NOT EXISTS {$table} (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            " . sprintf($columns, 'DOUBLE') . ",
+            " . sprintf($binary, 'DOUBLE') . ",
             INDEX idx_identifier (identifier),
             INDEX idx_type (request_type),
             INDEX idx_window (window_start),
@@ -174,7 +190,10 @@ class RateLimiter implements RateLimiterInterface
         }
 
         $now = (int) ($this->clock)();
-        $key = ['identifier' => $identifier, 'type' => $request_type];
+        $key = [
+            'identifier' => self::column_value($identifier, 128),
+            'type' => self::column_value($request_type, 50),
+        ];
         $driver = $db->get_driver_name();
         $on_conflict = $driver === 'mysql'
             ? 'ON DUPLICATE KEY UPDATE identifier = identifier'
