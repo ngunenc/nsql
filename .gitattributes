@@ -38,6 +38,7 @@
 /docker-compose.yml export-ignore
 /docker-compose.dev.yml export-ignore
 /docker export-ignore
+/.dockerignore export-ignore
 
 # Scripts (production'da gerekli değil)
 /scripts export-ignore

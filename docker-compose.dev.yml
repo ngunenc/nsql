@@ -16,18 +16,18 @@ services:
 
   mysql:
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
 
   postgres:
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
 
   redis:
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   memcached:
     ports:
-      - "11211:11211"
+      - "127.0.0.1:11211:11211"
