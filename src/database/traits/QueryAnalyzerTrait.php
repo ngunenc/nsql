@@ -25,7 +25,7 @@ trait QueryAnalyzerTrait
     {
         $this->analyze_queries = true;
         if ($this->query_analyzer === null) {
-            $this->query_analyzer = new QueryAnalyzer();
+            $this->query_analyzer = new QueryAnalyzer($this->get_driver_name());
         }
     }
 
@@ -44,7 +44,7 @@ trait QueryAnalyzerTrait
      */
     public function analyze_sql(string $query): array
     {
-        $this->query_analyzer ??= new QueryAnalyzer();
+        $this->query_analyzer ??= new QueryAnalyzer($this->get_driver_name());
 
         return $this->query_analyzer->analyze_query($query);
     }

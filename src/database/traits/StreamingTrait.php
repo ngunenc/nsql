@@ -125,7 +125,7 @@ trait StreamingTrait
      */
     private function has_top_level_limit(string $query): bool
     {
-        return preg_match('/\b(LIMIT|OFFSET)\b/i', self::top_level_sql($query)) === 1;
+        return preg_match('/\b(LIMIT|OFFSET)\b/i', $this->top_level_sql($query)) === 1;
     }
 
     /**
@@ -154,20 +154,16 @@ trait StreamingTrait
 
     private function has_top_level_order_by(string $query): bool
     {
-        return preg_match('/\bORDER\s+BY\b/i', self::top_level_sql($query)) === 1;
+        return preg_match('/\bORDER\s+BY\b/i', $this->top_level_sql($query)) === 1;
     }
 
     /**
-     * Literal, yorum ve parantez içi (subquery) çıkarılmış sorgu.
+     * Literal, yorum ve parantez içi (subquery) çıkarılmış sorgu. `#` yalnızca MySQL'de yorumdur
+     * (PostgreSQL'de XOR operatörü; yorum sanılırsa sorgunun kendi LIMIT'i gözden kaçardı).
      */
-    private static function top_level_sql(string $query): string
+    private function top_level_sql(string $query): string
     {
-        $stripped = (string) preg_replace('/\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\]|\\\\.)*"|`[^`]*`|--[^\n]*|#[^\n]*|\/\*.*?\*\//s', "''", $query);
-        do {
-            $stripped = (string) preg_replace('/\([^()]*\)/', ' ', $stripped, -1, $count);
-        } while ($count > 0);
-
-        return $stripped;
+        return \nsql\database\security\SqlText::top_level($query, $this->get_driver_name() === 'mysql');
     }
 
     /**
