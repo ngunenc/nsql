@@ -154,6 +154,40 @@ PHP);
         $this->assertSame(self::driver() === 'mysql', $this->table_exists('p_mig_a'));
     }
 
+    /**
+     * 'failed' kaydı yazılamazsa asıl migration hatası korunmalı (önceden kayıt hatası onu gizliyordu).
+     */
+    public function test_original_error_survives_failed_status_write(): void
+    {
+        file_put_contents($this->dir . '/migrations/2026_01_01_000001_breaks_log.php', <<<'PHP'
+<?php
+
+return new class extends \nsql\database\BaseMigration {
+    public function within_transaction(): bool { return false; }
+    public function up(): void
+    {
+        $this->db()->query('DROP TABLE p_migrations');
+        throw new \RuntimeException('asıl hata');
+    }
+    public function down(): void {}
+};
+PHP);
+
+        $this->db->set_throw_on_error(true);
+        $previous = ini_set('error_log', $this->dir . '/seeds/error.log');
+        try {
+            $this->manager()->migrate();
+            $this->fail('Migration hata vermeli');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('asıl hata', $e->getMessage());
+            $this->assertStringContainsString('breaks_log', $e->getMessage());
+        } finally {
+            ini_set('error_log', (string) $previous);
+            $this->db->set_throw_on_error(false);
+        }
+        $this->assertStringContainsString("'failed' kaydı yazılamadı", (string) file_get_contents($this->dir . '/seeds/error.log'));
+    }
+
     public function test_targeted_migrate_partial_rollbacks_and_status_api(): void
     {
         $a = '2026_01_01_000001_create_a.php';

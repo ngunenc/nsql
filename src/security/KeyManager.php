@@ -15,6 +15,9 @@ class KeyManager
     private const KEY_MIN_LENGTH = 32;
     private const KEY_MAX_LENGTH = 64;
 
+    /** @var array<string, true> İzin uyarısı verilmiş dosyalar (her istekte log taşmasın diye süreç başına bir kez) */
+    private static array $permission_warned = [];
+
     /**
      * Mevcut encryption key'i alır
      *
@@ -176,7 +179,8 @@ class KeyManager
 
         // Windows POSIX izinlerini raporlamaz (her zaman 0666 görünür)
         $perms = fileperms($storage_path);
-        if (PHP_OS_FAMILY !== 'Windows' && ($perms & 0777) !== 0600) {
+        if (PHP_OS_FAMILY !== 'Windows' && ($perms & 0777) !== 0600 && ! isset(self::$permission_warned[$storage_path])) {
+            self::$permission_warned[$storage_path] = true;
             // Güvenlik uyarısı: dosya izinleri güvenli değil
             trigger_error(
                 "Key storage dosyası güvenli izinlere sahip değil: {$storage_path}",

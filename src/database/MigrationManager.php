@@ -194,7 +194,12 @@ class MigrationManager
         try {
             $this->uses_transaction($migration) ? $this->db->transaction($apply) : $apply();
         } catch (\Throwable $e) {
-            $this->log_migration($name, $batch, 'failed', $e->getMessage(), microtime(true) - $start_time);
+            try {
+                $this->log_migration($name, $batch, 'failed', $e->getMessage(), microtime(true) - $start_time);
+            } catch (\Throwable $log_error) {
+                // Kayıt hatası asıl hatayı gizlemez (ör. migration log tablosunu bozduysa)
+                error_log("Migration {$name} 'failed' kaydı yazılamadı: " . $log_error->getMessage());
+            }
 
             throw new \RuntimeException("Migration {$name} failed: " . $e->getMessage(), 0, $e);
         }

@@ -19,7 +19,7 @@ final class ConnectionManager
 {
     public const DEFAULT = 'default';
 
-    private const CONFIG_KEYS = ['host', 'db', 'user', 'pass', 'port', 'driver', 'charset', 'debug', 'read'];
+    private const CONFIG_KEYS = ['host', 'db', 'user', 'pass', 'port', 'driver', 'charset', 'debug', 'read', 'options', 'dsn_params'];
 
     /** @var array<string, array<string, mixed>> */
     private static array $configs = [];
@@ -28,8 +28,9 @@ final class ConnectionManager
     private static array $connections = [];
 
     /**
-     * Bağlantı ayarı ekler. Anahtarlar: host, db, user, pass, port, driver, charset, debug ve
-     * read (replica ayarı, bkz. Nsql::set_read_replica). Açık bağlantı varsa kapatılır.
+     * Bağlantı ayarı ekler. Anahtarlar: host, db, user, pass, port, driver, charset, debug,
+     * options (PDO seçenekleri), dsn_params (ek DSN parametreleri) ve read (replica ayarı, bkz.
+     * Nsql::set_read_replica). Açık bağlantı varsa kapatılır.
      *
      * @param array<string, mixed> $config
      */
@@ -107,7 +108,9 @@ final class ConnectionManager
             charset: isset($config['charset']) ? (string) $config['charset'] : null,
             debug: isset($config['debug']) ? (bool) $config['debug'] : null,
             driver: isset($config['driver']) ? (string) $config['driver'] : null,
-            port: isset($config['port']) ? (int) $config['port'] : null
+            port: isset($config['port']) ? (int) $config['port'] : null,
+            options: isset($config['options']) && is_array($config['options']) ? $config['options'] : null,
+            dsn_params: isset($config['dsn_params']) && is_array($config['dsn_params']) ? $config['dsn_params'] : null
         );
 
         if (array_key_exists('read', $config)) {

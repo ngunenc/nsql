@@ -80,6 +80,21 @@ class CrudPortableTest extends PortableTestCase
         $this->assertSame([100, 2, 300], $scores);
     }
 
+    public function test_batch_update_rejects_row_without_key_before_writing(): void
+    {
+        $this->db->batch_insert('p_users', [['name' => 'a', 'score' => 1], ['name' => 'b', 'score' => 2]]);
+
+        try {
+            $this->db->batch_update('p_users', [['id' => 1, 'score' => 100], ['score' => 200]]);
+            $this->fail('Anahtarsız satır QueryException vermeli');
+        } catch (\nsql\database\exceptions\QueryException $e) {
+            $this->assertStringContainsString("'id'", $e->getMessage());
+        }
+
+        $scores = array_map(fn ($r) => (int) $r->score, $this->db->get_results('SELECT score FROM p_users ORDER BY id'));
+        $this->assertSame([1, 2], $scores, 'Hiçbir satır yazılmamalı');
+    }
+
     public function test_unicode_round_trip(): void
     {
         $this->db->insert('INSERT INTO p_users (name) VALUES (?)', ['Şükrü Çağlar ğüöı']);
