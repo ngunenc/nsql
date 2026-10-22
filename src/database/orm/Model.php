@@ -72,6 +72,14 @@ abstract class Model implements \JsonSerializable
     /** @var array<string, array<string, bool>> */
     private static array $relation_methods = [];
 
+    /**
+     * İsteğe bağlı açık ilişki listesi (ör. `['posts', 'author']`). Tanımlıysa yalnızca bu metodlar
+     * `$model->ad`, load() ve eager_load() ile yüklenir; null ise dönüş tipi + gövde kontrolü yapılır.
+     *
+     * @var list<string>|null
+     */
+    protected ?array $allowed_relations = null;
+
     /** eager_load(): ilişki metodu sorgu çalıştırmak yerine tanımını kaydeder */
     private bool $capturing_relation = false;
 
@@ -1134,6 +1142,18 @@ abstract class Model implements \JsonSerializable
     /**
      * Alt sınıfta tanımlı, public, statik olmayan ve parametresiz metotlar ilişki sayılır.
      */
+    /**
+     * `$model->ad`, load() ve eager_load() ile çalıştırılabilecek ilişki metodu mu?
+     *
+     * Metod çalıştırılmadan karar verilir: aksi halde `$model->{$alan}` gibi bir erişim
+     * `close_account()` gibi parametresiz bir iş metodunu yürütürdü. İlişki sayılması için:
+     * public, statik olmayan, parametresiz, alt sınıfta tanımlı; ve
+     * - modelde `$allowed_relations` tanımlıysa o listede olmalı, değilse
+     * - dönüş tipi Model alt sınıfı / array olarak bildirilmiş ve gövdesinde
+     *   `$this->belongs_to(` / `has_one(` / `has_many(` çağrısı bulunmalı.
+     *
+     * @param class-string<Model> $class
+     */
     private static function is_relation_method(string $class, string $method): bool
     {
         if (isset(self::$relation_methods[$class][$method])) {
@@ -1147,9 +1167,71 @@ abstract class Model implements \JsonSerializable
                 && $reflection->getDeclaringClass()->getName() !== self::class
                 && $reflection->getNumberOfRequiredParameters() === 0
                 && ! str_starts_with($method, '__');
+
+            if ($is_relation) {
+                $allowed = (new \ReflectionClass($class))->getDefaultProperties()['allowed_relations'] ?? null;
+                $is_relation = is_array($allowed)
+                    ? in_array($method, $allowed, true)
+                    : self::returns_relation_type($reflection) && self::calls_relation_helper($reflection);
+            }
         }
 
         return self::$relation_methods[$class][$method] = $is_relation;
+    }
+
+    /**
+     * Dönüş tipi bildirilmiş ve yalnızca array / Model alt sınıfı / null içeriyor mu?
+     */
+    private static function returns_relation_type(\ReflectionMethod $method): bool
+    {
+        $type = $method->getReturnType();
+        $types = match (true) {
+            $type instanceof \ReflectionNamedType => [$type],
+            $type instanceof \ReflectionUnionType => $type->getTypes(),
+            default => [],
+        };
+        if ($types === []) {
+            return false;
+        }
+
+        foreach ($types as $part) {
+            if (! $part instanceof \ReflectionNamedType) {
+                return false;
+            }
+            $name = $part->getName();
+            if ($name === 'null' || $name === 'array') {
+                continue;
+            }
+            if (in_array($name, ['self', 'static'], true)) {
+                $name = $method->getDeclaringClass()->getName();
+            }
+            if ($part->isBuiltin() || ! is_a($name, self::class, true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Metod gövdesinde ilişki yardımcısı çağrılıyor mu? (kaynak dosyadan okunur, çalıştırılmaz)
+     */
+    private static function calls_relation_helper(\ReflectionMethod $method): bool
+    {
+        $file = $method->getFileName();
+        $start = $method->getStartLine();
+        $end = $method->getEndLine();
+        if ($file === false || $start === false || $end === false || ! is_readable($file)) {
+            return false;
+        }
+
+        $lines = @file($file);
+        if ($lines === false) {
+            return false;
+        }
+        $body = implode('', array_slice($lines, $start - 1, $end - $start + 1));
+
+        return preg_match('/\$this\s*->\s*(?:belongs_to|has_one|has_many)\s*\(/', $body) === 1;
     }
 
     private function cast_type(string $key): ?string
