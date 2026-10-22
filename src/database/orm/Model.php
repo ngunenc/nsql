@@ -927,6 +927,9 @@ abstract class Model implements \JsonSerializable
         $column = $this->fillable_key($key);
         if ($column !== null) {
             $this->attributes[$column] = $this->to_storage($column, $value);
+        } elseif ((bool) Config::get('orm_strict_assignment', Config::orm_strict_assignment)) {
+            // Sessiz yok sayma yazım hatalarını gizler; strict modda atama hata verir
+            throw new \InvalidArgumentException(static::class . "::\${$key} toplu atamaya açık değil (fillable/guarded).");
         }
     }
 

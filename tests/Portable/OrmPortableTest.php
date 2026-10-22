@@ -614,6 +614,23 @@ class OrmPortableTest extends PortableTestCase
         $this->assertSame('Büyük', $named->name);
     }
 
+    public function test_strict_assignment_rejects_non_fillable_property(): void
+    {
+        $author = $this->author();
+        Config::set('orm_strict_assignment', true);
+        try {
+            $loaded = Author::find($author->get_key(), $this->db);
+            $this->assertNotNull($loaded, 'Satırdan yükleme strict moddan etkilenmez');
+            $loaded->name = 'yeni';
+            $this->assertSame('yeni', $loaded->name);
+
+            $this->expectException(\InvalidArgumentException::class);
+            $loaded->is_admin = 1;
+        } finally {
+            Config::set('orm_strict_assignment', null);
+        }
+    }
+
     /**
      * `$model->{$alan}` erişimi parametresiz iş metodunu çalıştırıyordu (ör. hesap silme).
      */

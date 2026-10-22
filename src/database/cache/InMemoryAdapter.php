@@ -35,6 +35,10 @@ class InMemoryAdapter implements CacheAdapterInterface
             return null;
         }
 
+        // LRU: okunan kayıt sona taşınır (tahliye en uzun süredir kullanılmayandan başlar)
+        unset($this->cache[$key]);
+        $this->cache[$key] = $entry;
+
         return $entry['value'] ?? null;
     }
 
@@ -43,9 +47,12 @@ class InMemoryAdapter implements CacheAdapterInterface
         $ttl = $ttl ?? $this->default_ttl;
         $expires_at = time() + $ttl;
 
+        // Yeniden yazmada eski tag eşlemesi temizlenir; yoksa eski tag'in geçersiz kılınması yeni kaydı silerdi
+        $this->delete($key);
+
         // Size limit kontrolü
-        if (count($this->cache) >= $this->size_limit && ! isset($this->cache[$key])) {
-            // En eski entry'yi sil (basit LRU)
+        if (count($this->cache) >= $this->size_limit) {
+            // En uzun süredir kullanılmayan kaydı sil (LRU)
             $oldest_key = array_key_first($this->cache);
             if ($oldest_key !== null) {
                 $this->delete((string) $oldest_key);

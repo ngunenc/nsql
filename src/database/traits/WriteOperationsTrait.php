@@ -166,12 +166,18 @@ trait WriteOperationsTrait
      * @param string $key_column Eşleştirme için kullanılacak sütun (varsayılan: 'id')
      * @param bool $use_transaction Transaction kullanılsın mı? (varsayılan: true)
      * @return int Güncellenen satır sayısı
-     * @throws QueryException
+     * @throws QueryException Satırlardan biri dizi değilse veya $key_column değeri yoksa (hiçbir satır yazılmadan)
      */
     public function batch_update(string $table, array $data, string $key_column = 'id', bool $use_transaction = true): int
     {
         if (empty($data)) {
             return 0;
+        }
+        // Anahtarsız satır önceden sessizce atlanıyordu; güncellenmeyen satır fark edilmiyordu
+        foreach ($data as $index => $row) {
+            if (! is_array($row) || ! isset($row[$key_column])) {
+                throw new QueryException("Batch update: {$index}. satırda '{$key_column}' anahtarı yok.");
+            }
         }
 
         $total_affected = 0;
@@ -182,10 +188,6 @@ trait WriteOperationsTrait
             }
 
             foreach ($data as $row) {
-                if (! is_array($row) || ! isset($row[$key_column])) {
-                    continue;
-                }
-
                 $key_value = $row[$key_column];
                 unset($row[$key_column]);
 

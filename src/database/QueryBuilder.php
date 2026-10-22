@@ -708,7 +708,9 @@ class QueryBuilder
      * JOIN ekler
      *
      * @param string|QueryBuilder $table Katılım yapılacak tablo veya subquery builder
-     * @param string|callable $first Birinci sütun veya closure (raw ON koşulu döndürür)
+     * @param string|callable $first Birinci sütun veya closure (raw ON koşulu döndürür). Closure'ın
+     *        döndürdüğü metin SQL'e olduğu gibi eklenir, bağlanmaz ve kaçışlanmaz: kullanıcı girdisi
+     *        içermemelidir (değer karşılaştırması için join() sonrasında where() kullanın).
      * @param string|null $operator Operatör (closure kullanılıyorsa null)
      * @param string|null $second İkinci sütun (closure kullanılıyorsa null)
      * @param string $type Join tipi (INNER, LEFT, RIGHT, FULL, CROSS, LEFT OUTER, RIGHT OUTER, FULL OUTER)

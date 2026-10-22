@@ -31,12 +31,13 @@ trait DebugTrait
     }
 
     /**
-     * Debug çıktısı oluşturur
+     * Son sorgunun HTML debug çıktısını basar (yalnızca debug modunda). Debug kapalıyken çıktıya bir şey
+     * yazılmaz, E_USER_NOTICE verilir: production'da unutulan debug() çağrısı JSON/HTML yanıtını bozmaz.
      */
     public function debug(): void
     {
         if (! $this->debug_mode) {
-            echo '<div style="color:red;font-weight:bold;">Debug modu kapalı! Detaylı sorgu ve hata bilgisi için nsql nesnesini debug modda başlatın.</div>';
+            trigger_error('nsql debug() çağrıldı ama debug modu kapalı; çıktı üretilmedi.', E_USER_NOTICE);
 
             return;
         }
