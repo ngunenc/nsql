@@ -13,6 +13,9 @@ final class ArrayPsr16Cache implements CacheInterface
     /** @var array<string, array{0: string, 1: int|null}> */
     public array $items = [];
 
+    /** true iken yazmalar başarısız olur (store kesintisi) */
+    public bool $fail_writes = false;
+
     public function get(string $key, mixed $default = null): mixed
     {
         if (! $this->has($key)) {
@@ -24,6 +27,9 @@ final class ArrayPsr16Cache implements CacheInterface
 
     public function set(string $key, mixed $value, null|int|\DateInterval $ttl = null): bool
     {
+        if ($this->fail_writes) {
+            return false;
+        }
         $expires = is_int($ttl) ? time() + $ttl : null;
         $this->items[$key] = [serialize($value), $expires];
 
@@ -56,6 +62,9 @@ final class ArrayPsr16Cache implements CacheInterface
 
     public function setMultiple(iterable $values, null|int|\DateInterval $ttl = null): bool
     {
+        if ($this->fail_writes) {
+            return false;
+        }
         foreach ($values as $key => $value) {
             $this->set((string) $key, $value, $ttl);
         }

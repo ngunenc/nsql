@@ -32,6 +32,12 @@ trait CacheTrait
     private array $deferred_store_tables = [];
     private bool $deferred_store_all = false;
 
+    /** @var array<string, true> Store'a yazılamamış (tekrar denenecek) tablo geçersiz kılmaları */
+    private array $pending_store_tables = [];
+    /** @var array<string, true> */
+    private array $pending_store_tags = [];
+    private bool $pending_store_all = false;
+
     /** @var array<string, array<string, true>> tag => [key => true] */
     private array $tag_to_keys = [];
     /** @var array<string, array<string, true>> table => [key => true] */
@@ -182,7 +188,15 @@ trait CacheTrait
             'tables' => array_values(array_unique(array_map(fn ($t) => strtolower(trim((string)$t)), $tables))),
         ];
         if ($this->query_cache_store !== null) {
-            $entry['versions'] = $this->query_cache_store->put($key, $entry, $this->cache_ttl_for($entry['tables']));
+            // Store'a yazılamayan kaydın sürüm görüntüsü yoktur; süreç içinde de tutulmaz, yoksa diğer
+            // süreçlerin geçersiz kılması bu kayıtta hiç doğrulanamazdı
+            $versions = $this->shared_store_ready()
+                ? $this->query_cache_store->put($key, $entry, $this->cache_ttl_for($entry['tables']))
+                : null;
+            if ($versions === null) {
+                return false;
+            }
+            $entry['versions'] = $versions;
         }
         $this->remember_locally($key, $entry);
 
@@ -284,6 +298,12 @@ trait CacheTrait
     private function get_from_query_cache(string $key): mixed
     {
         if (! $this->query_cache_usable()) {
+            return null;
+        }
+        // Bekleyen geçersiz kılmalar yazılamadıysa ne paylaşılan ne süreç içi kayıt güvenilirdir
+        if ($this->query_cache_store !== null && ! $this->shared_store_ready()) {
+            $this->query_cache_misses++;
+
             return null;
         }
 
@@ -415,7 +435,7 @@ trait CacheTrait
             }
             unset($this->table_to_keys[$table]);
         }
-        $this->query_cache_store?->invalidate_tables($normalized);
+        $this->store_invalidate('tables', $normalized);
         if ($this->query_cache_store !== null && $this->in_cache_transaction()) {
             $this->deferred_store_tables += array_fill_keys($normalized, true);
         }
@@ -493,7 +513,7 @@ trait CacheTrait
             }
             unset($this->tag_to_keys[$tag]);
         }
-        $this->query_cache_store?->invalidate_tags($normalized);
+        $this->store_invalidate('tags', $normalized);
     }
 
     /**
@@ -528,7 +548,7 @@ trait CacheTrait
     public function invalidate_all_cache(): void
     {
         $this->clear_query_cache();
-        $this->query_cache_store?->invalidate_all();
+        $this->store_invalidate('all', []);
         if ($this->query_cache_store !== null && $this->in_cache_transaction()) {
             $this->deferred_store_all = true;
         }
@@ -556,10 +576,77 @@ trait CacheTrait
         }
 
         if ($all) {
-            $this->query_cache_store->invalidate_all();
+            $this->store_invalidate('all', []);
         } elseif ($tables !== []) {
-            $this->query_cache_store->invalidate_tables(array_map('strval', $tables));
+            $this->store_invalidate('tables', array_map('strval', $tables));
         }
+    }
+
+    /**
+     * Paylaşılan store'da geçersiz kılar; yazılamazsa (Redis kesintisi) kapsam bekleyen listeye
+     * alınır ve shared_store_ready() ile tekrar denenir. Önceden hata yutuluyordu: store geri gelince
+     * eski kayıtlar TTL dolana kadar tüm süreçlere bayat veri olarak dönüyordu.
+     *
+     * @param 'tables'|'tags'|'all' $kind
+     * @param list<string> $names
+     */
+    private function store_invalidate(string $kind, array $names): void
+    {
+        $store = $this->query_cache_store;
+        if ($store === null) {
+            return;
+        }
+
+        $ok = match ($kind) {
+            'tables' => $store->invalidate_tables($names),
+            'tags' => $store->invalidate_tags($names),
+            default => $store->invalidate_all(),
+        };
+        if ($ok) {
+            return;
+        }
+
+        match ($kind) {
+            'tables' => $this->pending_store_tables += array_fill_keys($names, true),
+            'tags' => $this->pending_store_tags += array_fill_keys($names, true),
+            default => $this->pending_store_all = true,
+        };
+        $this->log_error(
+            'Paylaşılan query cache geçersiz kılınamadı (' . $kind . '); bu süreç store\'u tekrar deneyene kadar kullanmıyor, '
+            . 'diğer süreçler bu sürede bayat veri okuyabilir.',
+            ['tables' => $names],
+            \nsql\database\logging\Logger::WARNING
+        );
+    }
+
+    /**
+     * Paylaşılan store kullanılabilir mi? Bekleyen geçersiz kılmalar varsa önce onlar yazılır;
+     * yazılamazsa store bu çağrıda kullanılmaz (bayat kayıt okunmaz, yeni kayıt yazılmaz).
+     */
+    private function shared_store_ready(): bool
+    {
+        $store = $this->query_cache_store;
+        if ($store === null) {
+            return false;
+        }
+        if (! $this->pending_store_all && $this->pending_store_tables === [] && $this->pending_store_tags === []) {
+            return true;
+        }
+
+        if ($this->pending_store_all && ! $store->invalidate_all()) {
+            return false;
+        }
+        $this->pending_store_all = false;
+        if ($this->pending_store_tables !== [] && ! $store->invalidate_tables(array_map('strval', array_keys($this->pending_store_tables)))) {
+            return false;
+        }
+        $this->pending_store_tables = [];
+        if ($this->pending_store_tags !== [] && ! $store->invalidate_tags(array_map('strval', array_keys($this->pending_store_tags)))) {
+            return false;
+        }
+        $this->pending_store_tags = [];
+
+        return true;
     }
 
     /**
