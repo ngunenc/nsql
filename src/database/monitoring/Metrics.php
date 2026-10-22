@@ -11,6 +11,18 @@ use nsql\database\Nsql;
  */
 class Metrics
 {
+    /**
+     * Hata ayrıntısı yanıta konmaz (EndpointGuard::fail_closed ile aynı ilke); error_log'a yazılır.
+     *
+     * @return array{error: string}
+     */
+    private static function failure(\Exception $e): array
+    {
+        error_log('[nsql metrics] ' . $e::class . ': ' . $e->getMessage());
+
+        return ['error' => 'unavailable'];
+    }
+
     private Nsql $db;
 
     public function __construct(Nsql $db)
@@ -42,16 +54,16 @@ class Metrics
     {
         try {
             $stats = $this->db->get_all_stats();
+            $queries = $this->db->get_query_stats();
 
             return [
                 'connection_pool' => $stats['connection_pool'] ?? [],
-                'query_count' => $stats['query_analyzer']['total_queries'] ?? 0,
-                'slow_queries' => $stats['query_analyzer']['slow_queries'] ?? 0,
+                'query_count' => $queries['total_queries'],
+                'slow_queries' => $queries['slow_queries'],
+                'failed_queries' => $queries['failed_queries'],
             ];
         } catch (\Exception $e) {
-            return [
-                'error' => $e->getMessage(),
-            ];
+            return self::failure($e);
         }
     }
 
@@ -73,9 +85,7 @@ class Metrics
                 'timeout' => $stats['timeout'],
             ];
         } catch (\Exception $e) {
-            return [
-                'error' => $e->getMessage(),
-            ];
+            return self::failure($e);
         }
     }
 
@@ -94,9 +104,7 @@ class Metrics
                 'usage_percent' => round(($stats['current_usage'] / $stats['limit']) * 100, 2),
             ];
         } catch (\Exception $e) {
-            return [
-                'error' => $e->getMessage(),
-            ];
+            return self::failure($e);
         }
     }
 
@@ -115,9 +123,7 @@ class Metrics
                 'max_connections' => $stats['max_connections'] ?? 0,
             ];
         } catch (\Exception $e) {
-            return [
-                'error' => $e->getMessage(),
-            ];
+            return self::failure($e);
         }
     }
 
@@ -128,17 +134,18 @@ class Metrics
     {
         try {
             $stats = $this->db->get_query_analyzer_stats();
+            $queries = $this->db->get_query_stats();
 
+            // Önceden olmayan anahtarlar okunuyor, her zaman 0 dönüyordu
             return [
-                'total_queries' => $stats['total_queries'] ?? 0,
-                'slow_queries' => $stats['slow_queries'] ?? 0,
-                'risky_queries' => $stats['risky_queries'] ?? 0,
-                'average_execution_time' => $stats['average_execution_time'] ?? 0,
+                'total_queries' => $queries['total_queries'],
+                'slow_queries' => $queries['slow_queries'],
+                'failed_queries' => $queries['failed_queries'],
+                'risky_queries' => $stats['risky_queries'],
+                'average_execution_time' => $queries['average_execution_time'],
             ];
         } catch (\Exception $e) {
-            return [
-                'error' => $e->getMessage(),
-            ];
+            return self::failure($e);
         }
     }
 }
