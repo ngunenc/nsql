@@ -17,6 +17,8 @@ trait QueryAnalyzerTrait
     private array $query_analysis_cache = []; // Analiz sonuçlarını cache'le
     private int $analysis_cache_hits = 0;
     private int $analysis_cache_misses = 0;
+    /** high / critical bulgulu analiz sayısı (engellenenler dahil) */
+    private int $risky_queries = 0;
 
     /**
      * Query analyzer'ı aktive eder
@@ -73,6 +75,11 @@ trait QueryAnalyzerTrait
             }
         }
 
+        $levels = array_column($analysis['issues'], 'risk_level');
+        if (array_intersect($levels, ['critical', 'high']) !== []) {
+            $this->risky_queries++;
+        }
+
         // Kritik risk varsa exception fırlat
         foreach ($analysis['issues'] as $issue) {
             if ($issue['risk_level'] === 'critical') {
@@ -113,6 +120,7 @@ trait QueryAnalyzerTrait
             'cache_misses' => $this->analysis_cache_misses,
             'cache_hit_rate' => round($cache_hit_rate, 2),
             'total_analyses' => $total_analyses,
+            'risky_queries' => $this->risky_queries,
         ];
     }
 

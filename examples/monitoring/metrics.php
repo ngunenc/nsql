@@ -7,6 +7,10 @@
  * Auth: Authorization: Bearer <token> | X-NSQL-Monitoring-Token
  *       (?token= yalnızca NSQL_MONITORING_ALLOW_QUERY_TOKEN=true ile)
  * Env: NSQL_MONITORING_TOKEN (zorunlu), NSQL_MONITORING_ENABLED=false ile kapatılabilir
+ *
+ * Not: Sorgu ve cache sayaçları Nsql örneği başınadır. Bu örnek kendi (yeni) bağlantısının
+ * değerlerini gösterir; uygulamanızın sayaçları için Metrics'i uygulamanın kullandığı örnekle
+ * oluşturun (ör. `new Metrics(Nsql::connection())` uygulama içindeki bir yönetim rotasında).
  */
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';

@@ -16,6 +16,33 @@ trait QueryEventsTrait
     /** @var list<callable(QueryEvent): void> */
     private array $query_listeners = [];
 
+    /** @var array{total: int, slow: int, failed: int, time_ms: float} Bu örneğin sorgu sayaçları (Metrics) */
+    private array $query_stats = ['total' => 0, 'slow' => 0, 'failed' => 0, 'time_ms' => 0.0];
+
+    /**
+     * Bu örnekte (ve varsa okuma replica'sında) çalışan sorguların sayaçları. Süreç başınadır:
+     * yeni bir Nsql örneği sıfırdan başlar.
+     *
+     * @return array{total_queries: int, slow_queries: int, failed_queries: int, total_time_ms: float, average_execution_time: float}
+     */
+    public function get_query_stats(): array
+    {
+        $stats = $this->query_stats;
+        if ($this->reader !== null) {
+            foreach ($this->reader->query_stats as $key => $value) {
+                $stats[$key] += $value;
+            }
+        }
+
+        return [
+            'total_queries' => (int) $stats['total'],
+            'slow_queries' => (int) $stats['slow'],
+            'failed_queries' => (int) $stats['failed'],
+            'total_time_ms' => round((float) $stats['time_ms'], 3),
+            'average_execution_time' => $stats['total'] > 0 ? round($stats['time_ms'] / $stats['total'], 3) : 0.0,
+        ];
+    }
+
     /**
      * Her veritabanı sorgusundan sonra çağrılacak dinleyici ekler (SQL, maskeli parametreler,
      * süre, satır sayısı, hata). Dinleyicide fırlatılan exception sorgu çağrısına yayılır.
@@ -48,12 +75,15 @@ trait QueryEventsTrait
         bool $row_count_known = true
     ): void {
         $threshold = (float) $this->setting('slow_query_threshold_ms', Config::slow_query_threshold_ms);
-        if ($this->query_listeners === [] && $threshold <= 0) {
-            return;
-        }
-
         $duration_ms = (hrtime(true) - $started) / 1e6;
         $is_slow = $threshold > 0 && $duration_ms >= $threshold;
+
+        // Sayaçlar dinleyici olmasa da tutulur (Metrics); erken dönüşlerden önce
+        $this->query_stats['total']++;
+        $this->query_stats['time_ms'] += $duration_ms;
+        $this->query_stats['slow'] += $is_slow ? 1 : 0;
+        $this->query_stats['failed'] += $error !== null ? 1 : 0;
+
         if ($this->query_listeners === [] && ! $is_slow) {
             return;
         }
