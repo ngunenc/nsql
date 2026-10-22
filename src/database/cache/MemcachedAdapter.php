@@ -9,10 +9,22 @@ namespace nsql\database\cache;
  * anahtarlar `{prefix}{nesil}:{anahtar}` biçiminde yazılır; clear() yalnızca nesil token'ını
  * yeniler, böylece sunucudaki diğer uygulamaların verisi silinmez (flush kullanılmaz). Eski
  * nesildeki kayıtlar okunmaz ve TTL / LRU ile düşer.
+ *
+ * Tüm değerler (tag listeleri dahil) SafeSerializer JSON string'i olarak yazılır.
+ *
+ * GÜVENLİK: php-memcached bir öğeyi okurken öğenin bayrağına göre çözer; "PHP serialized" bayraklı
+ * bir öğe sınıf kısıtı olmadan unserialize edilir (object injection). Bu, eklenti seviyesinde olur ve
+ * kütüphaneden kapatılamaz. Memcached'e güvenilmeyen hiçbir istemci yazamamalıdır: SASL kimlik
+ * doğrulaması veya ağ yalıtımı (yalnızca uygulama sunucularından erişim) zorunludur. Paylaşılan /
+ * kimlik doğrulamasız bir cache sunucusunda Redis (AUTH + string değerler) tercih edin.
  */
 class MemcachedAdapter implements CacheAdapterInterface
 {
     private const MAX_KEY_LENGTH = 250;
+    /** \Memcached::GET_EXTENDED (eklenti yüklü değilken de sabit kullanılabilsin) */
+    private const GET_EXTENDED = 2;
+    /** Eşzamanlı tag güncellemesinde cas() deneme sayısı */
+    private const CAS_ATTEMPTS = 5;
 
     /** @var \Memcached|null */
     private ?object $memcached = null;
@@ -170,14 +182,7 @@ class MemcachedAdapter implements CacheAdapterInterface
 
             if ($result) {
                 foreach ($tags as $tag) {
-                    $tag_key = $this->tag_key((string) $tag, $generation);
-                    $tag_keys = $memcached->get($tag_key);
-                    $tag_keys = is_array($tag_keys) ? $tag_keys : [];
-
-                    if (! in_array($full_key, $tag_keys, true)) {
-                        $tag_keys[] = $full_key;
-                        $memcached->set($tag_key, $tag_keys, $ttl);
-                    }
+                    $this->add_to_tag($this->tag_key((string) $tag, $generation), $full_key, $ttl);
                 }
             }
 
@@ -185,6 +190,45 @@ class MemcachedAdapter implements CacheAdapterInterface
         } catch (\Exception $e) {
             return false;
         }
+    }
+
+    /**
+     * Tag listesine anahtar ekler. Oku-değiştir-yaz cas() ile yapılır: eşzamanlı iki set() birbirinin
+     * eklediği anahtarı ezmez (aksi halde invalidate_by_tag() o kaydı bulamaz ve bayat veri kalır).
+     */
+    private function add_to_tag(string $tag_key, string $full_key, int $ttl): void
+    {
+        $memcached = $this->client();
+        for ($attempt = 0; $attempt < self::CAS_ATTEMPTS; $attempt++) {
+            $item = $memcached->get($tag_key, null, self::GET_EXTENDED);
+            if (! is_array($item) || ! array_key_exists('value', $item)) {
+                if ($memcached->add($tag_key, SafeSerializer::encode([$full_key]), $ttl)) {
+                    return;
+                }
+                continue;
+            }
+
+            $keys = self::tag_keys($item['value']);
+            if (in_array($full_key, $keys, true)) {
+                return;
+            }
+            $keys[] = $full_key;
+            if ($memcached->cas($item['cas'], $tag_key, SafeSerializer::encode($keys), $ttl)) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * Tag listesini çözer: JSON string (2.5.1+) veya eski PHP dizisi biçimi.
+     *
+     * @return list<string>
+     */
+    private static function tag_keys(mixed $stored): array
+    {
+        $keys = is_string($stored) ? SafeSerializer::decode($stored) : $stored;
+
+        return is_array($keys) ? array_values(array_filter($keys, 'is_string')) : [];
     }
 
     public function delete(string $key): bool
@@ -229,10 +273,10 @@ class MemcachedAdapter implements CacheAdapterInterface
             $generation = $this->generation();
             foreach ((array) $tags as $tag) {
                 $tag_key = $this->tag_key((string) $tag, $generation);
-                $keys = $memcached->get($tag_key);
+                $stored = $memcached->get($tag_key);
 
-                if (is_array($keys)) {
-                    $keys_to_delete = array_merge($keys_to_delete, $keys);
+                if ($stored !== false) {
+                    $keys_to_delete = array_merge($keys_to_delete, self::tag_keys($stored));
                     $memcached->delete($tag_key);
                 }
             }

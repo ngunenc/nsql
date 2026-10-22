@@ -122,6 +122,54 @@ class CacheAdapterPrefixTest extends TestCase
         $this->assertSame('space', $adapter->get('a b'));
     }
 
+    /**
+     * Tag listesi PHP dizisi yerine JSON string olarak saklanır (eklentinin PHP unserialize yolu
+     * kütüphanenin yazdığı değerler için kullanılmaz); eski dizi biçimi okunur.
+     */
+    public function test_memcached_tag_lists_are_json_strings_and_legacy_arrays_still_work(): void
+    {
+        $memcached = new FakeMemcached();
+        $adapter = new MemcachedAdapter(prefix: 'app1_', client: $memcached);
+        $adapter->set('k1', 1, 60, ['users']);
+
+        $tag_values = array_filter($memcached->data, fn ($v, $k) => str_contains($k, 'tag:'), ARRAY_FILTER_USE_BOTH);
+        $this->assertNotEmpty($tag_values);
+        foreach ($tag_values as $value) {
+            $this->assertIsString($value);
+        }
+        foreach ($memcached->data as $value) {
+            $this->assertIsString($value, 'Adaptör yalnızca string yazar');
+        }
+
+        // 2.5.0 ve öncesinde yazılmış dizi biçimli tag listesi
+        $tag_key = (string) array_key_first($tag_values);
+        $memcached->data[$tag_key] = [str_replace('tag:users', 'k1', $tag_key)];
+        $this->assertTrue($adapter->invalidate_by_tag('users'));
+        $this->assertNull($adapter->get('k1'));
+    }
+
+    /**
+     * İki set() aynı tag'e eşzamanlı ekleme yaparsa biri diğerinin anahtarını ezmemeli.
+     */
+    public function test_memcached_concurrent_tag_append_keeps_both_keys(): void
+    {
+        $memcached = new FakeMemcached();
+        $adapter = new MemcachedAdapter(prefix: 'app1_', client: $memcached);
+        $other = new MemcachedAdapter(prefix: 'app1_', client: $memcached);
+        $adapter->set('k1', 1, 60, ['users']);
+
+        // k2 eklenirken, okuma ile yazma arasında başka bir süreç k3'ü ekliyor
+        $memcached->before_tag_write = function () use ($other): void {
+            $other->set('k3', 3, 60, ['users']);
+        };
+        $adapter->set('k2', 2, 60, ['users']);
+
+        $this->assertTrue($adapter->invalidate_by_tag('users'));
+        $this->assertNull($adapter->get('k1'));
+        $this->assertNull($adapter->get('k2'));
+        $this->assertNull($adapter->get('k3'));
+    }
+
     public function test_memcached_tag_invalidation(): void
     {
         $adapter = new MemcachedAdapter(prefix: 'app1_', client: new FakeMemcached());
