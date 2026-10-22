@@ -135,8 +135,9 @@ abstract class Model implements \JsonSerializable
     public function fill(array $attributes): static
     {
         foreach ($attributes as $key => $value) {
-            if ($this->is_fillable((string) $key)) {
-                $this->attributes[$key] = $this->to_storage((string) $key, $value);
+            $column = $this->fillable_key((string) $key);
+            if ($column !== null) {
+                $this->attributes[$column] = $this->to_storage($column, $value);
             }
         }
 
@@ -187,14 +188,47 @@ abstract class Model implements \JsonSerializable
 
     public function is_fillable(string $key): bool
     {
-        if (in_array($key, $this->guarded, true)) {
-            return false;
-        }
-        if ($this->fillable !== []) {
-            return in_array($key, $this->fillable, true);
+        return $this->fillable_key($key) !== null;
+    }
+
+    /**
+     * Toplu atamada kullanılacak kolon adı; atanamıyorsa null.
+     *
+     * Karşılaştırma büyük/küçük harf duyarsızdır: MySQL ve SQLite'ta kolon adları harf duyarsız
+     * olduğundan `guarded = ['is_admin']` iken gelen `IS_ADMIN` aynı kolona yazılırdı. Anahtar
+     * `$fillable`'daki (guarded modunda: mevcut attribute'taki) yazıma çevrilir; aynı kolon iki
+     * farklı yazımla iki ayrı attribute olmaz.
+     */
+    private function fillable_key(string $key): ?string
+    {
+        $lower = strtolower($key);
+        foreach ($this->guarded as $guarded) {
+            if (strtolower((string) $guarded) === $lower) {
+                return null;
+            }
         }
 
-        return ! in_array('*', $this->guarded, true);
+        if ($this->fillable !== []) {
+            foreach ($this->fillable as $fillable) {
+                if (strtolower((string) $fillable) === $lower) {
+                    return (string) $fillable;
+                }
+            }
+
+            return null;
+        }
+
+        if (in_array('*', $this->guarded, true) || ! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key)) {
+            return null;
+        }
+
+        foreach (array_keys($this->attributes) as $existing) {
+            if (strtolower((string) $existing) === $lower) {
+                return (string) $existing;
+            }
+        }
+
+        return $key;
     }
 
     /**
@@ -882,8 +916,9 @@ abstract class Model implements \JsonSerializable
      */
     public function __set(string $key, mixed $value): void
     {
-        if ($this->is_fillable($key)) {
-            $this->attributes[$key] = $this->to_storage($key, $value);
+        $column = $this->fillable_key($key);
+        if ($column !== null) {
+            $this->attributes[$column] = $this->to_storage($column, $value);
         }
     }
 

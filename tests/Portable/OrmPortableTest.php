@@ -540,6 +540,33 @@ class OrmPortableTest extends PortableTestCase
         $this->assertFalse($profile->is_fillable('id'));
     }
 
+    /**
+     * MySQL / SQLite kolon adları harf duyarsız: `guarded = ['id']` iken `ID`, `Id` korumayı aşıyordu.
+     */
+    public function test_guarded_and_fillable_are_case_insensitive(): void
+    {
+        $author = $this->author();
+
+        // Constructor, fill() ve __set: ID / Id / iD birincil anahtara yazılamaz
+        $profile = new Profile($this->db, ['ID' => 99, 'Id' => 98, 'author_id' => $author->get_key(), 'bio' => 'ilk']);
+        $profile->fill(['iD' => 97, 'BIO' => 'güncel']);
+        $profile->ID = 96;
+
+        $this->assertFalse($profile->is_fillable('ID'));
+        $this->assertSame(['author_id', 'bio'], array_keys($profile->get_attributes()), 'Farklı yazım ikinci attribute oluşturmaz');
+        $this->assertSame('güncel', $profile->bio);
+
+        $this->assertTrue($profile->save());
+        $row = $this->db->table('p_profiles')->where('bio', '=', 'güncel')->first();
+        $this->assertNotNull($row);
+        $this->assertNotContains((int) $row->id, [96, 97, 98, 99]);
+
+        // Fillable modu: yazım fillable'daki ada çevrilir, listede olmayan reddedilir
+        $named = new Author($this->db, ['NAME' => 'Büyük', 'Score' => 5, 'IS_ACTIVE' => true, 'IS_ADMIN' => 1]);
+        $this->assertSame(['name', 'score', 'is_active'], array_keys($named->get_attributes()));
+        $this->assertSame('Büyük', $named->name);
+    }
+
     public function test_eager_loading_uses_one_query_per_relation(): void
     {
         $authors = [$this->author('A'), $this->author('B'), $this->author('C')];
