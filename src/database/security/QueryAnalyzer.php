@@ -4,38 +4,44 @@ namespace nsql\database\security;
 
 class QueryAnalyzer
 {
+    /**
+     * Literal'leri ve yorumları ayıklanmış ifade üzerinde aranır. `delete_without_where`,
+     * `update_without_where` ve `cartesian_join` desenle değil, üst seviye metinle ayrıca denetlenir
+     * (negatif lookahead'li desenler geri izlemeyle her sorguda eşleşiyordu). Yönetim komutları yalnızca
+     * ifade başında eşleşir: `shutdown_at` kolonu SHUTDOWN değildir.
+     */
     private array $risk_patterns = [
-        'delete_without_where' => '/DELETE\s+FROM\s+[`\w.]+\s*(?!WHERE)/i',
-        'update_without_where' => '/UPDATE\s+[`\w.]+\s+SET\s+(?:[`\w.]+\s*=\s*[^,]+\s*,?\s*)+(?!WHERE)/i',
-        'truncate_table' => '/TRUNCATE\s+TABLE\s+[`\w.]+/i',
-        'drop_table' => '/DROP\s+TABLE\s+[`\w.]+/i',
-        'alter_table' => '/ALTER\s+TABLE\s+[`\w.]+/i',
-        'multiple_joins' => '/(?:JOIN\s+[`\w.]+\s+(?:ON|USING)(?:\s+[^,]+)?){4,}/i',
-        'cartesian_join' => '/FROM\s+[`\w.]+(?:\s*,\s*[`\w.]+)+(?!\s+WHERE)/i',
-        'select_all_columns' => '/SELECT\s+\*\s+FROM/i',
-        'union_query' => '/UNION\s+(?:ALL\s+)?SELECT/i',
-        'subquery_exists' => '/EXISTS\s*\(\s*SELECT/i',
-        'large_in_clause' => '/IN\s*\([^)]{1000,}\)/i',
+        'truncate_table' => '/(?:^|;)\s*TRUNCATE\b/i',
+        'drop_table' => '/\bDROP\s+TABLE\b/i',
+        'alter_table' => '/(?:^|;)\s*ALTER\s+TABLE\b/i',
+        'multiple_joins' => '/(?:\bJOIN\s+[`"\w.]+\s+(?:\w+\s+)?(?:ON|USING)\b(?:\s+[^,]+)?){4,}/i',
+        'select_all_columns' => '/\bSELECT\s+\*\s+FROM\b/i',
+        'union_query' => '/\bUNION\s+(?:ALL\s+)?SELECT\b/i',
+        'subquery_exists' => '/\bEXISTS\s*\(\s*SELECT\b/i',
         // Veritabanı / şema düzeyi işlemler
-        'drop_database' => '/DROP\s+(?:DATABASE|SCHEMA)\s+[`\w.]+/i',
-        'create_database' => '/CREATE\s+(?:DATABASE|SCHEMA)\s+[`\w.]+/i',
-        'drop_index' => '/DROP\s+INDEX\s+[`\w.]+/i',
-        'drop_view' => '/DROP\s+VIEW\s+[`\w.]+/i',
-        'drop_procedure' => '/DROP\s+(?:PROCEDURE|FUNCTION)\s+[`\w.]+/i',
-        'create_user' => '/CREATE\s+USER\s+/i',
-        'alter_user' => '/ALTER\s+USER\s+/i',
-        'grant_privileges' => '/GRANT\s+[^;]+ON\s+/i',
-        'revoke_privileges' => '/REVOKE\s+[^;]+ON\s+/i',
-        'flush_privileges' => '/FLUSH\s+PRIVILEGES/i',
-        'set_password' => '/SET\s+PASSWORD\s+/i',
-        'lock_tables' => '/LOCK\s+TABLES\s+/i',
-        'unlock_tables' => '/UNLOCK\s+TABLES/i',
-        'kill_process' => '/KILL\s+(?:PROCESS|QUERY|CONNECTION)/i',
-        'shutdown' => '/SHUTDOWN/i',
+        'drop_database' => '/\bDROP\s+(?:DATABASE|SCHEMA)\b/i',
+        'create_database' => '/(?:^|;)\s*CREATE\s+(?:DATABASE|SCHEMA)\b/i',
+        'drop_index' => '/\bDROP\s+INDEX\b/i',
+        'drop_view' => '/\bDROP\s+VIEW\b/i',
+        'drop_procedure' => '/\bDROP\s+(?:PROCEDURE|FUNCTION)\b/i',
+        'create_user' => '/\bCREATE\s+USER\b/i',
+        'alter_user' => '/\bALTER\s+USER\b/i',
+        'grant_privileges' => '/(?:^|;)\s*GRANT\b/i',
+        'revoke_privileges' => '/(?:^|;)\s*REVOKE\b/i',
+        'flush_privileges' => '/(?:^|;)\s*FLUSH\s+PRIVILEGES\b/i',
+        'set_password' => '/(?:^|;)\s*SET\s+PASSWORD\b/i',
+        'lock_tables' => '/(?:^|;)\s*LOCK\s+TABLES?\b/i',
+        'unlock_tables' => '/(?:^|;)\s*UNLOCK\s+TABLES?\b/i',
+        'kill_process' => '/(?:^|;)\s*KILL\b/i',
+        'shutdown' => '/(?:^|;)\s*SHUTDOWN\b/i',
     ];
 
+    /** Literal içeriğine bakan desenler orijinal sorguda aranır */
+    private const ORIGINAL_TEXT_PATTERNS = ['like_wildcard_start', 'second_order_injection', 'encoded_payload', 'large_in_clause'];
+
     private array $performance_patterns = [
-        'missing_index_hint' => '/(?:JOIN|FROM)\s+[`\w.]+(?!\s+(?:USE|FORCE|IGNORE)\s+INDEX)/i',
+        'missing_index_hint' => '/\b(?:JOIN|FROM)\s+[`\w.]+(?!\s+(?:USE|FORCE|IGNORE)\s+INDEX)/i',
+        'large_in_clause' => '/\bIN\s*\([^)]{1000,}\)/i',
         'order_by_rand' => '/ORDER\s+BY\s+RAND\(\)/i',
         'group_by_all' => '/GROUP\s+BY\s+\d+(?:\s*,\s*\d+){3,}/i',
         'distinct_all' => '/SELECT\s+DISTINCT/i',
@@ -44,24 +50,23 @@ class QueryAnalyzer
     ];
 
     private array $security_patterns = [
-        'sql_comment' => '/--|\\/\\*|#/i',
-        'system_table_access' => '/FROM\s+(?:mysql\.|information_schema\.|performance_schema\.)/i',
-        'multiple_statements' => '/;\s*\w+/i',
-        'potential_injection' => '/EXEC\(|EXECUTE\(|INTO\s+OUTFILE|INTO\s+DUMPFILE|LOAD\s+DATA|LOAD\s+XML/i',
-        'privilege_escalation' => '/GRANT\s+|REVOKE\s+|CREATE\s+USER|DROP\s+USER/i',
+        'system_table_access' => '/\bFROM\s+(?:mysql\.|information_schema\.|performance_schema\.)/i',
+        'multiple_statements' => '/;\s*\S/',
+        'potential_injection' => '/\bEXEC(?:UTE)?\s*\(|\bINTO\s+(?:OUTFILE|DUMPFILE)\b|\bLOAD\s+(?:DATA|XML)\b/i',
+        'privilege_escalation' => '/(?:^|;)\s*(?:GRANT|REVOKE)\b|\b(?:CREATE|DROP)\s+USER\b/i',
         // Kodlama ve fonksiyon tabanlı injection teknikleri
-        'hex_encoding' => '/0x[0-9a-fA-F]+/i', // Hex encoding (SQL injection tekniği)
-        'char_function' => '/CHAR\s*\([^)]+\)/i', // CHAR() function (SQL injection tekniği)
-        'concat_function' => '/CONCAT\s*\([^)]+\)/i', // CONCAT() function (SQL injection tekniği)
-        'benchmark_function' => '/BENCHMARK\s*\(/i', // BENCHMARK() (time-based SQL injection)
-        'sleep_function' => '/SLEEP\s*\(/i', // SLEEP() (time-based SQL injection)
+        'hex_encoding' => '/\b0x[0-9a-fA-F]+\b/i', // Hex encoding (SQL injection tekniği)
+        'char_function' => '/\bCHAR\s*\([^)]+\)/i', // CHAR() function (SQL injection tekniği)
+        'concat_function' => '/\bCONCAT\s*\([^)]+\)/i', // CONCAT() function (SQL injection tekniği)
+        'benchmark_function' => '/\bBENCHMARK\s*\(/i', // BENCHMARK() (time-based SQL injection)
+        'sleep_function' => '/\bSLEEP\s*\(/i', // SLEEP() (time-based SQL injection)
         'waitfor_delay' => '/WAITFOR\s+DELAY/i', // SQL Server time-based injection
-        'pg_sleep' => '/PG_SLEEP\s*\(/i', // PostgreSQL time-based injection
-        'information_schema_access' => '/FROM\s+information_schema\./i', // Information schema access
-        'union_based_injection' => '/UNION\s+(?:ALL\s+)?SELECT\s+.*(?:NULL|0x|CHAR|CONCAT)/i', // Union-based injection pattern
+        'pg_sleep' => '/\bPG_SLEEP\s*\(/i', // PostgreSQL time-based injection
+        'information_schema_access' => '/\bFROM\s+information_schema\./i', // Information schema access
+        'union_based_injection' => '/\bUNION\s+(?:ALL\s+)?SELECT\s+.*\b(?:NULL|0x|CHAR|CONCAT)\b/i', // Union-based injection pattern
         'boolean_based_injection' => '/\b(?:AND|OR)\s+(?:\d+\s*=\s*\d+|1\s*=\s*1|1\s*=\s*0)/i', // Boolean-based injection
         'time_based_injection' => '/\b(?:AND|OR)\s+(?:SLEEP|BENCHMARK|WAITFOR|PG_SLEEP)\s*\(/i', // Time-based injection
-        'stacked_queries' => '/;\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)/i', // Stacked queries
+        'stacked_queries' => '/;\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER)\b/i', // Stacked queries
         'second_order_injection' => '/\'\s*\+\s*[^+]*\+\s*\'/i', // Second-order injection pattern
         'encoded_payload' => '/%[0-9a-fA-F]{2}|\\x[0-9a-fA-F]{2}/i', // URL/Hex encoded payload
     ];
@@ -121,8 +126,10 @@ class QueryAnalyzer
         'waitfor_delay' => 'critical',
         'pg_sleep' => 'critical',
         'information_schema_access' => 'medium',
-        'union_based_injection' => 'critical',
-        'boolean_based_injection' => 'critical',
+        // Yalnızca metin sezgisi: meşru `UNION SELECT NULL` ve QueryBuilder'ın boş IN için ürettiği
+        // `AND 1 = 1` de eşleşir; engellemez (critical değil), raporlanır
+        'union_based_injection' => 'high',
+        'boolean_based_injection' => 'high',
         'time_based_injection' => 'critical',
         'stacked_queries' => 'critical',
         'second_order_injection' => 'high',
@@ -132,13 +139,33 @@ class QueryAnalyzer
     /**
      * SQL sorgusunu analiz eder ve risk raporu oluşturur
      */
+    /**
+     * @param string|null $driver `mysql`, `pgsql`, `sqlite`; `#` yalnızca MySQL'de (veya bilinmiyorsa) yorumdur
+     */
+    public function __construct(private ?string $driver = null)
+    {
+    }
+
     public function analyze_query(string $query): array
     {
         $issues = [];
+        $hash_comments = $this->driver === null || $this->driver === 'mysql';
+        // Literal / yorum içeriği ve sondaki `;` anahtar kelime sayılmaz
+        $statement = rtrim(SqlText::strip($query, $hash_comments), " \t\n\r\0\x0B;");
+        $top = rtrim(SqlText::top_level($query, $hash_comments), " \t\n\r\0\x0B;");
+        $text = fn (string $type): string => in_array($type, self::ORIGINAL_TEXT_PATTERNS, true) ? $query : $statement;
+
+        foreach ($this->unbounded_writes($top) as $type) {
+            $issues[] = $this->create_issue($type, 'risk', $this->get_risk_message($type));
+        }
+
+        if (SqlText::strip_literals($query) !== SqlText::strip($query, $hash_comments)) {
+            $issues[] = $this->create_issue('sql_comment', 'security', $this->get_security_message('sql_comment'));
+        }
 
         // Risk pattern kontrolü
         foreach ($this->risk_patterns as $type => $pattern) {
-            if (preg_match($pattern, $query)) {
+            if (preg_match($pattern, $text($type))) {
                 $issues[] = $this->create_issue(
                     $type,
                     'risk',
@@ -149,7 +176,7 @@ class QueryAnalyzer
 
         // Performans pattern kontrolü
         foreach ($this->performance_patterns as $type => $pattern) {
-            if (preg_match($pattern, $query)) {
+            if (preg_match($pattern, $text($type))) {
                 $issues[] = $this->create_issue(
                     $type,
                     'performance',
@@ -160,7 +187,7 @@ class QueryAnalyzer
 
         // Güvenlik pattern kontrolü
         foreach ($this->security_patterns as $type => $pattern) {
-            if (preg_match($pattern, $query)) {
+            if (preg_match($pattern, $text($type))) {
                 $issues[] = $this->create_issue(
                     $type,
                     'security',
@@ -179,6 +206,31 @@ class QueryAnalyzer
             'risk_score' => $this->calculate_risk_score($issues),
             'recommendations' => $this->generate_recommendations($issues),
         ];
+    }
+
+    /**
+     * Üst seviyede (alt sorgu dışında) WHERE'i olmayan DELETE / UPDATE ve virgüllü FROM.
+     * Yalnızca ifade DELETE/UPDATE ile (isteğe bağlı CTE'den sonra) başlıyorsa: PostgreSQL
+     * `ON CONFLICT … DO UPDATE SET` ve MySQL `ON DUPLICATE KEY UPDATE` UPDATE ifadesi değildir.
+     *
+     * @return list<string>
+     */
+    private function unbounded_writes(string $top): array
+    {
+        $types = [];
+        $has_where = preg_match('/\bWHERE\b/i', $top) === 1;
+
+        if (! $has_where && preg_match('/^\s*(?:WITH\s.*?)?\bDELETE\b/is', $top)) {
+            $types[] = 'delete_without_where';
+        }
+        if (! $has_where && preg_match('/^\s*(?:WITH\s.*?)?\bUPDATE\b.*\bSET\b/is', $top)) {
+            $types[] = 'update_without_where';
+        }
+        if (! $has_where && preg_match('/\bFROM\s+[`"\w.]+(?:\s+(?:AS\s+)?\w+)?\s*,\s*[`"\w.]+/i', $top)) {
+            $types[] = 'cartesian_join';
+        }
+
+        return $types;
     }
 
     /**

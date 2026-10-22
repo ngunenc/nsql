@@ -105,4 +105,24 @@ class QueryExecutionPortableTest extends PortableTestCase
         $this->assertSame(3, $this->db->table('p_items')->count());
         $this->assertSame(1, $this->db->statement('DELETE FROM p_items WHERE name = ?', ['a']));
     }
+
+    /**
+     * Analiz açıkken normal CRUD engellenmemeli (v2.4.1–2.5.0'da WHERE'li DELETE/UPDATE kritik sayılıyordu).
+     */
+    public function test_enabled_query_analysis_allows_normal_crud(): void
+    {
+        $this->db->enable_query_analysis();
+        try {
+            $this->db->table('p_items')->insert(['name' => 'd']);
+            $this->assertSame(1, $this->db->table('p_items')->where('name', '=', 'd')->update(['name' => 'e']));
+            $this->assertSame(1, $this->db->statement('UPDATE p_items SET name = ? WHERE name IN (?, ?)', ['f', 'e', 'yok']));
+            $this->assertSame(4, $this->db->table('p_items')->where_not_in('name', [])->count());
+            $this->assertSame(1, $this->db->table('p_items')->where('name', '=', 'f')->delete());
+            $this->assertSame(1, $this->db->statement('DELETE FROM p_items WHERE name = ?;', ['a']));
+        } finally {
+            $this->db->disable_query_analysis();
+        }
+
+        $this->assertSame(['b', 'c'], $this->db->table('p_items')->order_by('id')->pluck('name'));
+    }
 }
