@@ -950,6 +950,8 @@ Query Cache özelliği, sık kullanılan sorguların sonuçlarını önbellekte 
 > | `redis` | Süreçler ve sunucular arası | **Production önerisi** (`ext-redis`) |
 > | `memcached` | Süreçler ve sunucular arası | Mevcut Memcached altyapısı varsa (`ext-memcached`) |
 >
+> ⚠️ **Memcached güvenliği:** php-memcached bir öğeyi okurken öğenin bayrağına göre çözer; Memcached'e yazabilen biri "PHP serialized" bayraklı bir değer bırakırsa okuma sırasında sınıf kısıtı olmadan `unserialize` çalışır (object injection). Bu eklenti seviyesindedir ve kütüphane yalnızca string yazsa da engellenemez. Memcached'e yalnızca uygulama sunucuları erişebilmeli (ağ yalıtımı / SASL); kimlik doğrulamasız paylaşılan bir sunucuda Redis (`REDIS_PASSWORD`) kullanın.
+>
 > Paylaşılan store'da process içi LRU birinci seviye olarak kalır; tablo/tag geçersiz kılma tüm süreçlere yansır. Sunucuya ulaşılamazsa veya sürücü adı geçersizse WARNING loglanır ve process içi cache ile devam edilir. Kendi PSR-16 cache'inizi `$db->set_query_cache_store($psr16)` ile bağlayabilirsiniz.
 
 ```ini
