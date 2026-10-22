@@ -53,6 +53,53 @@ class Post extends Model
     }
 }
 
+/** İş metodu (parametresiz, public) ilişki sanılıp `$model->ad` ile çalıştırılmamalı */
+class Ledger extends Model
+{
+    protected string $table = 'p_authors';
+    protected array $fillable = ['name'];
+
+    public static int $closed = 0;
+
+    public function close_account(): bool
+    {
+        self::$closed++;
+
+        return $this->force_delete();
+    }
+
+    /** Dönüş tipi yok: ilişki sayılmaz */
+    public function untyped()
+    {
+        return $this->has_many(Post::class, 'author_id');
+    }
+
+    /** @return list<Post> */
+    public function posts(): array
+    {
+        return $this->has_many(Post::class, 'author_id');
+    }
+}
+
+/** Açık liste: yalnızca listelenen metodlar ilişki */
+class ListedAuthor extends Model
+{
+    protected string $table = 'p_authors';
+    protected ?array $allowed_relations = ['posts'];
+
+    /** @return list<Post> */
+    public function posts(): array
+    {
+        return $this->has_many(Post::class, 'author_id');
+    }
+
+    /** @return list<Post> */
+    public function drafts(): array
+    {
+        return $this->has_many(Post::class, 'author_id');
+    }
+}
+
 class Profile extends Model
 {
     protected string $table = 'p_profiles';
@@ -565,6 +612,49 @@ class OrmPortableTest extends PortableTestCase
         $named = new Author($this->db, ['NAME' => 'Büyük', 'Score' => 5, 'IS_ACTIVE' => true, 'IS_ADMIN' => 1]);
         $this->assertSame(['name', 'score', 'is_active'], array_keys($named->get_attributes()));
         $this->assertSame('Büyük', $named->name);
+    }
+
+    /**
+     * `$model->{$alan}` erişimi parametresiz iş metodunu çalıştırıyordu (ör. hesap silme).
+     */
+    public function test_property_access_never_runs_non_relation_methods(): void
+    {
+        $author = $this->author();
+        (new Post($this->db, ['author_id' => $author->get_key(), 'title' => 'ilk']))->save();
+        Ledger::$closed = 0;
+
+        $ledger = Ledger::find($author->get_key(), $this->db);
+        $this->assertNotNull($ledger);
+        $field = 'close_account';
+        $this->assertNull($ledger->$field);
+        $this->assertNull($ledger->untyped);
+        $this->assertArrayNotHasKey('close_account', $ledger->to_array());
+        $this->assertSame(0, Ledger::$closed);
+        $this->assertSame(1, $this->db->table('p_authors')->count());
+
+        // Gerçek ilişki çalışmaya devam eder
+        $this->assertCount(1, $ledger->posts);
+
+        foreach (['load', 'eager'] as $path) {
+            try {
+                $path === 'load' ? $ledger->load('close_account') : Ledger::eager_load([$ledger], 'close_account');
+                $this->fail("{$path}: InvalidArgumentException bekleniyordu");
+            } catch (\InvalidArgumentException) {
+            }
+        }
+        $this->assertSame(0, Ledger::$closed);
+    }
+
+    public function test_allowed_relations_list_is_authoritative(): void
+    {
+        $author = $this->author();
+        (new Post($this->db, ['author_id' => $author->get_key(), 'title' => 'ilk']))->save();
+
+        $listed = ListedAuthor::find($author->get_key(), $this->db);
+        $this->assertNotNull($listed);
+        $this->assertCount(1, $listed->posts);
+        $this->assertNull($listed->drafts);
+        $this->assertCount(1, ListedAuthor::eager_load([$listed], 'posts')[0]->posts);
     }
 
     public function test_eager_loading_uses_one_query_per_relation(): void
