@@ -4,6 +4,30 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.5.1] - 2026-10-22
+
+Patch sürüm: üçüncü hata ve güvenlik analizinin bulguları. Davranış farkları: [UPGRADE.md](UPGRADE.md#250--251).
+
+### Security
+- ORM toplu atama: `$guarded` / `$fillable` karşılaştırması harf büyüklüğüne duyarsız. Önceden `['IS_ADMIN' => 1]` veya `['ID' => 5]` korumayı atlatıyordu (MySQL kolon adları duyarsız). Anahtar fillable'daki yazıma çevriliyor; guarded modunda geçersiz kolon adı yok sayılıyor.
+- ORM ilişki tespiti: `$model->ad`, `load()` ve eager loading yalnızca dönüş tipi `Model` / `?Model` / `array` olan ve gövdesinde `belongs_to(` / `has_one(` / `has_many(` geçen metodu çalıştırıyor. Önceden `$model->close_account` erişimi parametresiz iş metodunu yürütüyordu. İsteğe bağlı açık liste: `protected ?array $allowed_relations`.
+- Memcached: tag listeleri JSON string olarak yazılıyor (eski dizi biçimi okunuyor); php-memcached'in bayrağa göre `unserialize` riski README'de belgelendi.
+
+### Added
+- `ORM_STRICT_ASSIGNMENT` (varsayılan `false`): fillable dışı `$model->alan` ataması `InvalidArgumentException`.
+- `Model::$allowed_relations`, `Nsql::get_query_stats()`, `ConnectionManager::add()` için `options` ve `dsn_params`.
+
+### Fixed
+- `enable_query_analysis()`: WHERE'li `DELETE` / `UPDATE`, subquery'li `UPDATE`, `shutdown_at` gibi kolon adları ve literal içindeki `;` artık kritik sayılıp engellenmiyor. WHERE kontrolü üst seviye SQL'e bakıyor; `#` yalnızca MySQL'de yorum. `UNION SELECT … NULL` ve `OR 1=1` kalıpları `high` (meşru sorguda da geçtikleri için engellenmiyor).
+- `Metrics`: sorgu sayıları her zaman 0'dı; toplam, yavaş, başarısız sorgu ve ortalama süre raporlanıyor. Hata ayrıntısı yanıta değil log'a yazılıyor.
+- Paylaşılan query cache: store'a yazılamayan geçersiz kılma yutulmuyor, tekrar deneniyor; bu sürede süreç store'u kullanmıyor. Tahliye edilen sürüm token'ı eski kaydı yeniden güncel saydırmıyor.
+- Memcached tag listesine eşzamanlı ekleme `cas()` ile yapılıyor (anahtar kaybı yok).
+- `InMemoryAdapter`: yeniden yazmada eski tag eşlemesi temizleniyor; `get()` gerçek LRU.
+- `MigrationManager`: `failed` kaydı yazılamazsa asıl migration hatası korunuyor.
+- `KeyManager`: anahtar dosyası izin uyarısı süreç başına bir kez.
+- `batch_update()`: anahtarı olmayan satır sessizce atlanmıyor; hiçbir satır yazılmadan `QueryException`.
+- `debug()`: debug modu kapalıyken HTML basmıyor, `E_USER_NOTICE` veriyor.
+
 ## [2.5.0] - 2026-10-21
 
 Minor sürüm: ikinci güvenlik analizinin bulguları. Güvenlik amaçlı davranış farkları: [UPGRADE.md](UPGRADE.md#241--250).

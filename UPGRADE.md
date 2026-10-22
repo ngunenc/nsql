@@ -1,5 +1,21 @@
 # Yükseltme Rehberi
 
+## 2.5.0 → 2.5.1
+
+Patch sürüm; güvenlik ve hata düzeltmeleri. Kontrol edilecek davranış farkları:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `$fillable` / `$guarded` harf büyüklüğüne duyarsız; anahtar fillable'daki yazıma çevrilir | `['Name' => …]` ile atayıp attribute'u `Name` adıyla okuyan kod | Attribute'u fillable'daki adla okuyun (`$m->name`) |
+| İlişki metodu: dönüş tipi bildirilmiş ve gövdede `belongs_to(` / `has_one(` / `has_many(` çağrısı | Dönüş tipi olmayan veya ilişkiyi yardımcı metodla kuran modeller (`$m->posts` `null` döner, `load()` `InvalidArgumentException`) | Dönüş tipi ekleyin (`: array`, `: ?Author`) veya `protected ?array $allowed_relations = ['posts'];` |
+| `enable_query_analysis()` WHERE'li DELETE/UPDATE'i engellemez; `UNION SELECT` ve `OR 1=1` artık `high` (kritik değil) | Analizin bu sorguları engellemesine güvenen kod | Koruma parametre bağlamadır; analiz tanı aracıdır |
+| `batch_update()` anahtarsız satırda `QueryException` | Anahtarı olmayan satırların atlanmasına güvenen kod | Satırları göndermeden önce filtreleyin |
+| `debug()` debug modu kapalıyken HTML basmaz, `E_USER_NOTICE` verir | Uyarı kutusunu sayfada bekleyen kod; notice'i exception'a çeviren hata işleyicileri | Debug modunu açın veya `debug()` çağrısını kaldırın |
+| Memcached tag listesi JSON string | Tag anahtarlarını doğrudan okuyan araçlar | Eski dizi biçimi okunmaya devam eder; işlem gerekmez |
+| Paylaşılan query cache store'a yazılamazsa WARNING ve süreç store'u geçici olarak kullanmaz | Redis/Memcached kesintisi | İşlem gerekmez; store geri gelince bekleyen geçersiz kılmalar yazılır |
+
+Yeni ve isteğe bağlı: `ORM_STRICT_ASSIGNMENT`, `Model::$allowed_relations`, `Nsql::get_query_stats()`, `ConnectionManager::add()` `options` / `dsn_params`.
+
 ## 2.4.1 → 2.5.0
 
 Minor sürüm; güvenlik düzeltmeleri bazı davranışları değiştirir. Kontrol edilecek farklar:

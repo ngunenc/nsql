@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.5.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.5.1
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -120,6 +120,8 @@
 >
 > **v2.5.0**: Güvenlik: `Nsql::connect()` DSN'deki `sslmode`/`sslrootcert`'ü korur (TLS), `Validator` liste kurallarını uygular ve bilinmeyen kuralı reddeder, `ENCRYPTION_KEY` ile rotasyon veri kaybına yol açmaz, `secure_session_start()` zaman aşımlarını otomatik uygular ve strict mode açar, log kaydı geçersiz UTF-8 ile silinemez, Docker örneği `.env`'i web'e açmaz. Yeni: `where_like()`, `Nsql::session_login()`, `DB_SSLMODE` / `DB_SSL_CA`, `ENCRYPTION_PREVIOUS_KEYS`. Geçiş: [UPGRADE.md](UPGRADE.md#241--250)
 >
+> **v2.5.1**: Güvenlik ve hata düzeltmeleri: ORM `$guarded` harf büyüklüğüyle atlatılamaz, `$model->alan` erişimi ilişki olmayan metodu çalıştırmaz, `enable_query_analysis()` normal CRUD'u engellemez, Memcached tag listeleri JSON ve `cas()` ile yazılır, `Metrics` gerçek sorgu sayılarını raporlar, paylaşılan query cache geçersiz kılma hatası yutulmaz. Yeni: `ORM_STRICT_ASSIGNMENT`, `$allowed_relations`, `get_query_stats()`. Geçiş: [UPGRADE.md](UPGRADE.md#250--251)
+>
 > **v2.3.0**: ORM değişiklik takibi ve `exists()` (yalnızca değişen kolonlar yazılır), `decimal:N` cast; QueryBuilder tablo takma adı, `distinct()`, `where_column()`, `lock_for_update()`, `increment()`, `chunk()`; migration eşzamanlılık kilidi ve PostgreSQL/SQLite'ta transaction; replica koptuğunda primary'ye düşme; paylaşılan query cache'te süreç içi sürüm doğrulaması ve `set_cache_dependency()`; `RateLimiter::purge()`; MySQL 8 upsert sözdizimi. Geçiş: [UPGRADE.md](UPGRADE.md#223--230)
 >
 > **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
@@ -189,7 +191,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.5.0 --prefer-dist
+composer require ngunenc/nsql:^2.5.1 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -209,13 +211,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.5.0"
+        "ngunenc/nsql": "^2.5.1"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.5.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.5.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -1671,6 +1673,7 @@ echo json_encode($author);                 // cast'li alanlar + yüklenmiş ili�
 
 - İlişki metotları: `belongs_to($class, $foreign_key = '<ilişkili>_id', $owner_key = pk)`, `has_one` / `has_many($class, $foreign_key = '<bu_model>_id', $local_key = pk)`. Anahtar adları sınıfın snake_case adından türetilir (`BlogPost` → `blog_post_id`). İlişki metotları model örnekleri döndürür (v1.12.0 öncesi `has_many()` satır nesneleri döndürüyordu; özellik erişimi aynı çalışır).
 - **İlişki sayılma kuralı (v2.5.1+):** `$model->ad`, `load()` ve eager loading yalnızca ilişki metodunu çalıştırır. Metodun dönüş tipi bildirilmiş olmalı (`?Author`, `array`) ve gövdesinde `$this->belongs_to(` / `has_one(` / `has_many(` çağrısı geçmeli; aksi halde `$model->ad` `null` döner ve metod çalışmaz (önceden `$model->{$alan}` erişimi `close_account()` gibi parametresiz iş metodlarını yürütüyordu). İlişkiyi yardımcı bir metod üzerinden kuruyorsanız modelde açık liste verin: `protected ?array $allowed_relations = ['posts', 'author'];`
+- **Strict atama (v2.5.1+):** `ORM_STRICT_ASSIGNMENT=true` iken fillable/guarded dışı `$model->alan = …` ataması sessizce yok sayılmaz, `InvalidArgumentException` verir (yazım hatalarını yakalar). `fill()` ve constructor etkilenmez; fillable/guarded karşılaştırması v2.5.1'den beri harf büyüklüğüne duyarsızdır.
 - Cast tipleri: `int`, `float`/`decimal`, `bool`, `string`, `array`/`json`, `object`, `datetime`, `date`. Ham değer: `get_raw_attribute()`.
 - Eager loading: `get(..., with: ['author'])`, `first(..., with: [...])`, `Model::eager_load($models, 'author')`; ilişki başına tek `WHERE ... IN (...)` sorgusu ([ayrıntı](docs/api-reference.md#eager-loading-v220)).
 - Statik yardımcılar: `get(?scope)`, `first(?scope)`, `find()`, `find_or_fail()` (`ModelNotFoundException`, `DatabaseException` alt sınıfı), `hydrate($rows)`. `all()` geriye uyumluluk için satır nesneleri döndürmeye devam eder.
