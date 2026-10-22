@@ -24,6 +24,34 @@ class CacheAdapterSmokeTest extends TestCase
         $this->assertNull($adapter->get('k1'));
     }
 
+    public function test_in_memory_adapter_rewrite_drops_old_tags(): void
+    {
+        $adapter = new InMemoryAdapter(60, 50);
+        $adapter->set('k', 'eski', 60, ['old']);
+        $adapter->set('k', 'yeni', 60, ['new']);
+
+        // Eski tag'in geçersiz kılınması yeni kaydı silmemeli
+        $adapter->invalidate_by_tag('old');
+        $this->assertSame('yeni', $adapter->get('k'));
+
+        $adapter->invalidate_by_tag('new');
+        $this->assertNull($adapter->get('k'));
+    }
+
+    public function test_in_memory_adapter_evicts_least_recently_used(): void
+    {
+        $adapter = new InMemoryAdapter(60, 2);
+        $adapter->set('a', 1);
+        $adapter->set('b', 2);
+        $this->assertSame(1, $adapter->get('a'));
+
+        $adapter->set('c', 3);
+
+        $this->assertSame(1, $adapter->get('a'), 'Yakın zamanda okunan kayıt tahliye edilmemeli');
+        $this->assertFalse($adapter->has('b'));
+        $this->assertSame(3, $adapter->get('c'));
+    }
+
     public function test_cache_manager_uses_in_memory_fallback(): void
     {
         $manager = new CacheManager(

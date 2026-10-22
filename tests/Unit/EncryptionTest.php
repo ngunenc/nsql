@@ -297,6 +297,31 @@ class EncryptionTest extends TestCase
         $this->assertSame($key, @KeyManager::load_key_from_storage());
     }
 
+    public function test_insecure_permission_warning_is_raised_once_per_process(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Windows POSIX izinlerini raporlamaz');
+        }
+        $key = self::key();
+        KeyManager::save_key_to_storage($key);
+        chmod($this->dir . DIRECTORY_SEPARATOR . 'encryption.key', 0644);
+
+        $warnings = 0;
+        set_error_handler(static function (int $level) use (&$warnings): bool {
+            $warnings += $level === E_USER_WARNING ? 1 : 0;
+
+            return true;
+        });
+        try {
+            $this->assertSame($key, KeyManager::load_key_from_storage());
+            $this->assertSame($key, KeyManager::load_key_from_storage());
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame(1, $warnings);
+    }
+
     public function test_is_key_valid(): void
     {
         $this->assertTrue((new Encryption(self::key()))->is_key_valid());
