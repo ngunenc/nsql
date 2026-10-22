@@ -12,7 +12,8 @@ use Psr\SimpleCache\CacheInterface;
  * ilgili token'ların anlık görüntüsü kayda eklenir; okumada güncel token'lar farklıysa kayıt
  * bayattır ve yok sayılır. Token anahtarları TTL'siz yazılır.
  *
- * Store hataları sorguyu bozmaz: okuma hatası miss, yazma hatası no-op sayılır.
+ * Store hataları sorguyu bozmaz: okuma hatası miss, kayıt yazma hatası no-op sayılır. Geçersiz kılma
+ * hatası ise false döner; çağıran (CacheTrait) bunu bekletip tekrar dener.
  */
 final class QueryCacheStore
 {
@@ -109,38 +110,42 @@ final class QueryCacheStore
 
     /**
      * @param list<string> $tables
+     * @return bool Store'a yazılamadıysa false (çağıran tekrar denemeli)
      */
-    public function invalidate_tables(array $tables): void
+    public function invalidate_tables(array $tables): bool
     {
-        $this->bump(array_map(fn (string $t) => $this->version_key('t', $t), $tables));
+        return $this->bump(array_map(fn (string $t) => $this->version_key('t', $t), $tables));
     }
 
     /**
      * @param list<string> $tags
      */
-    public function invalidate_tags(array $tags): void
+    public function invalidate_tags(array $tags): bool
     {
-        $this->bump(array_map(fn (string $t) => $this->version_key('g', $t), $tags));
+        return $this->bump(array_map(fn (string $t) => $this->version_key('g', $t), $tags));
     }
 
-    public function invalidate_all(): void
+    public function invalidate_all(): bool
     {
-        $this->bump([$this->version_key('a', self::ALL_SCOPE)]);
+        return $this->bump([$this->version_key('a', self::ALL_SCOPE)]);
     }
 
     /**
      * @param list<string> $keys
      */
-    private function bump(array $keys): void
+    private function bump(array $keys): bool
     {
         if ($keys === []) {
-            return;
+            return true;
         }
 
         try {
             $token = bin2hex(random_bytes(8));
-            $this->cache->setMultiple(array_fill_keys($keys, $token));
+
+            return $this->cache->setMultiple(array_fill_keys($keys, $token));
         } catch (\Throwable) {
+            // Hata yutulmaz: geçersiz kılma kaybolursa diğer süreçler TTL dolana kadar bayat veri okur
+            return false;
         }
     }
 
@@ -161,6 +166,20 @@ final class QueryCacheStore
 
         $values = $this->cache->getMultiple($keys);
         $versions = is_array($values) ? $values : iterator_to_array($values);
+
+        // Eksik token null bırakılmaz: null anlık görüntülü bir kayıt, sonradan oluşan token tahliye
+        // edilince yeniden "güncel" sayılırdı. Yeni token her zaman farklıdır.
+        $missing = array_keys(array_filter($versions, static fn ($v) => $v === null));
+        if ($missing !== []) {
+            $created = [];
+            foreach ($missing as $key) {
+                $created[$key] = bin2hex(random_bytes(8));
+            }
+            if (! $this->cache->setMultiple($created)) {
+                throw new \RuntimeException('Query cache sürüm token\'ı yazılamadı');
+            }
+            $versions = $created + $versions;
+        }
         ksort($versions);
 
         return $versions;

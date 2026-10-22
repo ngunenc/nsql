@@ -139,4 +139,54 @@ class QueryCacheConsistencyTest extends TestCase
         $db->get_results($sql);
         $this->assertSame(1, $db->get_cache_stats()['size']);
     }
+
+    /**
+     * Store kesintisinde kaybolan geçersiz kılma tekrar denenir; önceden hata yutuluyor ve store geri
+     * gelince eski kayıt TTL dolana kadar dönüyordu.
+     */
+    public function test_failed_shared_invalidation_is_retried_before_store_is_used(): void
+    {
+        $store = new ArrayPsr16Cache();
+        $worker = $this->connect()->set_query_cache_store($store);
+        $writer = $this->connect()->set_query_cache_store($store);
+        $this->seed($writer);
+        $sql = 'SELECT name FROM users WHERE id = 1';
+
+        $this->assertSame('ayse', $worker->get_row($sql)?->name);
+
+        $store->fail_writes = true;
+        $writer->update('UPDATE users SET name = ? WHERE id = 1', ['fatma']);
+        // Store yazılamazken bu süreç paylaşılan kaydı okumaz
+        $this->assertSame('fatma', $writer->get_row($sql)?->name);
+
+        $store->fail_writes = false;
+        $this->assertSame('fatma', $writer->get_row($sql)?->name);
+        // Bekleyen geçersiz kılma yazıldı: diğer süreç de güncel veriyi görür
+        $this->assertSame('fatma', $worker->get_row($sql)?->name);
+    }
+
+    /**
+     * Sürüm token'ı tahliye edilince (LRU, restart) eski kayıt yeniden güncel sayılmamalı.
+     */
+    public function test_evicted_version_token_does_not_revive_old_entry(): void
+    {
+        $this->seed($this->connect());
+        // Store boş: kayıt yazılırken tablonun sürüm token'ı henüz yok
+        $store = new ArrayPsr16Cache();
+        $worker = $this->connect()->set_query_cache_store($store);
+        $reader = $this->connect()->set_query_cache_store($store);
+        $writer = $this->connect()->set_query_cache_store($store);
+        $sql = 'SELECT name FROM users WHERE id = 1';
+
+        $this->assertSame('ayse', $worker->get_row($sql)?->name);
+        $writer->update('UPDATE users SET name = ? WHERE id = 1', ['fatma']);
+        foreach (array_keys($store->items) as $key) {
+            if (str_contains($key, '_vt_')) {
+                unset($store->items[$key]);
+            }
+        }
+
+        $this->assertSame('fatma', $worker->get_row($sql)?->name, 'Süreç içi kayıt');
+        $this->assertSame('fatma', $reader->get_row($sql)?->name, 'Paylaşılan kayıt');
+    }
 }
