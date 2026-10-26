@@ -3,6 +3,7 @@
 namespace nsql\database\monitoring;
 
 use nsql\database\Nsql;
+use nsql\security\PhpSecurityAdvisories;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -66,6 +67,9 @@ class HealthCheck
         if ($memory_check['status'] !== 'healthy') {
             $results['status'] = 'degraded';
         }
+
+        // PHP sürümü: genel durumu değiştirmez (dağıtım backport'larında yanlış alarm olabilir)
+        $results['checks']['php'] = $this->check_php();
 
         return $results;
     }
@@ -164,6 +168,38 @@ class HealthCheck
     /**
      * Bytes'ı okunabilir formata çevirir
      */
+    /**
+     * Çalışan PHP sürümü bilinen çekirdek açıklarına karşı yamalı mı? Yanıta sürüm numarası
+     * konmaz (dışarı açık endpoint'te parmak izi vermemek için); ayrıntı log'a yazılır.
+     *
+     * @param string $version Test için; varsayılan PHP_VERSION
+     */
+    public function check_php(string $version = PHP_VERSION): array
+    {
+        $advisory = PhpSecurityAdvisories::status($version);
+        if ($advisory['status'] === 'ok') {
+            return ['status' => 'healthy', 'message' => 'PHP version has no known critical advisories'];
+        }
+
+        $detail = $advisory['status'] === 'unsupported'
+            ? "PHP {$advisory['branch']} güvenlik desteği almıyor; en az {$advisory['minimum']} sürümüne geçin"
+            : "PHP {$version} bilinen kritik açıklar içeriyor (PHP2Shell CVE-2026-109618/109619); "
+                . "en az {$advisory['minimum']} sürümüne güncelleyip PHP süreçlerini yeniden başlatın";
+        $message = "nsql health check 'php': {$detail}. Dağıtım paketi yamayı backport etmiş olabilir.";
+        if ($this->logger !== null) {
+            $this->logger->warning($message, ['check' => 'php']);
+        } else {
+            error_log($message);
+        }
+
+        return [
+            'status' => $advisory['status'],
+            'message' => $advisory['status'] === 'unsupported'
+                ? 'PHP branch no longer receives security fixes'
+                : 'PHP security update required (or verify distribution backport)',
+        ];
+    }
+
     private function format_bytes(int $bytes): string
     {
         $units = ['B', 'KB', 'MB', 'GB'];

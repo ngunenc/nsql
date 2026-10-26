@@ -39,7 +39,33 @@ class HealthCheckTest extends TestCase
         $this->assertStringNotContainsString('secret_tbl', $json);
         $this->assertStringNotContainsString('PDOException', $json);
 
-        $this->assertCount(3, $logger->messages);
-        $this->assertStringContainsString('Access denied', $logger->messages[0]);
+        // PHP sürüm uyarısı çalışan sürüme bağlı; yalnızca hata kayıtları sayılır
+        $failures = array_values(array_filter($logger->messages, fn (string $m) => str_contains($m, 'failed')));
+        $this->assertCount(3, $failures);
+        $this->assertStringContainsString('Access denied', $failures[0]);
+    }
+
+    public function test_php_check_reports_outdated_version_without_revealing_it(): void
+    {
+        $db = $this->createMock(Nsql::class);
+        $logger = new class () extends AbstractLogger {
+            /** @var list<string> */
+            public array $messages = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->messages[] = (string) $message;
+            }
+        };
+        $health = new HealthCheck($db, $logger);
+
+        $outdated = $health->check_php('8.4.26');
+        $this->assertSame('outdated', $outdated['status']);
+        $this->assertStringNotContainsString('8.4.26', (string) json_encode($outdated));
+        $this->assertStringContainsString('8.4.27', $logger->messages[0] ?? '');
+
+        $this->assertSame('unsupported', $health->check_php('8.1.30')['status']);
+        $this->assertSame('healthy', $health->check_php('8.4.27')['status']);
+        $this->assertCount(2, $logger->messages);
     }
 }

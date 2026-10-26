@@ -176,6 +176,19 @@ class Nsql
 
         $this->debug_mode = (bool)($debug ?? Config::get('debug_mode', false));
         $this->log_file = (string)Config::get('log_file', 'error_log.txt');
+        if (
+            $driver_name === 'pgsql'
+            && ! empty($this->options[\PDO::ATTR_EMULATE_PREPARES])
+            && ! \nsql\security\PhpSecurityAdvisories::pdo_pgsql_quote_fixed()
+        ) {
+            // CVE-2025-14180: geçersiz bayt dizisi içeren parametre süreci çökertir (DoS)
+            $this->log_error(
+                'PDO::ATTR_EMULATE_PREPARES bu PHP sürümünde PostgreSQL için güvensiz (CVE-2025-14180); '
+                . 'emülasyonu kapatın (nsql varsayılanı) veya PHP\'yi güncelleyin.',
+                [],
+                \nsql\database\logging\Logger::WARNING
+            );
+        }
         $this->statement_cache_limit = (int)Config::get('statement_cache_limit', 100);
 
         // Tek bağlantı: yalnızca pool (parent PDO açılmaz — çift bağlantı önlenir)
