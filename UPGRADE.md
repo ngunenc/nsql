@@ -1,5 +1,17 @@
 # Yükseltme Rehberi
 
+## 2.5.1 → 2.5.2
+
+Patch sürüm; kütüphane API'si değişmedi. Asıl yapılacak iş sunucu tarafında:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| PHP2Shell (CVE-2026-109618 / 109619): PHP yorumlayıcısında RCE | 8.2.35, 8.3.36, 8.4.27, 8.5.12 öncesi tüm PHP kurulumları | PHP'yi güncelleyin, PHP-FPM / Apache'yi yeniden başlatın; gerekmiyorsa `session.upload_progress.enabled=0` |
+| PHP 8.1 güvenlik desteği bitti | 8.1 kullananlar | 8.2+ sürümüne geçin; 8.1 desteği sonraki minor sürümde bırakılacak |
+| `HealthCheck::check()` yanıtında yeni `checks.php` alanı | Yanıt anahtarlarını birebir karşılaştıran izleme araçları | Alanı kabul edin; genel `status` bu alandan etkilenmez |
+| Yamasız PHP'de pgsql + `ATTR_EMULATE_PREPARES` WARNING | Emülasyonu bilerek açan PostgreSQL kullanıcıları | Emülasyonu kapatın veya PHP'yi 8.2.30 / 8.3.29 / 8.4.16 / 8.5.1+ sürümüne güncelleyin |
+| Docker imajı `php:8.4.27-fpm` | `docker-compose` ile geliştirme yapanlar | `docker compose build --pull` |
+
 ## 2.5.0 → 2.5.1
 
 Patch sürüm; güvenlik ve hata düzeltmeleri. Kontrol edilecek davranış farkları:

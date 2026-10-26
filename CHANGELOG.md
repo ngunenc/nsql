@@ -4,7 +4,20 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
-## [2.5.1] - 2026-10-22
+## [2.5.2] - 2026-10-26
+
+Patch sürüm: Ekim 2026 PHP çekirdek güvenlik açıklarına (PHP2Shell) karşı önlemler. Kütüphane kodunda açık yok; PHP yorumlayıcısının güncellenmesi gerekir. Ayrıntı: [UPGRADE.md](UPGRADE.md#251--252).
+
+### Security
+- README'de güvenli asgari PHP sürümleri: 8.2.35, 8.3.36, 8.4.27, 8.5.12 (CVE-2026-109618, CVE-2026-109619). PHP 8.1'in güvenlik desteğinin bittiği belirtildi.
+- Docker geliştirme imajı `php:8.4.27-fpm` sürümüne sabitlendi (önceden sabitlenmemiş `php:8.2-fpm`). `session.upload_progress.enabled=0` ve `expose_php=Off` ayarlandı.
+- PostgreSQL bağlantısında `PDO::ATTR_EMULATE_PREPARES` açılırsa ve PHP CVE-2025-14180'e karşı yamasızsa WARNING loglanıyor (nsql varsayılanı emülasyon kapalı).
+
+### Added
+- `nsql\security\PhpSecurityAdvisories`: çalışan PHP sürümünü bilinen kritik açıklara karşı denetler (`status()`, `pdo_pgsql_quote_fixed()`).
+- `HealthCheck::check()` çıktısında `checks.php` (`healthy` / `outdated` / `unsupported`). Genel durumu değiştirmez; sürüm numarası yanıta konmaz, ayrıntı log'a yazılır.
+- CI: PHP 8.5.
+
 
 Patch sürüm: üçüncü hata ve güvenlik analizinin bulguları. Davranış farkları: [UPGRADE.md](UPGRADE.md#250--251).
 
