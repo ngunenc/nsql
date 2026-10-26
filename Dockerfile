@@ -1,5 +1,8 @@
-# PHP 8.2 FPM için Dockerfile
-FROM php:8.2-fpm
+# PHP 8.4 FPM için Dockerfile
+# Sürüm sabit: PHP2Shell (CVE-2026-109618 / CVE-2026-109619) yamasını içeren en düşük 8.4 sürümü.
+# Güncel yama için: docker build --pull --build-arg PHP_VERSION=8.4.x .
+ARG PHP_VERSION=8.4.27
+FROM php:${PHP_VERSION}-fpm
 
 # Sistem bağımlılıklarını yükle
 RUN apt-get update && apt-get install -y \
@@ -18,6 +21,9 @@ RUN apt-get update && apt-get install -y \
 # Redis / Memcached (opsiyonel — yoksa image yine build edilir)
 RUN (pecl install redis && docker-php-ext-enable redis) || echo "redis extension skipped"
 RUN (pecl install memcached && docker-php-ext-enable memcached) || echo "memcached extension skipped"
+
+# PHP sertleştirme (session.upload_progress kapalı, expose_php kapalı)
+COPY docker/php/security.ini /usr/local/etc/php/conf.d/zz-nsql-security.ini
 
 # Composer'ı yükle
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
