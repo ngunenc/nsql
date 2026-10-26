@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.5.1
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.5.2
 
 **nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -122,6 +122,8 @@
 >
 > **v2.5.1**: Güvenlik ve hata düzeltmeleri: ORM `$guarded` harf büyüklüğüyle atlatılamaz, `$model->alan` erişimi ilişki olmayan metodu çalıştırmaz, `enable_query_analysis()` normal CRUD'u engellemez, Memcached tag listeleri JSON ve `cas()` ile yazılır, `Metrics` gerçek sorgu sayılarını raporlar, paylaşılan query cache geçersiz kılma hatası yutulmaz. Yeni: `ORM_STRICT_ASSIGNMENT`, `$allowed_relations`, `get_query_stats()`. Geçiş: [UPGRADE.md](UPGRADE.md#250--251)
 >
+> **v2.5.2**: PHP2Shell (CVE-2026-109618 / CVE-2026-109619) ve diğer PHP çekirdek açıklarına karşı: güvenli asgari PHP sürümleri belgelendi, `HealthCheck` yamasız PHP'yi bildirir (`checks.php`), PostgreSQL'de emülasyonlu prepare yamasız PHP'de uyarı verir, Docker imajı PHP 8.4.27'ye sabitlendi ve `session.upload_progress` kapatıldı, CI'a PHP 8.5 eklendi. Geçiş: [UPGRADE.md](UPGRADE.md#251--252)
+>
 > **v2.3.0**: ORM değişiklik takibi ve `exists()` (yalnızca değişen kolonlar yazılır), `decimal:N` cast; QueryBuilder tablo takma adı, `distinct()`, `where_column()`, `lock_for_update()`, `increment()`, `chunk()`; migration eşzamanlılık kilidi ve PostgreSQL/SQLite'ta transaction; replica koptuğunda primary'ye düşme; paylaşılan query cache'te süreç içi sürüm doğrulaması ve `set_cache_dependency()`; `RateLimiter::purge()`; MySQL 8 upsert sözdizimi. Geçiş: [UPGRADE.md](UPGRADE.md#223--230)
 >
 > **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
@@ -180,18 +182,24 @@
 ## 📋 Kurulum
 
 ### Sistem Gereksinimleri
-- **PHP**: 8.1 veya üstü
+- **PHP**: 8.1 veya üstü (güvenlik için aşağıdaki asgari yama sürümleri)
 - **PDO**: PHP PDO eklentisi
 - **MySQL**: 5.7.8+ veya MariaDB 10.2+
 - **OpenSSL**: Şifreleme özellikleri için
 - **JSON**: Yapılandırma dosyaları için
+
+> ⚠️ **PHP güvenlik güncellemesi (Ekim 2026):** PHP2Shell (CVE-2026-109618, CVE-2026-109619) PHP yorumlayıcısında kimlik doğrulamasız uzaktan kod çalıştırmaya izin verir ve kütüphane kodu bunu kapatamaz. En az **8.2.35, 8.3.36, 8.4.27 veya 8.5.12** kullanın ve güncellemeden sonra PHP-FPM / Apache süreçlerini **yeniden başlatın**. Yükleme ilerlemesi kullanılmıyorsa `session.upload_progress.enabled=0` önerilir (CVE-2026-115560 için de geçici önlem).
+>
+> **PHP 8.1** Aralık 2025'ten beri güvenlik yaması almıyor ve bu açıkların düzeltmesi yok. nsql 2.x 8.1'de çalışmaya devam eder ama 8.1 desteği bir sonraki minor sürümde bırakılacaktır; production'da 8.2+ kullanın.
+>
+> Çalışan sürümü denetlemek için `HealthCheck::check()` çıktısındaki `checks.php` alanına veya `\nsql\security\PhpSecurityAdvisories::status()` metoduna bakın. Debian / Ubuntu / RHEL paketleri yamayı sürüm numarasını değiştirmeden geri taşıyabilir; bu durumda `outdated` sonucu yanlış alarmdır, dağıtımın güvenlik duyurusunu kontrol edin.
 
 ### Composer ile Kurulum
 
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.5.1 --prefer-dist
+composer require ngunenc/nsql:^2.5.2 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -211,13 +219,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.5.1"
+        "ngunenc/nsql": "^2.5.2"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.5.1 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.5.2 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası
@@ -437,7 +445,7 @@ composer fix
 ### CI/CD
 
 Proje GitHub Actions ile otomatik test edilir:
-- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.4 (unit, integration, portable; query cache açık/kapalı)
+- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.5 (unit, integration, portable; query cache açık/kapalı)
 - **Portable**: PostgreSQL 16 ve SQLite üzerinde `tests/Portable`
 - PHP 8.3 job’da `coverage/clover.xml` üretilir, %65 satır coverage eşiği uygulanır ve Codecov’a yüklenir
 - Windows unit smoke isteğe bağlıdır (`continue-on-error`; MySQL service yok)
@@ -1263,7 +1271,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 | nsql Sürümü | PHP Minimum | PHP Maksimum | Notlar |
 |-------------|-------------|--------------|---------|
 | 1.0.x–1.9.1 | 8.0.0      | 8.3.x        | Eski sürümler, destek yok |
-| 1.9.2+      | 8.1.0      | 8.4.x        | CI: 8.1–8.4 (güncel: 1.13.x) |
+| 1.9.2–2.5.1 | 8.1.0      | 8.4.x        | CI: 8.1–8.4 |
+| 2.5.2+      | 8.1.0 (güvenli: 8.2.35+) | 8.5.x | CI: 8.1–8.5; 8.1 güvenlik desteği bitti |
 
 ### Veritabanı Uyumluluğu
 | Veritabanı     | Minimum Sürüm | Önerilen Sürüm | CI |
