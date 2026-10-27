@@ -77,6 +77,36 @@ class BatchWritePortableTest extends PortableTestCase
         $this->assert_wide_rows_inserted(20500);
     }
 
+    /**
+     * upsert() tek ifade kuruyordu: 65.535 placeholder'ı aşan veri her sürücüde hata veriyordu.
+     */
+    public function test_upsert_splits_rows_over_driver_param_limit(): void
+    {
+        $this->create_table('p_batch_upsert', ['name VARCHAR(20) NOT NULL', 'code INT NOT NULL UNIQUE']);
+        $rows = [];
+        for ($i = 1; $i <= 35000; $i++) {
+            $rows[] = ['name' => 'n' . $i, 'code' => $i];
+        }
+
+        $this->db->table('p_batch_upsert')->upsert($rows, ['name'], ['code']);
+        $updated = array_map(static fn (array $r): array => ['name' => 'u' . $r['code'], 'code' => $r['code']], $rows);
+        $this->db->table('p_batch_upsert')->upsert($updated, ['name'], ['code']);
+
+        $stats = $this->db->get_row("SELECT COUNT(*) AS c, SUM(CASE WHEN name LIKE 'u%' THEN 1 ELSE 0 END) AS u FROM p_batch_upsert");
+        $this->assertSame(35000, (int) $stats->c);
+        $this->assertSame(35000, (int) $stats->u);
+    }
+
+    /**
+     * SQLite'ta isimli placeholder maliyeti ifade başına karesel: parçalar 1000 parametreyle sınırlı.
+     */
+    public function test_sqlite_bulk_chunks_stay_small(): void
+    {
+        $chunks = (fn (array $rows): array => $this->chunk_rows($rows))->call($this->db->table('p_batch'), array_fill(0, 2500, ['a' => 1, 'b' => 2]));
+        $expected = self::driver() === 'sqlite' ? 500 : 2500;
+        $this->assertSame($expected, count($chunks[0]));
+    }
+
     public function test_batch_insert_rejects_rows_with_different_columns(): void
     {
         $invalid_sets = [
