@@ -174,7 +174,7 @@ class QueryBuilderPortableTest extends PortableTestCase
 
     public function test_nested_subqueries_raw_bindings_and_groups(): void
     {
-        // Alt sorgu, raw ve dış sorgu aynı isimli binding kullanır; compile() hepsini tek sayaçla yeniden adlandırır
+        // Alt sorgu, raw ve dış sorgu aynı isimli binding kullanır; compile() hepsini SQL sırasıyla `?` yapar
         $ordered = $this->db->table('p_orders')->select('product_id')->where_raw('qty >= :min', ['min' => 2]);
         $query = $this->db->table('p_products')
             ->where_in_subquery('id', $ordered)
@@ -184,11 +184,67 @@ class QueryBuilderPortableTest extends PortableTestCase
 
         [$sql, $params] = $query->compile();
         $this->assertCount(5, $params);
-        $this->assertSame(count($params), substr_count($sql, ':__p'));
+        $this->assertSame(count($params), substr_count($sql, '?'));
+        $this->assertTrue(array_is_list($params));
+        $this->assertStringNotContainsString(':min', $sql);
         $this->assertSame(['Kalem'], $query->pluck('name'));
 
         // compile() yan etkisiz: tekrar çağrı aynı sonucu verir
         $this->assertSame([$sql, $params], $query->compile());
+    }
+
+    /**
+     * Konumsal placeholder sırası SQL metnindeki sırayla aynı olmalı: SELECT alt sorgusu, JOIN alt sorgusu,
+     * WHERE, HAVING, UNION ve LIMIT/OFFSET bir arada.
+     */
+    public function test_positional_parameters_follow_sql_order(): void
+    {
+        $priced = $this->db->table('p_products')->select('id')->where('price', '>', 1);
+        $query = $this->db->table('p_products')
+            ->select('category', 'COUNT(*) AS n')
+            ->where_in_subquery('id', $priced)
+            ->where('name', '<>', 'yok')
+            ->group_by('category')
+            ->having('COUNT(*)', '>=', 1)
+            ->order_by('category')
+            ->limit(10)
+            ->offset(0);
+        [$sql, $params] = $query->compile();
+
+        $this->assertSame([1, 'yok', 1, 10], array_column($params, 'value'), $sql);
+        $this->assertNotEmpty($query->get());
+
+        $union = $this->db->table('p_products')->select('name')->where('price', '<', 15)
+            ->union($this->db->table('p_products')->select('name')->where('price', '>', 900));
+        [, $union_params] = $union->compile();
+        $this->assertSame([15, 900], array_column($union_params, 'value'));
+        $this->assertSame(['Kalem'], array_map(static fn ($r) => $r->name, $union->get()));
+    }
+
+    public function test_bare_question_mark_in_raw_sql_is_rejected(): void
+    {
+        // Literal içindeki `?` placeholder değildir
+        $rows = $this->db->table('p_products')->select_raw("'?' AS q")->where('id', '=', 1)->get();
+        $this->assertSame('?', $rows[0]->q);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('isimli binding');
+        $this->db->table('p_products')->where_raw('price > ?')->where('id', '=', 1)->compile();
+    }
+
+    /**
+     * IN listesinde isimli placeholder karesel maliyetliydi (SQLite'ta 8.000 değer ~0,4 sn, 40.000 değer ~10 sn).
+     */
+    public function test_large_in_list_uses_positional_placeholders(): void
+    {
+        $ids = range(1, 30000);
+        $started = hrtime(true);
+        $this->assertSame(4, $this->db->table('p_products')->where_in('id', $ids)->count());
+        $elapsed_ms = (hrtime(true) - $started) / 1e6;
+
+        [$sql] = $this->db->table('p_products')->where_in('id', [1, 2])->compile();
+        $this->assertStringContainsString('IN (?, ?)', $sql);
+        $this->assertLessThan(2000, $elapsed_ms, 'Geniş sınır: yalnızca karesel davranışı yakalar');
     }
 
     public function test_paginate_edges(): void
@@ -374,7 +430,7 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertCount(2, $params, $sql);
         $this->assertSame(['Kalem', 'Kupa'], $builder->order_by('id')->pluck('name'));
 
-        // Üretilen `:__pN` adı kullanıcı binding'iyle çakışmaz
+        // `__p0` gibi eski üretilen adlara benzeyen kullanıcı binding'i de sorunsuz
         $names = $this->db->table('p_products')
             ->where_raw('price > :min AND price < :__p0', ['min' => 10, '__p0' => 50])
             ->order_by('id')
