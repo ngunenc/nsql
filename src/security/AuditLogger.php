@@ -175,11 +175,7 @@ class AuditLogger
 
         $this->rotate_if_needed($this->log_file);
 
-        $result = file_put_contents(
-            $this->log_file,
-            $log_line,
-            FILE_APPEND | LOCK_EX
-        );
+        $result = $this->append_log_line($this->log_file, $log_line);
 
         if ($result === false) {
             error_log("Audit log yazma hatası: " . (error_get_last()['message'] ?? 'unknown'));
