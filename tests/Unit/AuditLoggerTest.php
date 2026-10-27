@@ -55,6 +55,29 @@ class AuditLoggerTest extends TestCase
         );
     }
 
+    /**
+     * Log ve audit dosyaları umask 022 ile 0644 (herkes okuyabilir) oluşuyordu.
+     */
+    public function test_log_files_and_directories_are_not_world_readable(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('Windows POSIX izinlerini raporlamaz');
+        }
+        $previous = umask(022);
+        try {
+            (new AuditLogger($this->file))->log_security_event('login_failed', 'x');
+            $app_log = $this->dir . DIRECTORY_SEPARATOR . 'app.log';
+            (new \nsql\database\logging\Logger($app_log))->error('x');
+        } finally {
+            umask($previous);
+        }
+        clearstatcache();
+
+        $this->assertSame(0750, fileperms($this->dir) & 0777);
+        $this->assertSame(0640, fileperms($this->file) & 0777);
+        $this->assertSame(0640, fileperms($app_log) & 0777);
+    }
+
     public function test_sensitive_context_is_masked(): void
     {
         $logger = new AuditLogger($this->file);

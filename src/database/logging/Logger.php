@@ -148,11 +148,7 @@ class Logger
         }
         $log_line = $json . PHP_EOL;
 
-        $result = @file_put_contents(
-            $this->log_file,
-            $log_line,
-            FILE_APPEND | LOCK_EX
-        );
+        $result = $this->append_log_line($this->log_file, $log_line);
 
         if ($result === false) {
             error_log("Log yazma hatası: " . (error_get_last()['message'] ?? 'unknown'));
@@ -174,11 +170,7 @@ class Logger
 
         $log_line = "[$timestamp] [$level] $message$context" . PHP_EOL;
 
-        $result = @file_put_contents(
-            $this->log_file,
-            $log_line,
-            FILE_APPEND | LOCK_EX
-        );
+        $result = $this->append_log_line($this->log_file, $log_line);
 
         if ($result === false) {
             error_log("Log yazma hatası: " . (error_get_last()['message'] ?? 'unknown'));
@@ -350,6 +342,7 @@ class Logger
         if ($compressed !== false) {
             $compressed_file = $file . '.gz';
             if (@file_put_contents($compressed_file, $compressed) !== false) {
+                @chmod($compressed_file, 0640);
                 // Orijinal dosyayı sil (sadece compressed versiyonu tut)
                 @unlink($file);
             }
