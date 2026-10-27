@@ -1,6 +1,6 @@
 # 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.5.3
 
-**nsql**, PHP 8.1+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
+**nsql**, PHP 8.2+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
 > **🚀 v1.5.0 Yeni Özellikler**: Thread-safe connection pool, LFU cache algoritması, per-table TTL, cache warming, identifier quoting, güvenli IP/HTTPS tespiti, gelişmiş exception handling ve memory leak düzeltmeleri!
 >
@@ -184,7 +184,7 @@
 ## 📋 Kurulum
 
 ### Sistem Gereksinimleri
-- **PHP**: 8.1 veya üstü (güvenlik için aşağıdaki asgari yama sürümleri)
+- **PHP**: 8.2 veya üstü (v2.6.0+; güvenlik için aşağıdaki asgari yama sürümleri)
 - **PDO**: PHP PDO eklentisi
 - **MySQL**: 5.7.8+ veya MariaDB 10.2+
 - **OpenSSL**: Şifreleme özellikleri için
@@ -192,7 +192,7 @@
 
 > ⚠️ **PHP güvenlik güncellemesi (Ekim 2026):** PHP2Shell (CVE-2026-109618, CVE-2026-109619) PHP yorumlayıcısında kimlik doğrulamasız uzaktan kod çalıştırmaya izin verir ve kütüphane kodu bunu kapatamaz. En az **8.2.35, 8.3.36, 8.4.27 veya 8.5.12** kullanın ve güncellemeden sonra PHP-FPM / Apache süreçlerini **yeniden başlatın**. Yükleme ilerlemesi kullanılmıyorsa `session.upload_progress.enabled=0` önerilir (CVE-2026-115560 için de geçici önlem).
 >
-> **PHP 8.1** Aralık 2025'ten beri güvenlik yaması almıyor ve bu açıkların düzeltmesi yok. nsql 2.x 8.1'de çalışmaya devam eder ama 8.1 desteği bir sonraki minor sürümde bırakılacaktır; production'da 8.2+ kullanın.
+> **PHP 8.1** Aralık 2025'ten beri güvenlik yaması almıyor ve bu açıkların düzeltmesi yok; nsql v2.6.0 ile 8.1 desteği bırakıldı. 8.1'de kalmak zorundaysanız `^2.5.3` kullanın.
 >
 > Çalışan sürümü denetlemek için `HealthCheck::check()` çıktısındaki `checks.php` alanına veya `\nsql\security\PhpSecurityAdvisories::status()` metoduna bakın. Debian / Ubuntu / RHEL paketleri yamayı sürüm numarasını değiştirmeden geri taşıyabilir; bu durumda `outdated` sonucu yanlış alarmdır, dağıtımın güvenlik duyurusunu kontrol edin.
 
@@ -447,7 +447,7 @@ composer fix
 ### CI/CD
 
 Proje GitHub Actions ile otomatik test edilir:
-- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.1–8.5 (unit, integration, portable; query cache açık/kapalı)
+- **Ana gate**: Ubuntu + MySQL 8 — PHP 8.2–8.5 (unit, integration, portable; query cache açık/kapalı)
 - **Portable**: PostgreSQL 16 ve SQLite üzerinde `tests/Portable`
 - PHP 8.3 job’da `coverage/clover.xml` üretilir, %65 satır coverage eşiği uygulanır ve Codecov’a yüklenir
 - Windows unit smoke isteğe bağlıdır (`continue-on-error`; MySQL service yok)
@@ -1274,7 +1274,8 @@ $db->delete("DELETE FROM users WHERE id = :id", [
 |-------------|-------------|--------------|---------|
 | 1.0.x–1.9.1 | 8.0.0      | 8.3.x        | Eski sürümler, destek yok |
 | 1.9.2–2.5.1 | 8.1.0      | 8.4.x        | CI: 8.1–8.4 |
-| 2.5.2+      | 8.1.0 (güvenli: 8.2.35+) | 8.5.x | CI: 8.1–8.5; 8.1 güvenlik desteği bitti |
+| 2.5.2–2.5.3 | 8.1.0 (güvenli: 8.2.35+) | 8.5.x | CI: 8.1–8.5; 8.1 güvenlik desteği bitti |
+| 2.6.0+      | 8.2.0 (güvenli: 8.2.35+) | 8.5.x | CI: 8.2–8.5 |
 
 ### Veritabanı Uyumluluğu
 | Veritabanı     | Minimum Sürüm | Önerilen Sürüm | CI |
