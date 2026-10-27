@@ -98,13 +98,16 @@ class BatchWritePortableTest extends PortableTestCase
     }
 
     /**
-     * SQLite'ta isimli placeholder maliyeti ifade başına karesel: parçalar 1000 parametreyle sınırlı.
+     * Parçalar sürücünün placeholder sınırını aşmaz (upsert SET parametreleri dahil).
      */
-    public function test_sqlite_bulk_chunks_stay_small(): void
+    public function test_bulk_chunks_follow_driver_param_limit(): void
     {
-        $chunks = (fn (array $rows): array => $this->chunk_rows($rows))->call($this->db->table('p_batch'), array_fill(0, 2500, ['a' => 1, 'b' => 2]));
-        $expected = self::driver() === 'sqlite' ? 500 : 2500;
-        $this->assertSame($expected, count($chunks[0]));
+        $limit = $this->db->max_bound_params();
+        $chunks = (fn (array $rows): array => $this->chunk_rows($rows, 3))
+            ->call($this->db->table('p_batch'), array_fill(0, $limit, ['a' => 1, 'b' => 2]));
+
+        $this->assertSame(intdiv($limit - 3, 2), count($chunks[0]));
+        $this->assertSame($limit, array_sum(array_map('count', $chunks)));
     }
 
     public function test_batch_insert_rejects_rows_with_different_columns(): void

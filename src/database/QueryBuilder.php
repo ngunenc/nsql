@@ -13,13 +13,14 @@ namespace nsql\database;
  * kullanıcı girdisi içermemelidir. JOIN closure'ının döndürdüğü koşul da raw kabul edilir.
  *
  * Sorgu parçaları eklendikleri anda doğrulanır ama placeholder'lar yalnızca compile()
- * sırasında tek bir sayaçla (`:__p0`, `:__p1` …) üretilir; subquery, UNION ve raw
- * binding'ler aynı sayaçla yeniden adlandırılır. compile() yan etkisizdir.
+ * sırasında, SQL'deki sırayla konumsal `?` olarak üretilir (v2.6.0; önceden `:__p0` …);
+ * subquery, UNION ve raw binding'ler (`:ad`) de `?`'e çevrilir. PDO isimli placeholder'ları
+ * ifade başına karesel maliyetle eşlediğinden büyük IN listeleri ve toplu yazmalar böyle doğrusal kalır.
+ * compile() yan etkisizdir.
  */
 class QueryBuilder
 {
     private const AGGREGATES = 'COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT';
-    private const PARAM_PREFIX = ':__p';
 
     private Nsql $db;
 
@@ -1199,10 +1200,7 @@ class QueryBuilder
     }
 
     /**
-     * Satırları ifade başına placeholder sınırına göre böler.
-     *
-     * SQLite'ta sınır 1000 tutulur: PDO isimli placeholder'ları ifade başına karesel maliyetle eşler
-     * (5.000 satır × 8 kolon tek parçada ~7 sn, 1000'lik parçalarla ~50 ms).
+     * Satırları ifade başına sürücü placeholder sınırına göre böler.
      *
      * @param list<array<string, mixed>> $rows
      * @param int $extra_params Satır dışında ifade başına bağlanan en fazla parametre (upsert SET değerleri)
@@ -1210,7 +1208,7 @@ class QueryBuilder
      */
     private function chunk_rows(array $rows, int $extra_params = 0): array
     {
-        $limit = $this->db->get_driver_name() === 'sqlite' ? 1000 : $this->db->max_bound_params();
+        $limit = $this->db->max_bound_params();
         $first = reset($rows);
         $per_row = max(1, is_array($first) ? count($first) : 1);
 
@@ -1233,8 +1231,8 @@ class QueryBuilder
 
     /**
      * @param list<array<string, mixed>> $rows
-     * @param array<string, array{value: mixed, type: int}> $params
-     * @return array{0: string, 1: array<string, array{value: mixed, type: int}>}
+     * @param list<array{value: mixed, type: int}> $params
+     * @return array{0: string, 1: list<array{value: mixed, type: int}>}
      */
     private function compile_insert(array $rows, int &$counter = 0, array &$params = []): array
     {
@@ -1333,9 +1331,9 @@ class QueryBuilder
     }
 
     /**
-     * get_query() ile aynı placeholder adlarını kullanan parametreleri döndürür
+     * get_query()'deki `?` placeholder'larının sırasıyla parametreleri (v2.6.0: liste; önceden `:__pN` anahtarlı)
      *
-     * @return array<string, array{value: mixed, type: int}>
+     * @return list<array{value: mixed, type: int}>
      */
     public function get_params(): array
     {
@@ -1345,7 +1343,7 @@ class QueryBuilder
     /**
      * SQL ve parametreleri birlikte üretir. Yan etkisizdir; art arda çağrılabilir.
      *
-     * @return array{0: string, 1: array<string, array{value: mixed, type: int}>}
+     * @return array{0: string, 1: list<array{value: mixed, type: int}>}
      */
     public function compile(): array
     {
@@ -1353,11 +1351,22 @@ class QueryBuilder
         $params = [];
         $sql = $this->compile_into($counter, $params);
 
+        // Raw ifadelerde (where_raw, select_raw, order_by_raw, join closure) kalan çıplak `?` konumsal
+        // parametre sırasını kaydırır: anlaşılır hata ver. `??` (PostgreSQL jsonb operatörü için PDO kaçışı)
+        // ve literal / yorum içindeki `?` sayılmaz.
+        $placeholders = preg_match_all('/(?<!\?)\?(?!\?)/', \nsql\database\security\SqlText::strip($sql, false));
+        if ($placeholders !== count($params)) {
+            throw new \InvalidArgumentException(
+                'Raw SQL içinde `?` kullanılamaz; değerleri isimli binding (`:ad`) ile verin '
+                . '(PostgreSQL `?` operatörü için `??` yazın).'
+            );
+        }
+
         return [$sql, $params];
     }
 
     /**
-     * @param array<string, array{value: mixed, type: int}> $params
+     * @param list<array{value: mixed, type: int}> $params
      */
     private function compile_into(int &$counter, array &$params): string
     {
@@ -1420,7 +1429,7 @@ class QueryBuilder
     }
 
     /**
-     * @param array<string, array{value: mixed, type: int}> $params
+     * @param list<array{value: mixed, type: int}> $params
      */
     private function compile_where(int &$counter, array &$params): string
     {
@@ -1442,7 +1451,7 @@ class QueryBuilder
 
     /**
      * @param list<list<string|array>> $parts
-     * @param array<string, array{value: mixed, type: int}> $params
+     * @param list<array{value: mixed, type: int}> $params
      */
     private function render_list(array $parts, string $glue, int &$counter, array &$params): string
     {
@@ -1458,7 +1467,7 @@ class QueryBuilder
      * Sorgu parçasını SQL'e çevirir; değer, subquery ve raw binding'lere placeholder atar.
      *
      * @param list<string|array> $part
-     * @param array<string, array{value: mixed, type: int}> $params
+     * @param list<array{value: mixed, type: int}> $params
      */
     private function render(array $part, int &$counter, array &$params): string
     {
@@ -1483,7 +1492,7 @@ class QueryBuilder
 
     /**
      * @param array<string, mixed> $bindings
-     * @param array<string, array{value: mixed, type: int}> $params
+     * @param list<array{value: mixed, type: int}> $params
      */
     private function render_raw(string $sql, array $bindings, int &$counter, array &$params): string
     {
@@ -1491,8 +1500,8 @@ class QueryBuilder
             return $sql;
         }
 
-        // Tek geçiş: üretilen `:__pN` yeniden taranmaz; aynı ad birden çok geçiyorsa her geçişe ayrı
-        // placeholder verilir (native prepare'de tekrarlanan isimli parametre HY093 verir).
+        // Tek geçiş, soldan sağa: her `:ad` geçişi sırasıyla bir `?` olur; aynı ad birden çok geçiyorsa
+        // değeri her geçiş için ayrıca bağlanır.
         // `::tip` (PostgreSQL cast) eşleşmez.
         $names = array_map(static fn ($name) => preg_quote((string) $name, '/'), array_keys($bindings));
         usort($names, static fn (string $a, string $b) => strlen($b) <=> strlen($a));
@@ -1517,14 +1526,15 @@ class QueryBuilder
     }
 
     /**
-     * @param array<string, array{value: mixed, type: int}> $params
+     * @param list<array{value: mixed, type: int}> $params
      */
     private function bind(mixed $value, int $type, int &$counter, array &$params): string
     {
-        $placeholder = self::PARAM_PREFIX . $counter++;
-        $params[$placeholder] = ['value' => $value, 'type' => $type];
+        // Parametre sırası SQL'deki sıradır: parçalar metin sırasıyla render edilir
+        $counter++;
+        $params[] = ['value' => $value, 'type' => $type];
 
-        return $placeholder;
+        return '?';
     }
 
     /**
