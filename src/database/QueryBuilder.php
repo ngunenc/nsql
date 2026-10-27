@@ -901,6 +901,9 @@ class QueryBuilder
     /**
      * Sayfalı sonuç.
      *
+     * Kullanıcı girdisine karşı dayanıklıdır: per_page PAGINATE_MAX_PER_PAGE ile sınırlanır (0 = sınırsız),
+     * son sayfadan sonraki (taşan dahil) sayfa numarası boş data döndürür.
+     *
      * @return array{data: array<int, object>, total: int, per_page: int, current_page: int, last_page: int}
      */
     public function paginate(int $per_page = 15, int $page = 1): array
@@ -908,16 +911,24 @@ class QueryBuilder
         if ($per_page < 1 || $page < 1) {
             throw new \InvalidArgumentException('per_page ve page en az 1 olmalıdır.');
         }
+        $max_per_page = (int) \nsql\database\Config::get('paginate_max_per_page', \nsql\database\Config::paginate_max_per_page);
+        if ($max_per_page > 0) {
+            $per_page = min($per_page, $max_per_page);
+        }
 
         $total = $this->count();
-        $data = $total === 0 ? [] : (clone $this)->limit($per_page)->offset(($page - 1) * $per_page)->get();
+        $last_page = max(1, (int) ceil($total / $per_page));
+        // $page <= $last_page iken ($page - 1) * $per_page < $total: offset taşamaz
+        $data = $total === 0 || $page > $last_page
+            ? []
+            : (clone $this)->limit($per_page)->offset(($page - 1) * $per_page)->get();
 
         return [
             'data' => $data,
             'total' => $total,
             'per_page' => $per_page,
             'current_page' => $page,
-            'last_page' => max(1, (int) ceil($total / $per_page)),
+            'last_page' => $last_page,
         ];
     }
 
