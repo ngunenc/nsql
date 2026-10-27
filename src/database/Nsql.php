@@ -471,7 +471,8 @@ class Nsql
         // Sonucu al, last_results ve cache'i guncelle
         $result = $stmt->fetch(PDO::FETCH_OBJ);
         $stmt->closeCursor();
-        $this->last_results = $result ? [$result] : [];
+        // Yalnızca debug() okur; debug kapalıyken sonucu tutmak bellek ve süre harcar
+        $this->last_results = $this->debug_mode && $result ? [$result] : [];
         if ($result && $cache_key !== null) {
             $this->add_to_query_cache($cache_key, $result, [], $this->extract_tables_from_query($query));
         }
@@ -512,7 +513,8 @@ class Nsql
             );
         }
 
-        $this->last_results = $results;
+        // Yalnızca debug() okur: debug kapalıyken tüm sonuç seti çağıran bıraktıktan sonra da bellekte kalıyordu
+        $this->last_results = $this->debug_mode ? $results : [];
         if ($cache_key !== null && count($results) <= $this->query_cache_max_rows()) {
             $this->add_to_query_cache($cache_key, $results, [], $this->extract_tables_from_query($query));
         }
