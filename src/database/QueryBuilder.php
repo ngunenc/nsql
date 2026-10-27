@@ -1014,9 +1014,7 @@ class QueryBuilder
             return 0;
         }
 
-        $first = reset($rows);
-        $per_chunk = max(1, intdiv($this->db->max_bound_params(), max(1, is_array($first) ? count($first) : 1)));
-        $chunks = array_chunk($rows, $per_chunk);
+        $chunks = $this->chunk_rows($rows);
 
         $run = function () use ($chunks): int {
             $total = 0;
@@ -1143,6 +1141,19 @@ class QueryBuilder
             throw new \InvalidArgumentException("upsert(): {$driver} için \$unique_by (çakışma kolonları) zorunludur.");
         }
 
+        $chunks = $this->chunk_rows($rows, count($update_columns));
+        if (count($chunks) > 1) {
+            // Placeholder sınırını aşan veri: tek transaction içinde parça parça (önceden tek ifadeydi ve hata veriyordu)
+            return $this->db->transaction(function () use ($chunks, $update_columns, $unique_by): int {
+                $total = 0;
+                foreach ($chunks as $chunk) {
+                    $total += $this->upsert($chunk, $update_columns, $unique_by);
+                }
+
+                return $total;
+            });
+        }
+
         $counter = 0;
         $params = [];
         [$sql] = $this->compile_insert($rows, $counter, $params);
@@ -1185,6 +1196,25 @@ class QueryBuilder
         }
 
         return $this->db->statement($sql, $params);
+    }
+
+    /**
+     * Satırları ifade başına placeholder sınırına göre böler.
+     *
+     * SQLite'ta sınır 1000 tutulur: PDO isimli placeholder'ları ifade başına karesel maliyetle eşler
+     * (5.000 satır × 8 kolon tek parçada ~7 sn, 1000'lik parçalarla ~50 ms).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param int $extra_params Satır dışında ifade başına bağlanan en fazla parametre (upsert SET değerleri)
+     * @return list<list<array<string, mixed>>>
+     */
+    private function chunk_rows(array $rows, int $extra_params = 0): array
+    {
+        $limit = $this->db->get_driver_name() === 'sqlite' ? 1000 : $this->db->max_bound_params();
+        $first = reset($rows);
+        $per_row = max(1, is_array($first) ? count($first) : 1);
+
+        return array_chunk($rows, max(1, intdiv(max(1, $limit - $extra_params), $per_row)));
     }
 
     /**
