@@ -1,5 +1,15 @@
 # Yükseltme Rehberi
 
+## 2.5.3 → 2.6.0
+
+Minor sürüm; iki uyumluluk değişikliği:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| Asgari PHP 8.2 | PHP 8.1 kullananlar | PHP'yi 8.2.35+ sürümüne yükseltin; yükseltemiyorsanız `^2.5.3`'te kalın |
+| QueryBuilder `?` placeholder üretir; `get_params()` / `compile()[1]` liste döndürür | `get_query()` çıktısını `:__p0` içeren metinle karşılaştıran testler; `get_params()[':__p0']` gibi anahtarla erişen kod | Parametrelere sırayla erişin (`get_params()[0]`). `$db->get_results($qb->get_query(), $qb->get_params())` değişmeden çalışır |
+| Raw SQL'de çıplak `?` → `InvalidArgumentException` | `where_raw('id = ?')` gibi (zaten çalışmayan) kullanım; PostgreSQL jsonb `?` operatörü | Değerleri isimli binding ile verin (`where_raw('id = :id', ['id' => 1])`); jsonb için `??` (PHP 8.4+) veya `jsonb_exists()` |
+
 ## 2.5.2 → 2.5.3
 
 Patch sürüm. Kontrol edilecek davranış farkları:
