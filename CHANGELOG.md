@@ -4,6 +4,23 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.5.3] - 2026-10-27
+
+Patch sürüm: dördüncü analiz turunun güvenlik ve performans bulguları. Davranış farkları: [UPGRADE.md](UPGRADE.md#252--253).
+
+### Security
+- `paginate()`: son sayfadan sonraki veya taşan sayfa numarası (`?page=9223372036854775807`) yakalanmayan `TypeError` (HTTP 500) yerine boş `data` döndürüyor; `per_page` `PAGINATE_MAX_PER_PAGE` (varsayılan 1000, 0 = sınırsız) ile sınırlanıyor (tüm tabloyu belleğe çekme).
+- Log ve audit dosyaları 0640, log dizini 0750 izniyle oluşturuluyor (önceden umask'a göre 0644 / 0775).
+- README: QueryBuilder `insert($_POST)` mass assignment uyarısı.
+
+### Performance
+- SQLite'ta `insert_many()` / `upsert()` ifade başına 1000 parametreyle parçalanıyor: PDO isimli placeholder'ları karesel maliyetle eşliyordu (5.000 satır × 8 kolon: 7,7 sn → 0,13 sn; upsert 14 sn → 0,15 sn).
+- `get_results()` / `get_row()` sonucu yalnızca debug modunda nesnede tutuluyor (büyük sonuçlarda ~%20 süre ve sonuç boyutu kadar bellek).
+- Süresi dolmuş cache kaydı taraması en az `CACHE_CLEANUP_INTERVAL` (varsayılan 60) saniye arayla; tablo adı çıkarma sonucu SQL başına saklanıyor.
+
+### Fixed
+- `upsert()` 65.535 placeholder'ı aşan veride tek ifade kurup hata veriyordu; tek transaction içinde parçalanıyor.
+
 ## [2.5.2] - 2026-10-26
 
 Patch sürüm: Ekim 2026 PHP çekirdek güvenlik açıklarına (PHP2Shell) karşı önlemler. Kütüphane kodunda açık yok; PHP yorumlayıcısının güncellenmesi gerekir. Ayrıntı: [UPGRADE.md](UPGRADE.md#251--252).
