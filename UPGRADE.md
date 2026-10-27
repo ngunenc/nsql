@@ -1,5 +1,17 @@
 # Yükseltme Rehberi
 
+## 2.5.2 → 2.5.3
+
+Patch sürüm. Kontrol edilecek davranış farkları:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `paginate()` `per_page`'i `PAGINATE_MAX_PER_PAGE` (1000) ile sınırlar | 1000'den büyük sayfa isteyen kod | `PAGINATE_MAX_PER_PAGE` değerini artırın veya `0` (sınırsız) yapın; dönen `per_page` uygulanan değeri gösterir |
+| Son sayfadan sonraki sayfa boş `data` döndürür | Taşan sayfa numarasında exception bekleyen kod | İşlem gerekmez |
+| `upsert()` büyük veride birden çok ifade ve transaction kullanır | Etkilenen satır sayısını tek ifadeden bekleyen kod | Dönüş değeri parçaların toplamıdır |
+| Log dosyaları 0640, dizinler 0750 | Logları web sunucusundan farklı, gruba dahil olmayan bir kullanıcıyla okuyan araçlar | Okuyucu kullanıcıyı dosyanın grubuna ekleyin |
+| Süresi dolmuş cache taraması en az 60 sn arayla | `CACHE_CLEANUP_PROBABILITY=100` ile her yazmada tarama bekleyen testler | `CACHE_CLEANUP_INTERVAL=0` |
+
 ## 2.5.1 → 2.5.2
 
 Patch sürüm; kütüphane API'si değişmedi. Asıl yapılacak iş sunucu tarafında:
