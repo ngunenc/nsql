@@ -1620,6 +1620,15 @@ $rows = $db->table('orders')
 
 JOIN closure'ının döndürdüğü ON koşulu da raw kabul edilir.
 
+> ⚠️ **Yazmada kolon listesi sizin sorumluluğunuzda:** `insert()`, `insert_many()`, `update()` ve `upsert()` dizi anahtarlarını kolon adı olarak kullanır. Kolon adları doğrulandığı için SQL injection olmaz, ama `->table('users')->insert($_POST)` kullanıcının `is_admin`, `role`, `balance` gibi **her kolonu** doldurmasına izin verir (mass assignment). İzin verilen alanları açıkça seçin ya da `$fillable` korumalı ORM modeli kullanın:
+>
+> ```php
+> $data = array_intersect_key($_POST, array_flip(['name', 'email']));
+> $db->table('users')->insert($data);
+> ```
+
+`paginate($per_page, $page)` kullanıcı girdisine dayanıklıdır (v2.5.3+): `per_page` `PAGINATE_MAX_PER_PAGE` (varsayılan 1000, 0 = sınırsız) ile sınırlanır; son sayfadan sonraki veya taşan sayfa numarası hata yerine boş `data` döndürür.
+
 ---
 
 ### 🧩 ORM Model (v1.5.16+)
