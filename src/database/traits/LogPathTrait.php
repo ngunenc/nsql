@@ -17,8 +17,24 @@ trait LogPathTrait
     protected function ensure_log_directory(string $dir): void
     {
         if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
+            // Loglar SQL ve hata ayrıntısı içerir: diğer kullanıcılar dizini listeleyemez
+            @mkdir($dir, 0750, true);
         }
+    }
+
+    /**
+     * Satırı log dosyasına ekler. Yeni oluşturulan dosya 0640 iznini alır; umask 022 ile 0644
+     * (herkes okuyabilir) oluyordu.
+     */
+    protected function append_log_line(string $file, string $line): int|false
+    {
+        $created = ! is_file($file);
+        $result = @file_put_contents($file, $line, FILE_APPEND | LOCK_EX);
+        if ($created && $result !== false) {
+            @chmod($file, 0640);
+        }
+
+        return $result;
     }
 
     /**
