@@ -2,6 +2,7 @@
 
 namespace Tests\Portable;
 
+use nsql\database\Config;
 use Tests\Support\PortableTestCase;
 
 class QueryBuilderPortableTest extends PortableTestCase
@@ -58,6 +59,30 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertSame('Kupa', $products()->where('sku', '=', 'B1')->value('name'));
         $this->assertSame(['A1' => 'Kalem', 'A2' => 'Defter'], $products()->where('category', '=', 'kirtasiye')->order_by('id')->pluck('name', 'sku'));
         $this->assertSame('Lamba', $products()->order_by('price', 'DESC')->first()->name);
+    }
+
+    /**
+     * Sayfa numarası kullanıcı girdisiyse (`(int) $_GET['page']`) taşan değer TypeError veriyordu;
+     * per_page sınırsızdı (tüm tabloyu belleğe çekme).
+     */
+    public function test_paginate_tolerates_hostile_page_and_per_page(): void
+    {
+        foreach ([PHP_INT_MAX, intdiv(PHP_INT_MAX, 3) + 2, 3] as $page) {
+            $result = $this->db->table('p_products')->order_by('id')->paginate(3, $page);
+            $this->assertSame([], $result['data']);
+            $this->assertSame(4, $result['total']);
+            $this->assertSame(2, $result['last_page']);
+        }
+
+        Config::set('paginate_max_per_page', 2);
+        try {
+            $capped = $this->db->table('p_products')->order_by('id')->paginate(1000000);
+        } finally {
+            Config::set('paginate_max_per_page', null);
+        }
+        $this->assertSame(2, $capped['per_page']);
+        $this->assertCount(2, $capped['data']);
+        $this->assertSame(2, $capped['last_page']);
     }
 
     public function test_limit_offset_and_paginate(): void
