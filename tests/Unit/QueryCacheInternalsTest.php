@@ -167,4 +167,61 @@ class QueryCacheInternalsTest extends TestCase
 
         $this->assertFileDoesNotExist($lock);
     }
+
+    /**
+     * Süresi dolmuş kayıt taraması tüm cache'i gezer; her yazmanın %10'unda çalışıyordu.
+     */
+    public function test_expired_entry_scan_runs_at_most_once_per_interval(): void
+    {
+        Config::set('cache_cleanup_probability', 100);
+        $cache = new class (100, 3600) {
+            use CacheTrait;
+
+            public int $scans = 0;
+
+            public function __construct(int $limit, int $timeout)
+            {
+                $this->query_cache_enabled = true;
+                $this->query_cache_size_limit = $limit;
+                $this->query_cache_timeout = $timeout;
+            }
+
+            public function get_transaction_level(): int
+            {
+                return 0;
+            }
+
+            public function put(string $key): bool
+            {
+                return $this->add_to_query_cache($key, 1, [], ['t']);
+            }
+
+            private function purge_expired_cache(): void
+            {
+                $this->scans++;
+            }
+
+            /** @return list<string> */
+            public function tables(string $sql): array
+            {
+                return $this->extract_tables_from_query($sql);
+            }
+
+            public function memo_size(): int
+            {
+                return count($this->query_tables_memo);
+            }
+        };
+
+        for ($i = 0; $i < 50; $i++) {
+            $cache->put('k' . $i);
+        }
+        $this->assertSame(1, $cache->scans);
+
+        $this->assertSame(['users'], $cache->tables('SELECT * FROM users WHERE id = ?'));
+        $this->assertSame(['users'], $cache->tables('SELECT * FROM users WHERE id = ?'));
+        $this->assertSame(1, $cache->memo_size());
+        $cache->tables('SELECT * FROM users WHERE id IN (' . str_repeat('?, ', 2000) . '?)');
+        $this->assertSame(1, $cache->memo_size(), 'Uzun SQL saklanmaz');
+    }
 }

@@ -73,6 +73,7 @@ class Config
     public const query_cache_size_limit = 200; // 100 → 200 (daha büyük cache)
     public const statement_cache_limit = 150; // 100 → 150 (daha büyük statement cache)
     public const cache_cleanup_probability = 10; // %10 olasılıkla temizlik
+    public const cache_cleanup_interval = 60; // süresi dolmuş kayıt taraması en az bu kadar saniye arayla
     public const paginate_max_per_page = 1000; // paginate() per_page üst sınırı (0 = sınırsız)
     public const query_cache_driver = 'memory'; // memory | redis (production önerisi) | memcached
     public const query_cache_prefix = 'nsql_qc_';
@@ -596,6 +597,7 @@ class Config
             'QUERY_CACHE_TIMEOUT' => self::query_cache_timeout,
             'QUERY_CACHE_SIZE_LIMIT' => self::query_cache_size_limit,
             'CACHE_CLEANUP_PROBABILITY' => self::cache_cleanup_probability,
+            'CACHE_CLEANUP_INTERVAL' => self::cache_cleanup_interval,
             'PAGINATE_MAX_PER_PAGE' => self::paginate_max_per_page,
             'QUERY_CACHE_DRIVER' => self::query_cache_driver,
             'QUERY_CACHE_PREFIX' => self::query_cache_prefix,

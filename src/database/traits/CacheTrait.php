@@ -32,6 +32,11 @@ trait CacheTrait
     private array $deferred_store_tables = [];
     private bool $deferred_store_all = false;
 
+    /** Son süresi dolmuş kayıt taramasının zamanı (tarama tüm cache'i gezer; sık çalışmamalı) */
+    private int $last_cache_purge = 0;
+    /** @var array<string, list<string>> SQL => tablolar (extract_tables_from_query sonucu) */
+    private array $query_tables_memo = [];
+
     /** @var array<string, true> Store'a yazılamamış (tekrar denenecek) tablo geçersiz kılmaları */
     private array $pending_store_tables = [];
     /** @var array<string, true> */
@@ -72,6 +77,25 @@ trait CacheTrait
      * @return list<string> Küçük harfli tablo adları
      */
     private function extract_tables_from_query(string $query): array
+    {
+        if (isset($this->query_tables_memo[$query])) {
+            return $this->query_tables_memo[$query];
+        }
+        // Toplu yazmaların uzun SQL'i (binlerce placeholder) saklanmaz: bellek yerine yeniden ayrıştırma
+        if (strlen($query) > 4096) {
+            return $this->parse_tables_from_query($query);
+        }
+        if (count($this->query_tables_memo) >= 256) {
+            unset($this->query_tables_memo[array_key_first($this->query_tables_memo)]);
+        }
+
+        return $this->query_tables_memo[$query] = $this->parse_tables_from_query($query);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parse_tables_from_query(string $query): array
     {
         $tables = [];
 
@@ -176,8 +200,13 @@ trait CacheTrait
             return false;
         }
 
+        // Tarama O(n): olasılık ve en az CACHE_CLEANUP_INTERVAL saniye arayla (süresi dolan kayıt okumada
+        // zaten reddedilir; tarama yalnızca okunmayan kayıtların belleğini erken geri alır)
         $cleanup_probability = \nsql\database\Config::get('cache_cleanup_probability', 10);
-        if (rand(1, 100) <= $cleanup_probability) {
+        $cleanup_interval = (int) \nsql\database\Config::get('cache_cleanup_interval', \nsql\database\Config::cache_cleanup_interval);
+        $now = time();
+        if ($now - $this->last_cache_purge >= $cleanup_interval && rand(1, 100) <= $cleanup_probability) {
+            $this->last_cache_purge = $now;
             $this->purge_expired_cache();
         }
 
