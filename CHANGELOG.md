@@ -4,6 +4,21 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.6.0] - 2026-10-27
+
+Minor sürüm: QueryBuilder placeholder biçimi ve asgari PHP sürümü değişti. Geçiş: [UPGRADE.md](UPGRADE.md#253--260).
+
+### Changed
+- **BREAKING:** QueryBuilder placeholder'ları konumsal `?` olarak üretir; `compile()[1]` / `get_params()` liste döndürür (önceden `:__pN` anahtarlı). Raw binding'ler (`:ad`) de sırasıyla `?`'e çevrilir; API'leri değişmedi.
+- **BREAKING:** Asgari PHP 8.2 (8.1 Aralık 2025'ten beri güvenlik yaması almıyor). CI: PHP 8.2–8.5.
+- Toplu yazmalar (`insert_many`, `upsert`) SQLite'ta yeniden sürücünün tam placeholder sınırıyla parçalanır.
+
+### Performance
+- PDO isimli placeholder'ları ifade başına karesel maliyetle eşliyordu. SQLite'ta `where_in()` 40.000 değer: 10,9 sn → 0,12 sn; `insert_many` 5.000 × 8 kolon: 7,7 sn (v2.5.3'te 0,13 sn) → 0,08 sn. PostgreSQL'de büyük listelerde ~2 kat.
+
+### Added
+- Raw SQL'de (`where_raw`, `select_raw`, `order_by_raw`, JOIN closure) kalan çıplak `?` anlaşılır `InvalidArgumentException` verir (konumsal sırayı kaydırırdı); literal içindeki `?` ve `??` sayılmaz.
+
 ## [2.5.3] - 2026-10-27
 
 Patch sürüm: dördüncü analiz turunun güvenlik ve performans bulguları. Davranış farkları: [UPGRADE.md](UPGRADE.md#252--253).
