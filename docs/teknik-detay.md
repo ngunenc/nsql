@@ -40,6 +40,20 @@ src/database/
 
 Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıdır (loose coupling).
 
+#### Alt Klasörlerin Sorumlulukları
+
+| Klasör/Dosya         | Açıklama |
+|----------------------|----------|
+| config.php           | Ortam ve yapılandırma yönetimi |
+| nsql.php             | Ana veritabanı erişim katmanı (PDO wrapper) |
+| connection_pool.php  | Bağlantı havuzu ve yönetimi |
+| query_builder.php    | Dinamik ve güvenli sorgu oluşturucu |
+| traits/              | Yeniden kullanılabilir kod özellikleri |
+| exceptions/          | Özel hata ve istisna sınıfları |
+| migrations/          | Veritabanı migration dosyaları |
+| seeds/               | Test/demo verisi üretimi |
+| templates/           | Debug ve özel çıktı şablonları |
+| security/            | Rate limiting, şifreleme, audit, veri filtreleme |
 ## 🔧 Temel Bileşenler
 
 ### 1. config Yönetimi (config.php)
@@ -109,6 +123,68 @@ $db->table('users')
 - Gereksiz kolon seçiminden kaçının
 - İndeks kullanımına dikkat edin
 - Karmaşık sorguları optimize edin
+
+### 4. Exception Yönetimi (exceptions/)
+
+Özel hata ve istisna yönetimi için exceptions klasörü kullanılır. Tüm veritabanı hataları merkezi olarak burada ele alınır.
+
+```php
+use exceptions\DatabaseException;
+
+try {
+    $db->query($sql);
+} catch (DatabaseException $e) {
+    // Hata loglama ve özel işlem
+    error_log($e->getMessage());
+}
+```
+
+**Best Practice:**
+- Tüm hata türleri için ayrı exception sınıfları oluşturun
+- Hataları merkezi olarak loglayın
+
+### 5. Migration Yönetimi (migrations/, migration_manager.php)
+
+Veritabanı şema değişiklikleri migration dosyaları ile yönetilir. Migration işlemleri migration_manager.php üzerinden yapılır.
+
+```php
+$manager = new migration_manager();
+$manager->create('create_users_table');
+$manager->migrate(['--force' => true]);
+```
+
+**Best Practice:**
+- Migration dosyalarını versiyonlayın
+- Rollback stratejisi belirleyin
+- Migration bağımlılıklarını yönetin
+
+### 6. Seed Yönetimi (seeds/)
+
+Test ve demo verisi üretimi için seed dosyaları kullanılır.
+
+```php
+require_once 'src/database/seeds/user_seeder.php';
+$userSeeder = new user_seeder();
+$userSeeder->run();
+```
+
+**Best Practice:**
+- Seed dosyalarını test ortamında kullanın
+- Gerçek veriye benzer dummy data üretin
+
+### 7. Template Kullanımı (templates/)
+
+Özel çıktı ve debug işlemleri için template dosyaları kullanılır.
+
+```php
+require_once 'src/database/templates/debug_template.php';
+$template = new debug_template();
+echo $template->render($debugData);
+```
+
+**Best Practice:**
+- Debug ve hata çıktıları için ayrı template dosyaları oluşturun
+- Template'leri özelleştirilebilir yapıda tutun
 
 ## 🔒 Güvenlik Mekanizmaları
 
@@ -198,6 +274,36 @@ Hazırlanmış statement'lar LRU/LFU ile önbelleklenir (`STATEMENT_CACHE_LIMIT`
 $db->clear_statement_cache();
 ```
 
+#### Performans Trait ve Bileşenleri
+
+- **cache_trait.php**: Sorgu sonuçlarını ve verileri önbelleğe alır.
+  ```php
+  $db->withCache(300)->get_results($query);
+  ```
+- **statement_cache_trait.php**: Hazırlanan SQL ifadelerini LRU algoritması ile önbelleğe alır.
+  ```php
+  $stmt = $db->prepare($query);
+  ```
+- **connection_trait.php**: Bağlantı yönetimi ve havuz optimizasyonu sağlar.
+  ```php
+  $db->ensureConnection();
+  ```
+- **debug_trait.php**: Sorgu ve performans analizini kolaylaştırır.
+  ```php
+  $db->debug();
+  $stats = $db->get_memory_stats();
+  ```
+- **query_analyzer_trait.php**: Sorgu analizi ve optimizasyon önerileri sunar.
+  ```php
+  $db->analyzeQuery($query);
+  ```
+
+**Best Practice:**
+- Trait dosyalarını modüler ve bağımsız tutun
+- Cache ve statement boyutlarını workload'a göre ayarlayın
+- Sık kullanılan sorguları ve statementları önceliklendirin
+- Performans izleme ve loglama araçlarını düzenli kullanın
+
 ## 🧪 Test ve Kalite
 
 Testler `tests/Unit`, `tests/Integration` (MySQL/MariaDB) ve `tests/Portable` (MySQL, PostgreSQL, SQLite) altındadır. Komutlar ve CI eşikleri için README'deki "Test ve Kalite" bölümüne bakın.
@@ -277,29 +383,21 @@ $user = $db->get_row('SELECT * FROM users WHERE id = :id', ['id' => (int) $_GET[
 ```
 ## 🎯 Best Practices Özeti
 
-1. **Güvenlik**
-   - Her zaman prepared statements kullanın
-   - Input validation uygulayın
-   - Rate limiting implementasyonu yapın
-   - Düzenli security audit yapın
+#### Best Practices Özeti
 
-2. **Performans**
-   - Connection pooling kullanın
-   - Query/Statement cache optimize edin
-   - İndeks stratejisi belirleyin
-   - Regular performance monitoring yapın
+- **Güvenlik**: Prepared statement, input validation, rate limiting, security audit.
+- **Performans**: Connection pool, query/statement cache, indeks stratejisi, monitoring.
+- **Maintainability**: Temiz kod, düzenli refactoring, kapsamlı test, güncel dokümantasyon.
+- **Scalability**: Horizontal scaling, sharding, load balancing, monitoring ve alerting.
+- **Backup & Recovery**: Düzenli yedekleme, otomatik recovery, rollback ve point-in-time recovery.
+- **Monitoring & Debug**: Sorgu ve kaynak izleme, hata loglama, performans denetimi.
 
-3. **Maintainability**
-   - Clean code prensiplerini uygulayın
-   - Düzenli refactoring yapın
-   - Comprehensive testing uygulayın
-   - Documentation güncel tutun
+#### Versiyon Detayları
 
-4. **Scalability**
-   - Horizontal scaling planı yapın
-   - Sharding stratejisi belirleyin
-   - Load balancing implementasyonu yapın
-   - Monitoring ve alerting kurun
+- **v1.0.0 (Güncel)**: İlk kararlı sürüm, temel veritabanı işlemleri, connection pool, query/statement cache, temel güvenlik.
+- **v1.1.0 (Planlanan)**: Read/Write splitting, gelişmiş monitoring, circuit breaker, Redis cache, migration iyileştirmeleri.
+- **v1.2.0 (Planlanan)**: Otomatik sharding, distributed cache, GraphQL, real-time monitoring, async query.
+- **v1.3.0 (Planlanan)**: Schema validation, database proxy, query optimization engine, advanced security, cloud integration.
 
 ## 📦 Sürüm Bilgisi
 

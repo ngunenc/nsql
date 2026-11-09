@@ -299,6 +299,7 @@ for ($i = 0; $i < 1000; $i++) {
 
 ## ⚠️ Hata Yönetimi
 
+
 ### Debug Modu
 
 ```php
@@ -312,6 +313,7 @@ $db->get_results("SELECT * FROM tablo");
 $db->debug();
 ```
 
+
 ### Güvenli Hata Yönetimi
 
 ```php
@@ -324,30 +326,30 @@ $result = $db->safe_execute(function() use ($db) {
 ## 💡 İyi Uygulamalar
 
 1. **Bağlantı Yönetimi**
-   - Connection Pool kullanın
-   - Uzun süreli bağlantılar için timeout ayarlayın
-   - Bağlantı sayılarını monitör edin
+    - Connection Pool kullanın (`get_pool_stats()` ile izleyin)
+    - Uzun süreli bağlantılar için timeout ayarlayın
+    - Bağlantı sayılarını monitör edin
 
 2. **Performans**
-   - Büyük veriler için `get_yield()` kullanın
-   - Query Cache'i etkin kullanın
-   - Statement Cache'den faydalanın
+    - Büyük veriler için `get_yield()` veya `get_chunk()` kullanın
+    - Query Cache'i etkin kullanın
+    - Statement Cache'den faydalanın
 
 3. **Güvenlik**
-   - Her zaman prepared statements kullanın
-   - Hassas verileri filtreleyin
-   - Güvenli oturum yönetimini kullanın
-   - Rate limiting uygulayın
+    - Her zaman prepared statements kullanın
+    - Hassas verileri filtreleyin (`sensitive_data_filter`)
+    - Güvenli oturum yönetimini kullanın (`secure_session_start`, `end_session`)
+    - Rate limiting uygulayın
 
 4. **Bellek Yönetimi**
-   - Gereksiz result set'leri temizleyin
-   - Büyük sorgularda chunk processing kullanın
-   - Memory limitlerini monitör edin
+    - Gereksiz result set'leri temizleyin
+    - Büyük sorgularda chunk processing kullanın
+    - Memory limitlerini monitör edin (`get_memory_stats()`)
 
 5. **Hata Yönetimi**
-   - try-catch bloklarını kullanın
-   - Detaylı log tutun
-   - Debug modunu geliştirme ortamında kullanın
+    - try-catch bloklarını kullanın
+    - Detaylı log tutun
+    - Debug modunu geliştirme ortamında kullanın
 
 ## 📦 Sürüm Bilgisi ve Yol Haritası
 
