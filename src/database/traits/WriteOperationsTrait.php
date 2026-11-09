@@ -28,9 +28,11 @@ trait WriteOperationsTrait
         $this->last_results = [];
         $this->last_insert_id = 0;
         $this->returned_insert_id = null;
+        $this->last_rows_affected = 0;
 
         $stmt = $this->execute_query($sql, $params);
         if ($stmt !== false && $this->pdo !== null) {
+            $this->last_rows_affected = $stmt->rowCount();
             $this->last_insert_id = $this->driver
                 ? $this->driver->get_last_insert_id($this->pdo, $sequence)
                 : InsertId::normalize($this->pdo->lastInsertId());
@@ -55,10 +57,12 @@ trait WriteOperationsTrait
         $this->last_results = [];
         $this->returned_insert_id = null;
 
+        $this->last_rows_affected = 0;
         $stmt = $this->execute_query($sql, $params);
         if ($stmt === false) {
             throw $this->make_query_exception($sql, $params);
         }
+        $this->last_rows_affected = $stmt->rowCount();
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         $stmt->closeCursor();
 
@@ -87,6 +91,7 @@ trait WriteOperationsTrait
      */
     public function batch_insert(string $table, array $data, bool $use_transaction = true): int
     {
+        $this->last_rows_affected = 0;
         if (empty($data)) {
             return 0;
         }
@@ -144,6 +149,8 @@ trait WriteOperationsTrait
                 $this->commit();
             }
 
+            $this->last_rows_affected = $affected_rows;
+
             return $affected_rows;
         } catch (\Exception $e) {
             if ($use_transaction) {
@@ -181,6 +188,7 @@ trait WriteOperationsTrait
         }
 
         $total_affected = 0;
+        $this->last_rows_affected = 0;
 
         try {
             if ($use_transaction) {
@@ -221,6 +229,8 @@ trait WriteOperationsTrait
                 $this->commit();
             }
 
+            $this->last_rows_affected = $total_affected;
+
             return $total_affected;
         } catch (\Exception $e) {
             if ($use_transaction) {
@@ -244,6 +254,7 @@ trait WriteOperationsTrait
         $this->set_last_called_method();
         $this->last_results = [];
         $this->returned_insert_id = null;
+        $this->last_rows_affected = 0;
 
         $stmt = $this->execute_query($sql, $params);
         if ($stmt === false) {
@@ -252,7 +263,9 @@ trait WriteOperationsTrait
 
         $this->invalidate_cache_for_write($sql);
 
-        return $stmt->rowCount();
+        $this->last_rows_affected = $stmt->rowCount();
+
+        return $this->last_rows_affected;
     }
 
     /**
@@ -281,6 +294,7 @@ trait WriteOperationsTrait
     private function execute_write(string $sql, array $params): int|bool
     {
         $this->last_results = [];
+        $this->last_rows_affected = 0;
 
         $stmt = $this->execute_query($sql, $params);
         if ($stmt === false) {
@@ -289,7 +303,9 @@ trait WriteOperationsTrait
 
         $this->invalidate_cache_for_write($sql);
 
-        return $this->throw_on_error() ? $stmt->rowCount() : true;
+        $this->last_rows_affected = $stmt->rowCount();
+
+        return $this->throw_on_error() ? $this->last_rows_affected : true;
     }
 
     /**
@@ -308,5 +324,24 @@ trait WriteOperationsTrait
         }
 
         return $this->last_insert_id;
+    }
+
+    /**
+     * Son yazma sorgusunun (INSERT/UPDATE/DELETE/statement) etkilenen satır sayısını döndürür.
+     * Başarısız yazmada 0; SELECT sorguları bu değeri değiştirmez.
+     */
+    public function rows_affected(): int
+    {
+        return $this->last_rows_affected;
+    }
+
+    /**
+     * Birden çok ifadeye bölünen yazmaların (QueryBuilder::insert_many / upsert) toplamını bildirir.
+     *
+     * @internal QueryBuilder kullanır
+     */
+    public function set_rows_affected(int $count): void
+    {
+        $this->last_rows_affected = max(0, $count);
     }
 }

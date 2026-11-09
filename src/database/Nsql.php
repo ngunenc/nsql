@@ -17,6 +17,7 @@ use nsql\database\traits\{
     QueryEventsTrait,
     QueryExecutionTrait,
     QueryParameterTrait,
+    ResultFetchTrait,
     ReadWriteSplitTrait,
     SessionFacadeTrait,
     StatementCacheTrait,
@@ -50,6 +51,7 @@ use PDOStatement;
 class Nsql
 {
     use QueryParameterTrait;
+    use ResultFetchTrait;
     use CacheTrait;
     use DebugTrait;
     use StatementCacheTrait;
@@ -67,6 +69,11 @@ class Nsql
     use ReadWriteSplitTrait;
     use HotSettingsTrait;
 
+    /** get_row() / get_results() çıktı biçimleri */
+    public const OBJECT = 'OBJECT';
+    public const ARRAY_A = 'ARRAY_A';
+    public const ARRAY_N = 'ARRAY_N';
+
     // Debug özellikleri
     protected ?string $last_error = null;
     protected string $last_query = '';
@@ -74,6 +81,8 @@ class Nsql
     protected string $last_called_method = 'unknown';
     protected bool $debug_mode = false;
     protected string $log_file = 'error_log.txt';
+    /** Son yazma sorgusunun etkilenen satır sayısı (rows_affected()) */
+    protected int $last_rows_affected = 0;
 
     // Bağlantı ayarları ($pdo, $pool_key, $retry_limit: connection_trait)
     private array $options = [];
@@ -367,6 +376,8 @@ class Nsql
 
         if (! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
             $this->invalidate_cache_for_write($query);
+            // ezSQL'den gelen kodlar yazmaları query() ile yapar; rows_affected() bunları da kapsar
+            $this->last_rows_affected = $result->rowCount();
         }
 
         return $result;
@@ -447,17 +458,25 @@ class Nsql
         return $query . ' LIMIT 1';
     }
 
-    public function get_row(string $query, array $params = []): ?object
+    /**
+     * Tek satır döndürür. $output: self::OBJECT (varsayılan), self::ARRAY_A veya self::ARRAY_N.
+     *
+     * @return ($output is 'OBJECT' ? object|null : array|null)
+     */
+    public function get_row(string $query, array $params = [], string|int $output = self::OBJECT): object|array|null
     {
         $this->set_last_called_method();
+        $fetch_mode = $this->resolve_fetch_mode($output);
         $query = $this->with_single_row_limit($query);
 
         // Cache anahtarı yalnızca cache kullanılabilirken hesaplanır. Tek satır sonucu ayrı anahtarla
         // saklanır: LIMIT içeren aynı sorgu get_results() ile çağrıldığında satır listesi beklenir.
-        $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key('row:' . $query, $params) : null;
+        $cache_key = $this->query_cache_usable()
+            ? $this->generate_query_cache_key('row:' . $this->output_key_prefix($output) . $query, $params)
+            : null;
         if ($cache_key !== null) {
             $cached = $this->get_from_query_cache($cache_key);
-            if (is_object($cached)) {
+            if ($cached !== null) {
                 return $cached;
             }
         }
@@ -469,25 +488,45 @@ class Nsql
         }
 
         // Sonucu al, last_results ve cache'i guncelle
-        $result = $stmt->fetch(PDO::FETCH_OBJ);
+        $result = $stmt->fetch($fetch_mode);
+        $debug_names = $this->debug_mode && $fetch_mode === PDO::FETCH_NUM && $result !== false
+            ? $this->debug_column_names($stmt)
+            : null;
         $stmt->closeCursor();
-        // Yalnızca debug() okur; debug kapalıyken sonucu tutmak bellek ve süre harcar
-        $this->last_results = $this->debug_mode && $result ? [$result] : [];
-        if ($result && $cache_key !== null) {
+        if ($result === false) {
+            $result = null;
+        }
+        // Yalnızca debug() okur; debug kapalıyken sonucu tutmak bellek ve süre harcar.
+        // ARRAY_N satırı maskeleme için adlı anahtarlara çevrilir (dönen değer değişmez).
+        $this->last_results = [];
+        if ($this->debug_mode && $result !== null) {
+            $this->last_results = $fetch_mode === PDO::FETCH_NUM
+                ? $this->name_debug_rows([$result], $debug_names)
+                : [$result];
+        }
+        if ($result !== null && $cache_key !== null) {
             $this->add_to_query_cache($cache_key, $result, [], $this->extract_tables_from_query($query));
         }
 
-        return $result ?: null;
+        return $result;
     }
 
-    public function get_results(string $query, array $params = []): array
+    /**
+     * Tüm satırları döndürür. $output: self::OBJECT (varsayılan), self::ARRAY_A veya self::ARRAY_N.
+     *
+     * @return array<int, mixed>
+     */
+    public function get_results(string $query, array $params = [], string|int $output = self::OBJECT): array
     {
         $this->set_last_called_method();
+        $fetch_mode = $this->resolve_fetch_mode($output);
 
         // Memory kontrolü
         $this->check_memory_status();
 
-        $cache_key = $this->query_cache_usable() ? $this->generate_query_cache_key($query, $params) : null;
+        $cache_key = $this->query_cache_usable()
+            ? $this->generate_query_cache_key($this->output_key_prefix($output) . $query, $params)
+            : null;
         if ($cache_key !== null) {
             $cached = $this->get_from_query_cache($cache_key);
             if (is_array($cached)) {
@@ -501,21 +540,21 @@ class Nsql
             return [];
         }
 
-        $results = $stmt->fetchAll(PDO::FETCH_OBJ);
+        $results = $stmt->fetchAll($fetch_mode);
+        $debug_names = $this->debug_mode && $fetch_mode === PDO::FETCH_NUM ? $this->debug_column_names($stmt) : null;
         $stmt->closeCursor();
 
         // rowCount() SELECT için sürücüler arası güvenilir değil; gerçek satır sayısı kullanılır
         $result_count = count($results);
-        if ($result_count > (int) $this->setting('large_result_warning', Config::large_result_warning)) {
-            trigger_error(
-                "Büyük veri seti ($result_count satır). chunk_by_id() veya get_yield() kullanmayı düşünün.",
-                E_USER_NOTICE
-            );
-        }
+        $this->warn_large_result_set($result_count);
 
-        // Yalnızca debug() okur: debug kapalıyken tüm sonuç seti çağıran bıraktıktan sonra da bellekte kalıyordu
-        $this->last_results = $this->debug_mode ? $results : [];
-        if ($cache_key !== null && count($results) <= $this->query_cache_max_rows()) {
+        // Yalnızca debug() okur: debug kapalıyken tüm sonuç seti çağıran bıraktıktan sonra da bellekte kalıyordu.
+        // ARRAY_N satırları maskeleme için adlı anahtarlara çevrilir.
+        $this->last_results = [];
+        if ($this->debug_mode) {
+            $this->last_results = $fetch_mode === PDO::FETCH_NUM ? $this->name_debug_rows($results, $debug_names) : $results;
+        }
+        if ($cache_key !== null && $result_count <= $this->query_cache_max_rows()) {
             $this->add_to_query_cache($cache_key, $results, [], $this->extract_tables_from_query($query));
         }
 

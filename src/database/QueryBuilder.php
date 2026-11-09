@@ -1027,7 +1027,11 @@ class QueryBuilder
             return $total;
         };
 
-        return count($chunks) > 1 ? $this->db->transaction($run) : $run();
+        $total = count($chunks) > 1 ? (int) $this->db->transaction($run) : $run();
+        // Her parça statement() ile son değeri yazar; rows_affected() toplamı göstermeli
+        $this->db->set_rows_affected($total);
+
+        return $total;
     }
 
     /**
@@ -1145,7 +1149,7 @@ class QueryBuilder
         $chunks = $this->chunk_rows($rows, count($update_columns));
         if (count($chunks) > 1) {
             // Placeholder sınırını aşan veri: tek transaction içinde parça parça (önceden tek ifadeydi ve hata veriyordu)
-            return $this->db->transaction(function () use ($chunks, $update_columns, $unique_by): int {
+            $total = (int) $this->db->transaction(function () use ($chunks, $update_columns, $unique_by): int {
                 $total = 0;
                 foreach ($chunks as $chunk) {
                     $total += $this->upsert($chunk, $update_columns, $unique_by);
@@ -1153,6 +1157,10 @@ class QueryBuilder
 
                 return $total;
             });
+            // Her parça statement() ile son değeri yazar; rows_affected() toplamı göstermeli
+            $this->db->set_rows_affected($total);
+
+            return $total;
         }
 
         $counter = 0;

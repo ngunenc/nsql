@@ -98,15 +98,24 @@ batch_update(string $table, array $data, string $key_column = 'id', bool $use_tr
 delete(string $sql, array $params = []): int|bool
 // Örnek: $db->delete("DELETE FROM users WHERE id = ?", [1]);
 
-// Tek satır alma
-get_row(string $query, array $params = []): ?object
+// Tek satır alma ($output: Nsql::OBJECT (varsayılan), Nsql::ARRAY_A, Nsql::ARRAY_N)
+get_row(string $query, array $params = [], string $output = Nsql::OBJECT): object|array|null
 // Not: LIMIT 1 otomatik eklenir, last_results tek elemanlı dizi olarak set edilir
 // Örnek: $user = $db->get_row("SELECT * FROM users WHERE id = ?", [1]);
+// Örnek: $row = $db->get_row("SELECT * FROM users WHERE id = ?", [1], Nsql::ARRAY_A);
 
-// Tüm sonuçları alma
-get_results(string $query, array $params = []): array
+// Tüm sonuçları alma ($output: Nsql::OBJECT (varsayılan), Nsql::ARRAY_A, Nsql::ARRAY_N)
+get_results(string $query, array $params = [], string $output = Nsql::OBJECT): array
 // Not: last_results tüm sonuçlar olarak set edilir, debug paneli için
 // Örnek: $users = $db->get_results("SELECT * FROM users WHERE active = ?", [1]);
+
+// Tek değer alma (ilk satırın ilk sütunu; satır yoksa veya değer NULL ise null)
+get_var(string $query, array $params = []): mixed
+// Örnek: $count = $db->get_var("SELECT COUNT(*) FROM users WHERE active = ?", [1]);
+
+// Tek sütun alma (0 tabanlı $x; negatif veya sütun sayısını aşan indeks InvalidArgumentException)
+get_col(string $query, array $params = [], int $x = 0): array
+// Örnek: $emails = $db->get_col("SELECT id, email FROM users", [], 1);
 
 // Generator ile sonuçları alma (bellek dostu)
 get_yield(string $query, array $params = [], ?bool $unbuffered = null): Generator
@@ -172,6 +181,11 @@ try {
 ```php
 // Son insert ID
 insert_id(): int|string
+
+// Son yazma sorgusunun etkilenen satır sayısı (insert/update/delete/statement/batch_*,
+// yazma yapan query(), QueryBuilder insert_many/upsert: parçalı yazmada toplam)
+// Başarısız yazmada 0; SELECT sorguları değeri değiştirmez; MySQL değişmeyen satırları saymaz
+rows_affected(): int
 
 // Son hata
 get_last_error(): ?string
