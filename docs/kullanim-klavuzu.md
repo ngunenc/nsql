@@ -9,6 +9,7 @@
 - [Performans Optimizasyonu](#-performans-optimizasyonu)
 - [Hata Yönetimi](#-hata-yönetimi)
 - [İyi Uygulamalar](#-iyi-uygulamalar)
+- [ezSQL'den Geçiş](#-ezsqlden-geçiş)
 
 ## 📥 Kurulum
 
@@ -114,6 +115,16 @@ $kullanicilar = $db->get_results("SELECT * FROM kullanicilar");
 foreach ($db->get_yield("SELECT * FROM buyuk_tablo") as $row) {
     // Hafıza dostu işlemler...
 }
+
+// Tek değer (ilk satırın ilk sütunu; satır yoksa veya değer NULL ise null)
+$adet = $db->get_var("SELECT COUNT(*) FROM kullanicilar WHERE aktif = ?", [1]);
+
+// Tek sütun (0 tabanlı indeks; sınır dışı indeks InvalidArgumentException fırlatır)
+$emailler = $db->get_col("SELECT ad, email FROM kullanicilar", [], 1);
+
+// Çıktı biçimi: Nsql::OBJECT (varsayılan), Nsql::ARRAY_A, Nsql::ARRAY_N
+$satir  = $db->get_row("SELECT * FROM kullanicilar WHERE id = :id", ['id' => 1], Nsql::ARRAY_A);
+$satirlar = $db->get_results("SELECT id, ad FROM kullanicilar", [], Nsql::ARRAY_N);
 ```
 
 ### Veri Manipülasyonu
@@ -142,7 +153,13 @@ $db->delete(
     "DELETE FROM kullanicilar WHERE id = :id", 
     ['id' => 1]
 );
+
+// Etkilenen satır sayısı (son yazma sorgusu için)
+$db->delete("DELETE FROM kullanicilar WHERE aktif = :a", ['a' => 0]);
+echo $db->rows_affected();
 ```
+
+> **Not:** `rows_affected()` insert, update, delete, statement, batch işlemleri, yazma yapan `query()` ve QueryBuilder `insert_many`/`upsert` için toplam değeri verir. MySQL'de değeri değişmeyen satırlar sayılmaz. Başarısız yazmada `0` döner; SELECT bu değeri değiştirmez.
 
 ### Transaction İşlemleri
 
@@ -368,6 +385,37 @@ $reporting = Nsql::connection('reporting');
 // Redis / Memcached query cache (v1.10.1): .env -> QUERY_CACHE_DRIVER=redis
 $cache_stats = $db->get_all_cache_stats();
 ```
+
+## 🔁 ezSQL'den Geçiş
+
+nsql v2.7.0+ ezSQL'in yaygın okuma/yazma yardımcılarını sunar. Fark: tüm sorgular hazırlanmış ifadedir; değerler sorguya gömülmez, `:ad` veya `?` parametresiyle verilir ve okuma/yazma yardımcılarında parametre dizisi ikinci argümandır.
+
+| ezSQL | nsql |
+|-------|------|
+| `$db->get_var($q)` | `$db->get_var($q, $params)` |
+| `$db->get_col($q, $x)` | `$db->get_col($q, $params, $x)` |
+| `$db->get_row($q, OBJECT\|ARRAY_A\|ARRAY_N)` | `$db->get_row($q, $params, Nsql::OBJECT\|Nsql::ARRAY_A\|Nsql::ARRAY_N)` |
+| `$db->get_results($q, $output)` | `$db->get_results($q, $params, $output)` |
+| `$db->rows_affected` | `$db->rows_affected()` |
+| `$db->query($q)` (yazma) | Parametreli yazma için `insert`/`update`/`delete`/`statement`; `query($q)` parametresiz çalışır |
+
+Karşılığı bilerek eklenmeyenler:
+
+| ezSQL | nsql'de yapılacak |
+|-------|-------------------|
+| `escape()` | Gerekmez; parametre kullanın (`:ad`, `?`) |
+| `num_rows` | `count($db->get_results(...))` veya `get_var("SELECT COUNT(*) ...")` |
+| `last_query` | Debug modu (`debug()`) |
+| `get_col_info`, `sysdate` | Karşılığı yok; SQL'in kendi işlevlerini kullanın |
+
+```php
+// ezSQL (değer sorguya gömülür; SQL injection riski)
+$ad = $db->get_var("SELECT ad FROM kullanicilar WHERE id = " . $db->escape($id));
+
+// nsql
+$ad = $db->get_var("SELECT ad FROM kullanicilar WHERE id = :id", ['id' => $id]);
+```
+
 ## 🤝 Destek ve Katkı
 
 - GitHub Issues: [https://github.com/ngunenc/nsql/issues](https://github.com/ngunenc/nsql/issues)
