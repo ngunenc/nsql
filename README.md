@@ -1,4 +1,4 @@
-# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.6.0
+# 📚 nsql - Modern PHP PDO Veritabanı Kütüphanesi v2.7.0
 
 **nsql**, PHP 8.2+ için tasarlanmış, modern, güvenli ve yüksek performanslı bir veritabanı kütüphanesidir. PDO tabanlı bu kütüphane, gelişmiş özellikler ve optimizasyonlarla güçlendirilmiştir.
 
@@ -128,6 +128,8 @@
 >
 > **v2.6.0**: QueryBuilder konumsal `?` placeholder üretir (büyük `where_in` / toplu yazma SQLite'ta ~90 kat hızlı; `get_params()` artık liste), asgari PHP 8.2. Geçiş: [UPGRADE.md](UPGRADE.md#253--260)
 >
+> **v2.7.0**: ezSQL'den geçiş için `get_var()`, `get_col()`, `rows_affected()` ve `get_row()`/`get_results()` çıktı biçimleri (`Nsql::OBJECT`, `Nsql::ARRAY_A`, `Nsql::ARRAY_N`); debug çıktısında bu sonuçlar da maskelenir. Geriye uyumlu. Geçiş: [UPGRADE.md](UPGRADE.md#260--270)
+>
 > **v2.3.0**: ORM değişiklik takibi ve `exists()` (yalnızca değişen kolonlar yazılır), `decimal:N` cast; QueryBuilder tablo takma adı, `distinct()`, `where_column()`, `lock_for_update()`, `increment()`, `chunk()`; migration eşzamanlılık kilidi ve PostgreSQL/SQLite'ta transaction; replica koptuğunda primary'ye düşme; paylaşılan query cache'te süreç içi sürüm doğrulaması ve `set_cache_dependency()`; `RateLimiter::purge()`; MySQL 8 upsert sözdizimi. Geçiş: [UPGRADE.md](UPGRADE.md#223--230)
 >
 > **v2.2.3**: Hata düzeltmeleri: `query()` / `get_yield()` statement'ı aynı SQL'in tekrarında bozulmaz, `union()` SQLite'ta çalışır, `connect()` seçenekleri bağlantı kurulmadan uygulanır, `warm_cache(true)`, debug çıktısı, `full_join()` sürücü kontrolü. Geçiş: [UPGRADE.md](UPGRADE.md#222--223)
@@ -203,7 +205,7 @@
 Resmi paket adı: **`ngunenc/nsql`** ([Packagist](https://packagist.org/packages/ngunenc/nsql)).
 
 ```bash
-composer require ngunenc/nsql:^2.6.0 --prefer-dist
+composer require ngunenc/nsql:^2.7.0 --prefer-dist
 ```
 
 > **Öneri**: Her zaman `--prefer-dist` kullanın (zip kurulumu). Source/VCS kurulumunda `vendor/ngunenc/nsql` bir git kopyası olur; paket içine yazılan dosyalar Composer update’i bozar.
@@ -223,13 +225,13 @@ Packagist kullanılamıyorsa:
         }
     ],
     "require": {
-        "ngunenc/nsql": "^2.6.0"
+        "ngunenc/nsql": "^2.7.0"
     }
 }
 ```
 
 ```bash
-composer require ngunenc/nsql:^2.6.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
+composer require ngunenc/nsql:^2.7.0 --prefer-dist --repository='{"type":"vcs","url":"https://github.com/ngunenc/nsql.git"}'
 ```
 
 ### Composer: `has uncommitted changes` hatası

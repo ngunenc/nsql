@@ -1,5 +1,15 @@
 # Yükseltme Rehberi
 
+## 2.6.0 → 2.7.0
+
+Minor sürüm; geriye uyumlu, yalnızca yeni API eklendi. Kontrol edilecek noktalar:
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| `get_row()` / `get_results()` üçüncü parametre `$output` (`Nsql::OBJECT` varsayılan) | Üçüncü parametreye `PDO::FETCH_*` geçen kod (önceden yok sayılıyordu) | Davranış değişmedi, yine nesne döner. Dizi için `Nsql::ARRAY_A` / `Nsql::ARRAY_N` kullanın |
+| `get_row()` dönüş tipi `object\|array\|null` | `Nsql`'i genişletip `get_row()`'u override eden alt sınıflar | İmzayı `(string $query, array $params = [], string\|int $output = self::OBJECT): object\|array\|null` olarak güncelleyin |
+| Yeni public metodlar: `get_var`, `get_col`, `rows_affected` | `Nsql` alt sınıfında aynı adla metod tanımlayan kod | Çakışan metodu yeniden adlandırın |
+
 ## 2.5.3 → 2.6.0
 
 Minor sürüm; iki uyumluluk değişikliği:

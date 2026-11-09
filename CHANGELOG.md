@@ -4,6 +4,22 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [2.7.0] - 2026-11-09
+
+Minor sürüm: ezSQL'den geçiş için çekirdek okuma/yazma yardımcıları. Geriye uyumlu. Geçiş: [UPGRADE.md](UPGRADE.md#260--270).
+
+### Added
+- `get_var(string $query, array $params = []): mixed`: ilk satırın ilk sütunu; satır yoksa veya değer NULL ise `null`.
+- `get_col(string $query, array $params = [], int $x = 0): array`: tek sütunun değerleri (0 tabanlı indeks; negatif veya sorgunun sütun sayısını aşan indeks → `InvalidArgumentException`).
+- `rows_affected(): int`: son yazma sorgusunun etkilenen satır sayısı: `insert`, `update`, `delete`, `statement`, `batch_insert`, `batch_update`, yazma yapan `query()` ve QueryBuilder `insert_many` / `upsert` (birden çok ifadeye bölündüğünde toplam). Başarısız yazmada `0`; SELECT bu değeri değiştirmez. MySQL'de değeri değişmeyen satırlar sayılmaz.
+- Debug çıktısında `get_var`, `get_col` ve `ARRAY_N` sonuçları sütun adlarıyla gösterilir; hassas alan maskelemesi (`SensitiveDataFilter`) bunlara da uygulanır. Sütun adı alınamazsa değerler maskelenir.
+- Yeni `ResultFetchTrait` (`get_var`, `get_col`, çıktı biçimi çözümü); `Nsql` cephe sınıfı küçük kalır.
+- `Nsql::OBJECT`, `Nsql::ARRAY_A`, `Nsql::ARRAY_N` sabitleri ve `get_row()` / `get_results()` için üçüncü parametre `$output`. Varsayılan `Nsql::OBJECT` (önceki davranış).
+
+### Compatibility
+- Önbellek anahtarları OBJECT için değişmedi; `preload_query()` ile hazırlanan önbellek girdileri geçerli kalır. `ARRAY_A`/`ARRAY_N` sonuçları ayrı anahtarlarla saklanır.
+- `get_row()` / `get_results()` üçüncü parametreye bir `PDO::FETCH_*` sabiti verilirse yok sayılır ve nesne döner (önceki sürümlerdeki davranış). `$output` olarak `Nsql::ARRAY_A` / `Nsql::ARRAY_N` kullanın.
+
 ## [2.6.0] - 2026-10-27
 
 Minor sürüm: QueryBuilder placeholder biçimi ve asgari PHP sürümü değişti. Geçiş: [UPGRADE.md](UPGRADE.md#253--260).
