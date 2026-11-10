@@ -131,6 +131,22 @@ class BatchWritePortableTest extends PortableTestCase
         $this->assertSame(0, $this->db->get_transaction_level());
     }
 
+    /**
+     * Kolonsuz satır sıfıra bölme hatası (DivisionByZeroError) üretiyordu.
+     */
+    public function test_batch_insert_rejects_empty_rows(): void
+    {
+        try {
+            $this->db->batch_insert('p_batch', [[], []]);
+            $this->fail('QueryException bekleniyordu');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('kolon', $e->getMessage());
+        }
+
+        $this->assertSame([], $this->names());
+        $this->assertSame(0, $this->db->get_transaction_level());
+    }
+
     public function test_batch_insert_accepts_same_columns_in_different_order(): void
     {
         $this->db->batch_insert('p_batch', [['name' => 'a'], ['name' => 'b']]);

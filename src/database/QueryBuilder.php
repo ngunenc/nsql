@@ -747,6 +747,10 @@ class QueryBuilder
         }
 
         $this->validate_operator($operator);
+        // İki kolon karşılaştırılır: where_column() ile aynı operatör kümesi
+        if (in_array(strtoupper(trim($operator)), ['IN', 'NOT IN', 'IS', 'IS NOT', 'LIKE', 'NOT LIKE'], true)) {
+            throw new \InvalidArgumentException("join() için karşılaştırma operatörü gerekli: {$operator}");
+        }
 
         $this->joins[] = [
             'type' => $type,
@@ -1523,8 +1527,12 @@ class QueryBuilder
         usort($names, static fn (string $a, string $b) => strlen($b) <=> strlen($a));
         $used = [];
         $sql = (string) preg_replace_callback(
-            '/(?<!:):(' . implode('|', $names) . ')\b/',
+            // İlk seçenek string literal'i olduğu gibi geçirir: içindeki `:ad` binding değildir
+            '/\'(?:[^\'\\\\]|\\\\.|\'\')*\'|(?<!:):(' . implode('|', $names) . ')\b/s',
             function (array $m) use ($bindings, &$counter, &$params, &$used): string {
+                if (! isset($m[1])) {
+                    return $m[0];
+                }
                 $value = $bindings[$m[1]];
                 $used[$m[1]] = true;
 

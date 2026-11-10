@@ -125,4 +125,21 @@ class QueryExecutionPortableTest extends PortableTestCase
 
         $this->assertSame(['b', 'c'], $this->db->table('p_items')->order_by('id')->pluck('name'));
     }
+
+    /**
+     * Sorgu satır yorumuyla bitiyorsa aynı satıra eklenen ` LIMIT 1` yorumun içinde kalıyordu.
+     */
+    public function test_get_row_limit_is_not_swallowed_by_trailing_line_comment(): void
+    {
+        $executed = [];
+        $this->db->on_query(function ($event) use (&$executed): void {
+            $executed[] = $event->sql;
+        });
+
+        $row = $this->db->get_row('SELECT name FROM p_items ORDER BY id -- ilk kayıt');
+
+        $this->assertSame('a', $row?->name);
+        $this->assertCount(1, $executed);
+        $this->assertMatchesRegularExpression('/-- ilk kayıt\s*\n\s*LIMIT 1$/', $executed[0]);
+    }
 }

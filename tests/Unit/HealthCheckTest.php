@@ -6,6 +6,7 @@ use nsql\database\monitoring\HealthCheck;
 use nsql\database\Nsql;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
+use ReflectionMethod;
 
 class HealthCheckTest extends TestCase
 {
@@ -67,5 +68,40 @@ class HealthCheckTest extends TestCase
         $this->assertSame('unsupported', $health->check_php('8.1.30')['status']);
         $this->assertSame('healthy', $health->check_php('8.4.27')['status']);
         $this->assertCount(2, $logger->messages);
+    }
+
+    /**
+     * memory_limit=-1 iken sınır PHP_INT_MAX olarak gelir; "8589934592 GB" yerine sınırsız olduğu belirtilmeli.
+     */
+    public function test_unlimited_memory_limit_is_reported_as_unlimited(): void
+    {
+        $db = $this->createMock(Nsql::class);
+        $db->method('get_memory_stats')->willReturn([
+            'current_usage' => 4 * 1024 * 1024,
+            'peak_usage' => 6 * 1024 * 1024,
+            'limit' => PHP_INT_MAX,
+        ]);
+
+        $memory = (new ReflectionMethod(HealthCheck::class, 'check_memory'))->invoke(new HealthCheck($db));
+
+        $this->assertSame('healthy', $memory['status']);
+        $this->assertSame('unlimited', $memory['limit']);
+        $this->assertSame('4 MB', $memory['current_usage']);
+        $this->assertSame('0%', $memory['usage_percent']);
+    }
+
+    public function test_finite_memory_limit_is_still_formatted(): void
+    {
+        $db = $this->createMock(Nsql::class);
+        $db->method('get_memory_stats')->willReturn([
+            'current_usage' => 64 * 1024 * 1024,
+            'peak_usage' => 64 * 1024 * 1024,
+            'limit' => 128 * 1024 * 1024,
+        ]);
+
+        $memory = (new ReflectionMethod(HealthCheck::class, 'check_memory'))->invoke(new HealthCheck($db));
+
+        $this->assertSame('128 MB', $memory['limit']);
+        $this->assertSame('50%', $memory['usage_percent']);
     }
 }

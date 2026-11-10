@@ -514,7 +514,8 @@ class Nsql
             return $query;
         }
 
-        return $query . ' LIMIT 1';
+        // Satır sonu: sorgu `-- yorum` ile bitiyorsa LIMIT yorumun içinde kalmasın
+        return $query . "\nLIMIT 1";
     }
 
     /**

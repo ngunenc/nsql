@@ -274,7 +274,7 @@ trait StreamingTrait
     {
         $this->set_last_called_method();
 
-        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column)) {
+        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $column)) {
             throw new \InvalidArgumentException("Geçersiz keyset kolonu: {$column}");
         }
         if ($size < 1) {

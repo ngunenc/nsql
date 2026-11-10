@@ -460,6 +460,50 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->db->table('p_products')->where_like('name', 'x', 'regex');
     }
 
+    /**
+     * String literal içindeki `:ad` bir binding değildir: `?`'e çevrilmemeli, parametre sayısını kaydırmamalı.
+     */
+    public function test_raw_binding_name_inside_string_literal_is_not_bound(): void
+    {
+        $builder = $this->db->table('p_products')->where_raw("name <> ':min' AND price > :min", ['min' => 100]);
+        [$sql, $params] = $builder->compile();
+
+        $this->assertStringContainsString("':min'", $sql);
+        $this->assertCount(1, $params, $sql);
+        $this->assertSame(['Lamba'], $builder->order_by('id')->pluck('name'));
+
+        // Yalnızca literal içinde geçen ad "kullanılmış" sayılmaz
+        $this->expectException(\InvalidArgumentException::class);
+        $this->db->table('p_products')->where_raw("name <> ':min'", ['min' => 1])->compile();
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function non_comparison_operators(): array
+    {
+        return ['IN' => ['IN'], 'not in' => ['not in'], 'IS' => ['IS'], 'IS NOT' => ['IS NOT'], 'LIKE' => ['LIKE'], 'NOT LIKE' => ['NOT LIKE']];
+    }
+
+    /**
+     * join() iki kolonu karşılaştırır: where_column() ile aynı operatör kümesi geçerlidir.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('non_comparison_operators')]
+    public function test_join_rejects_non_comparison_operators(string $operator): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('join()');
+        $this->db->table('p_products')->join('p_orders', 'p_orders.product_id', $operator, 'p_products.id');
+    }
+
+    public function test_join_still_accepts_comparison_operators(): void
+    {
+        foreach (['=', '<>', '!=', '<', '>', '<=', '>='] as $operator) {
+            [$sql] = $this->db->table('p_products')->join('p_orders', 'p_orders.product_id', $operator, 'p_products.id')->compile();
+            $this->assertStringContainsString(" {$operator} ", $sql);
+        }
+    }
+
     public function test_raw_binding_repeated_and_prefixed_names(): void
     {
         $builder = $this->db->table('p_products')->where_raw('price = :p OR price = :p * 4', ['p' => 10]);

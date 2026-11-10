@@ -138,7 +138,9 @@ class HealthCheck
     {
         try {
             $memory_stats = $this->db->get_memory_stats();
-            $usage_percent = ($memory_stats['current_usage'] / $memory_stats['limit']) * 100;
+            // memory_limit=-1: sınır PHP_INT_MAX olarak gelir (MemoryMonitor::memory_limit)
+            $unlimited = $memory_stats['limit'] === PHP_INT_MAX || $memory_stats['limit'] <= 0;
+            $usage_percent = $unlimited ? 0 : ($memory_stats['current_usage'] / $memory_stats['limit']) * 100;
 
             $status = 'healthy';
             if ($usage_percent > 90) {
@@ -151,7 +153,7 @@ class HealthCheck
                 'status' => $status,
                 'current_usage' => $this->format_bytes($memory_stats['current_usage']),
                 'peak_usage' => $this->format_bytes($memory_stats['peak_usage']),
-                'limit' => $this->format_bytes($memory_stats['limit']),
+                'limit' => $unlimited ? 'unlimited' : $this->format_bytes($memory_stats['limit']),
                 'usage_percent' => round($usage_percent, 2) . '%',
                 'message' => 'Memory usage is ' . $status,
             ];

@@ -12,7 +12,7 @@ class SqliteDriver implements DriverInterface
         $path = $config['path'] ?? $config['dbname'] ?? ':memory:';
 
         // Eğer path mutlak değilse, project root'a göre ayarla
-        if ($path !== ':memory:' && ! str_starts_with($path, '/') && ! preg_match('/^[A-Z]:\\\\/', $path)) {
+        if ($path !== ':memory:' && ! str_starts_with($path, '/') && ! preg_match('/^[A-Za-z]:[\\\\\/]/', $path)) {
             $project_root = \nsql\database\Config::get_project_root();
             if ($project_root) {
                 $path = $project_root . '/' . $path;

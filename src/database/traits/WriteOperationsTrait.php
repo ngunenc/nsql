@@ -103,6 +103,10 @@ trait WriteOperationsTrait
         }
 
         $columns = array_keys($first_row);
+        if ($columns === []) {
+            // Kolonsuz satır: parça boyutu hesabı sıfıra bölerdi
+            throw new QueryException('Batch insert: satırlar en az bir kolon içermelidir.');
+        }
         foreach ($data as $index => $row) {
             if (! is_array($row)) {
                 throw new QueryException('Batch insert için her satır bir array olmalıdır.');

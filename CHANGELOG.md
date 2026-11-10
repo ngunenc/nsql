@@ -30,6 +30,13 @@ Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 - `query()`: `WITH ... DELETE/UPDATE/INSERT` yazma sayılır; query cache temizlenir ve `rows_affected()` güncellenir.
 - Query cache tablo çıkarımı `STRAIGHT_JOIN` ve iç içe `JOIN (b JOIN c)` tablolarını yakalar; hedefi tanınmayan `JOIN` içeren sorgunun sonucu cache'lenmez (yazmada tüm cache temizlenir).
 - PHP 8.5: int aralığı dışındaki kimliklerde (unsigned bigint) `insert_id()` uyarı üretmez; unbuffered `get_yield()` deprecated `PDO::MYSQL_ATTR_*` sabitlerini kullanmaz.
+- SQLite: Windows'ta küçük harfli sürücü (`c:\...`) ve `/` ayırıcılı (`C:/...`) mutlak yollar proje köküne eklenmez.
+- `batch_insert()`: kolonsuz satır `DivisionByZeroError` yerine `QueryException` verir.
+- `get_row()`: satır yorumuyla (`-- ...`) biten sorguda eklenen `LIMIT 1` yorumun içinde kalmaz.
+- QueryBuilder `join()`: `IN`, `NOT IN`, `IS`, `IS NOT`, `LIKE`, `NOT LIKE` operatörleri `InvalidArgumentException` verir (`where_column()` ile aynı kural; iki kolon karşılaştırılır). Farklı koşul için closure biçimini kullanın.
+- QueryBuilder raw SQL: string literal içindeki `:ad` binding sayılmaz ve `?`'e çevrilmez.
+- `HealthCheck`: `memory_limit=-1` iken sınır `unlimited`, kullanım `0%` olarak raporlanır.
+- `chunk_by_id()`: sonunda satır sonu bulunan kolon adı reddedilir.
 
 ## [2.7.0] - 2026-11-09
 

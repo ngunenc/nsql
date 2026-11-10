@@ -148,6 +148,15 @@ class StreamingPortableTest extends PortableTestCase
         $this->assertLessThanOrEqual(1, $chunks);
     }
 
+    public function test_chunk_by_id_rejects_column_with_trailing_newline(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('keyset');
+        foreach ($this->db->chunk_by_id('SELECT id FROM p_events', [], "id\n", 10) as $chunk) {
+            $this->fail('Geçersiz kolon adıyla sorgu çalışmamalı');
+        }
+    }
+
     public function test_chunk_by_id_allows_null_key_on_last_partial_chunk(): void
     {
         $this->create_table('p_null_keys', ['sort_key INT NULL']);

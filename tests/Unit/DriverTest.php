@@ -126,6 +126,10 @@ class DriverTest extends TestCase
         $this->assertSame('sqlite::memory:', $driver->build_dsn([]));
         $this->assertSame('sqlite:/tmp/app.sqlite', $driver->build_dsn(['path' => '/tmp/app.sqlite']));
         $this->assertSame('sqlite:C:\\data\\app.sqlite', $driver->build_dsn(['path' => 'C:\\data\\app.sqlite']));
+        // Windows: küçük harfli sürücü ve `/` ayırıcı da mutlak yoldur (proje köküne eklenmez)
+        $this->assertSame('sqlite:c:\\data\\app.sqlite', $driver->build_dsn(['path' => 'c:\\data\\app.sqlite']));
+        $this->assertSame('sqlite:C:/data/app.sqlite', $driver->build_dsn(['path' => 'C:/data/app.sqlite']));
+        $this->assertSame('sqlite:d:/data/app.sqlite', $driver->build_dsn(['path' => 'd:/data/app.sqlite']));
         $this->assertSame('"', $driver->get_identifier_quote());
         $this->assertSame('LIMIT 5 OFFSET 5', $driver->get_limit_clause(5, 5));
 
