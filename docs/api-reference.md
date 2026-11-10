@@ -371,9 +371,14 @@ SecurityManager::validate_csrf_token(mixed $token, bool $consume = false): bool
 // SQL parametrelerini doğrulama
 SecurityManager::validate_sql_params(array $params): bool
 
-// Güvenli sorgu hazırlama
+// @deprecated: sorguyu güvenli hale getirmez, yalnızca birkaç kalıbı arar ve sorguyu aynen döndürür
 SecurityManager::prepare_safe_query(string $sql, array $params): string
+
+// @deprecated: parametreleri temizlemez; validate_sql_params() ile aynıdır
+SecurityManager::sanitize_sql_params(array $params): array
 ```
+
+> `prepare_safe_query()` ve `sanitize_sql_params()` kullanımdan kaldırılmıştır (3.0'da silinecek): adları SQL injection koruması sağladıkları izlenimini verir, oysa girdiyi değiştirmezler. Koruma için bağlı parametre (`?` / `:ad`) ve QueryBuilder kullanın.
 
 ### Encryption
 

@@ -41,6 +41,10 @@ composer require ngunenc/nsql --prefer-dist
 
    Öncelik: `.env` > ortam değişkeni > varsayılan. Docker / Kubernetes / CI'da ortam değişkeninin `.env`'yi ezmesi için **ortam değişkeni olarak** `ENV_OVERRIDES_DOTENV=true` verin (`.env` içinde tanımlanamaz). 3.0'da bu davranışın varsayılan olması planlanıyor.
 
+   > **Güvenlik notu:** varsayılan öncelikte dağıtım ortamının verdiği değişkenler (`DB_PASS`, `ENV` ...) sunucuda kalmış bir `.env` dosyası tarafından sessizce ezilir. Production'da `.env` dosyasını dağıtmayın ya da `ENV_OVERRIDES_DOTENV=true` kullanın.
+
+   **Production kimlik bilgisi denetimi:** ortam açıkça production ilan edildiyse (`ENV=production` / `prod`; `ENV` verilmemişse `APP_ENV=production`) ve veritabanı kullanıcısı boşsa ya da `root` + boş parola ise `Nsql` bağlanmadan önce `ConnectionException` (kod `ErrorCodes::CONFIGURATION_ERROR`) fırlatır. Bunlar `DB_USER` / `DB_PASS` ayarlanmadığında düşülen varsayılanlardır. SQLite ve parolasız ama adlandırılmış kullanıcı (PostgreSQL peer/trust) etkilenmez; `ENV` hiç verilmemiş kurulumlar da etkilenmez. Bilinçli kullanım için `DB_ALLOW_INSECURE_CREDENTIALS=true`.
+
 3. Önerilen: giriş dosyanızda (ör. `public/index.php`) autoload sonrası:
 
 ```php

@@ -8,8 +8,20 @@ Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
 ### Dikkat: davranış değişiklikleri
 - ORM `save()`: UPDATE hiçbir satırı etkilemediyse ve satır veritabanında yoksa `false` döner (önceden `true`); INSERT'e düşülmez. `ORM_TRACK_EXISTS=false` (varsayılan, değişmedi) iken var olmayan anahtarla kaydedilen yüklenmemiş modeli ve satırı arada silinmiş yüklenmiş modeli etkiler. Değeri değişmeyen satır başarı sayılmaya devam eder (ek bir `SELECT 1` ile ayırt edilir). Elle atanmış anahtarlı yeni kayıt için `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;` kullanın.
+- Production kimlik bilgisi denetimi: ortam açıkça production ilan edildiyse (`ENV=production` / `prod`, `Config::set_environment('production')`; `ENV` verilmemişse `APP_ENV=production`) ve veritabanı kullanıcısı boşsa ya da `root` + boş parola ise `Nsql` bağlanmadan önce `ConnectionException` (kod `ErrorCodes::CONFIGURATION_ERROR`) fırlatır. Etkilenmeyenler: SQLite, parolasız ama adlandırılmış kullanıcı (PostgreSQL peer/trust), `ENV` hiç verilmemiş kurulumlar (örtük `production` varsayılanı). Eski davranış için `DB_ALLOW_INSECURE_CREDENTIALS=true`.
+- `var_dump($db)` / `print_r($db)` parolayı `********` olarak gösterir (`Nsql::__debugInfo()`); çıktının biçimine bağlı kod varsa etkilenir.
+
+### Security
+- `Nsql::__construct()` (`$pass`) ve `Nsql::connect()` (`$dsn`, `$password`) parametreleri `#[\SensitiveParameter]`: stack trace'lerde değer yerine `SensitiveParameterValue` görünür.
+- `handle_exception()` ve `safe_execute()` log'a yazdığı sürücü mesajındaki veri değerlerini maskeler (`Duplicate entry '***'`); çağırana dönen / fırlatılan hata değişmedi.
+- `quote_identifier()`: sonunda satır sonu bulunan tanımlayıcı (`"users\n"`) artık reddedilir.
+- `Encryption` kaynak dosyasındaki ham NUL baytı `"\0"` kaçışıyla değiştirildi (dosya araçlarca "binary" sayılıyordu). Şifreli veri biçimi değişmedi; mevcut veriler aynen çözülür.
+
+### Deprecated
+- `SecurityManager::sanitize_sql_params()` ve `SecurityManager::prepare_safe_query()`: adları yanıltıcı (girdiyi değiştirmezler). Bağlı parametre ve `validate_sql_params()` kullanın. 3.0'da kaldırılacak; şimdilik davranışları aynı.
 
 ### Docs
+- `.env` önceliğinin (`.env` > ortam değişkeni) güvenlik etkisi ve `ENV_OVERRIDES_DOTENV=true` önerisi belgelendi (öncelik değişmedi; 3.0 planı).
 - Kullanım kılavuzu: `memory` query cache sürücüsünün örnek başına çalıştığı ve çok süreçli kurulumda paylaşılan store (redis/memcached/PSR-16) gerektiği uyarısı.
 
 ### Fixed

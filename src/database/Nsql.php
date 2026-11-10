@@ -115,6 +115,7 @@ class Nsql
         ?string $host = null,
         ?string $db = null,
         ?string $user = null,
+        #[\SensitiveParameter]
         ?string $pass = null,
         ?string $charset = null,
         ?bool $debug = null,
@@ -134,6 +135,10 @@ class Nsql
         $pass = $pass ?? Config::get('db_pass', '');
         $charset = $charset ?? Config::get('db_charset', $this->get_default_charset($driver_name));
         $port = $port ?? (int) Config::get('db_port', $this->get_default_port($driver_name));
+        if ($this->driver->get_driver_name() !== 'sqlite') {
+            // Açıkça production ilan edilmiş ortamda boş kullanıcı / root + boş parola ile bağlanılmaz
+            Config::assert_production_credentials((string) $user, (string) $pass);
+        }
         $this->connection_args = [
             'host' => (string) $host,
             'db' => (string) $db,
@@ -315,8 +320,14 @@ class Nsql
         return ConnectionManager::get($name);
     }
 
-    public static function connect(string $dsn, ?string $username = null, ?string $password = null, ?array $options = null): static
-    {
+    public static function connect(
+        #[\SensitiveParameter]
+        string $dsn,
+        ?string $username = null,
+        #[\SensitiveParameter]
+        ?string $password = null,
+        ?array $options = null
+    ): static {
         // DSN'den driver oluştur
         $driver = DriverFactory::create_from_dsn($dsn);
         $parsed = $driver->parse_dsn($dsn);
@@ -339,6 +350,48 @@ class Nsql
         );
 
         return $instance;
+    }
+
+    /**
+     * var_dump() / print_r() çıktısı: parola ve DSN'deki `password=` değeri maskelenir.
+     *
+     * @return array<string, mixed>
+     */
+    public function __debugInfo(): array
+    {
+        $mask = \nsql\database\security\SensitiveDataFilter::MASK;
+        $info = get_object_vars($this);
+
+        if (($info['pass'] ?? null) !== null) {
+            $info['pass'] = $mask;
+        }
+        if (is_string($info['dsn'] ?? null)) {
+            $info['dsn'] = preg_replace('/\b(password|pwd)=[^;]*/i', '$1=' . $mask, $info['dsn']);
+        }
+        foreach (['connection_args', 'dsn_params', 'read_config'] as $property) {
+            if (is_array($info[$property] ?? null)) {
+                $info[$property] = self::mask_credentials($info[$property]);
+            }
+        }
+
+        return $info;
+    }
+
+    /**
+     * @param array<int|string, mixed> $values
+     * @return array<int|string, mixed>
+     */
+    private static function mask_credentials(array $values): array
+    {
+        foreach ($values as $key => $value) {
+            if (is_array($value)) {
+                $values[$key] = self::mask_credentials($value);
+            } elseif (in_array(strtolower((string) $key), ['pass', 'password', 'pwd'], true) && $value !== null) {
+                $values[$key] = \nsql\database\security\SensitiveDataFilter::MASK;
+            }
+        }
+
+        return $values;
     }
 
     public function __destruct()
@@ -431,7 +484,8 @@ class Nsql
         }
 
         foreach ($parts as $part) {
-            if (! preg_match('/^(?!\d+$)[A-Za-z0-9_]+$/', $part)) {
+            // D bayrağı: `$` sondaki "\n"den önce eşleşmez ("users\n" geçerli sayılmaz)
+            if (! preg_match('/^(?!\d+$)[A-Za-z0-9_]+$/D', $part)) {
                 throw new InvalidArgumentException('Geçersiz tanımlayıcı: ' . substr($identifier, 0, 64));
             }
         }

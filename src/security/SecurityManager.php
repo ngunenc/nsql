@@ -105,6 +105,10 @@ class SecurityManager
     /**
      * SQL parametreleri için doğrulama (mutasyon yok). Array/objeleri reddeder.
      * Strict mode açık ise şüpheli içerikte istisna atar, değilse audit log'a yazar.
+     *
+     * @deprecated 2.8.0 Adı yanıltıcıdır: parametreleri temizlemez, olduğu gibi döndürür. SQL injection
+     *             koruması için bağlı parametre (`?` / `:ad`) kullanın; yalnızca denetim gerekiyorsa
+     *             `validate_sql_params()` çağırın. 3.0'da kaldırılacak.
      */
     public static function sanitize_sql_params(array $params): array
     {
@@ -130,6 +134,10 @@ class SecurityManager
     /**
      * Güvenli SQL sorgusu oluşturur (değiştirmez). Tehlikeli kalıpları tespit eder.
      * Strict mode açık: istisna; kapalı: audit log ve devam.
+     *
+     * @deprecated 2.8.0 Adı yanıltıcıdır: sorguyu güvenli hale getirmez, yalnızca birkaç kalıbı arar ve
+     *             sorguyu değiştirmeden döndürür (`$params` kullanılmaz). SQL injection koruması için
+     *             bağlı parametre (`?` / `:ad`) ve QueryBuilder kullanın. 3.0'da kaldırılacak.
      */
     public static function prepare_safe_query(string $query, array $params): string
     {

@@ -18,6 +18,8 @@ class Config
     private static array $config = [];
     private static bool $env_loaded = false;
     private static string $environment = 'production';
+    /** Ortam açıkça verildi mi (ENV / set_environment)? false: 'production' yalnızca varsayılan */
+    private static bool $environment_explicit = false;
     private static ?string $project_root = null;
     /** @var string|null Uygulama kökü (set_project_root veya tespit) */
     private static ?string $project_root_override = null;
@@ -115,6 +117,56 @@ class Config
     public static function set_environment(string $environment): void
     {
         self::$environment = trim($environment) !== '' ? $environment : 'production';
+        self::$environment_explicit = trim($environment) !== '';
+    }
+
+    /**
+     * Ortam açıkça production olarak ilan edildi mi? `ENV=production|prod` (ortam değişkeni, .env veya
+     * set_environment()); ENV hiç verilmemişse `APP_ENV=production|prod`. ENV verilmediğinde geçerli olan
+     * örtük 'production' varsayılanı sayılmaz.
+     */
+    private static function is_declared_production(): bool
+    {
+        self::ensure_bootstrapped();
+        if (self::$environment_explicit) {
+            return self::is_production();
+        }
+
+        $app_env = self::get('app_env');
+
+        return is_string($app_env) && in_array(strtolower(trim($app_env)), ['production', 'prod'], true);
+    }
+
+    /**
+     * Açıkça production ilan edilmiş ortamda güvensiz veritabanı kimlik bilgisini reddeder: boş kullanıcı
+     * veya `root` + boş parola (DB_USER / DB_PASS ayarlanmadığında düşülen varsayılanlar). Parolasız ama
+     * adlandırılmış kullanıcı (PostgreSQL peer/trust, soket) kabul edilir.
+     * Bilinçli kullanım için: `DB_ALLOW_INSECURE_CREDENTIALS=true`.
+     *
+     * @internal Nsql constructor'ı çağırır (SQLite hariç)
+     * @throws \nsql\database\exceptions\ConnectionException Kod: ErrorCodes::CONFIGURATION_ERROR
+     */
+    public static function assert_production_credentials(string $user, #[\SensitiveParameter] string $pass): void
+    {
+        if (! self::is_declared_production() || (bool) self::get('db_allow_insecure_credentials', false)) {
+            return;
+        }
+
+        $user = trim($user);
+        $problem = match (true) {
+            $user === '' => 'DB_USER boş',
+            strtolower($user) === 'root' && $pass === '' => 'root kullanıcısı boş parolayla (DB_PASS) kullanılıyor',
+            default => null,
+        };
+        if ($problem === null) {
+            return;
+        }
+
+        throw new \nsql\database\exceptions\ConnectionException(
+            'Production ortamında güvensiz veritabanı kimlik bilgisi: ' . $problem
+            . '. DB_USER / DB_PASS ayarlayın; bilinçli kullanım için DB_ALLOW_INSECURE_CREDENTIALS=true.',
+            code: \nsql\database\exceptions\ErrorCodes::CONFIGURATION_ERROR
+        );
     }
 
     /**
@@ -540,6 +592,7 @@ class Config
         $env = getenv('ENV') ?: (self::$config['ENV'] ?? null);
         if (is_string($env) && $env !== '') {
             self::$environment = $env;
+            self::$environment_explicit = true;
         }
     }
 

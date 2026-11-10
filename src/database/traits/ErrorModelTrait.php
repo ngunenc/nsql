@@ -61,7 +61,8 @@ trait ErrorModelTrait
 
         $context['trace'] = $e->getTraceAsString();
 
-        $this->log_error($e->getMessage(), $context, Logger::ERROR);
+        // Sürücü mesajı veri içerebilir (`Duplicate entry 'ali@x.com'`); log'a maskeli yazılır
+        $this->log_error(SensitiveDataFilter::mask_error_message($e->getMessage()), $context, Logger::ERROR);
 
         if ($this->debug_mode) {
             return $e->getMessage();
@@ -105,7 +106,7 @@ trait ErrorModelTrait
         } catch (Throwable $e) {
             $this->last_error = $e->getMessage();
             $this->last_exception = $e;
-            $this->log_error(sprintf('%s: %s', get_class($e), $e->getMessage()));
+            $this->log_error(sprintf('%s: %s', get_class($e), SensitiveDataFilter::mask_error_message($e->getMessage())));
 
             if ($this->debug_mode) {
                 if ($e instanceof PDOException) {

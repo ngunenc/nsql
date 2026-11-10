@@ -235,6 +235,6 @@ class Encryption
     private static function aad(string $key_id, string $context = ''): string
     {
         // Boş bağlam 2.3 ve öncesiyle aynı AAD'yi üretir
-        return 'v2' . $key_id . ($context === '' ? '' : " " . $context);
+        return 'v2' . $key_id . ($context === '' ? '' : "\0" . $context);
     }
 }

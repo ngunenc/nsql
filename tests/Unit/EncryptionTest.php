@@ -386,4 +386,56 @@ class EncryptionTest extends TestCase
         $this->expectException(\RuntimeException::class);
         (new Encryption($key))->decrypt($legacy, 'bir bağlam');
     }
+
+    /**
+     * 2.7.0 ile üretilmiş sabit vektörler: AAD ayırıcısının kaynakta yazımı değişse de
+     * (ham NUL baytı → "\0" kaçışı) eski şifreli veriler aynen çözülmelidir.
+     */
+    public function test_ciphertexts_from_2_7_0_still_decrypt(): void
+    {
+        $encryption = new Encryption('1Hd7hgwzJT1AQg5enBI2DzPLOnjnuFAQ9ed0thywHGU=');
+
+        $this->assertSame(
+            'bağlamlı veri',
+            $encryption->decrypt('v2:lLS76Zp0UcWacBelBEeWkCTKaclQBfq87BuTpT5j2QPK8YVFFatENnn1jyBo1waQvKmo', 'users.email')
+        );
+        $this->assertSame(
+            'bağlamsız veri',
+            $encryption->decrypt('v2:lLS76Zp0UcW3z1O2ATi87JdpuBvwbzfRM1+cCXX30r0tsk/GwRlMOSAREBDe6dh6dL00Hg==')
+        );
+    }
+
+    public function test_context_aad_uses_nul_separator(): void
+    {
+        $key = self::key();
+        $raw = (string) base64_decode($key, true);
+        $key_id = substr(hash('sha256', $raw, true), 0, 8);
+        $iv = random_bytes(12);
+        $tag = '';
+        $aad = 'v2' . $key_id . "\0" . 'users.email';
+        $ciphertext = (string) openssl_encrypt('veri', 'aes-256-gcm', $raw, OPENSSL_RAW_DATA, $iv, $tag, $aad, 16);
+
+        $this->assertSame(
+            'veri',
+            (new Encryption($key))->decrypt('v2:' . base64_encode($key_id . $iv . $tag . $ciphertext), 'users.email')
+        );
+    }
+
+    /**
+     * Kaynakta ham kontrol baytı (NUL) dosyayı araçlar için "binary" yapar: grep, diff ve
+     * kod incelemesi içeriği göstermez.
+     */
+    public function test_source_files_contain_no_raw_nul_bytes(): void
+    {
+        $root = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'src';
+        $offenders = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if ($file->getExtension() === 'php' && str_contains((string) file_get_contents($file->getPathname()), "\0")) {
+                $offenders[] = substr($file->getPathname(), strlen($root) + 1);
+            }
+        }
+
+        $this->assertSame([], $offenders);
+    }
 }
