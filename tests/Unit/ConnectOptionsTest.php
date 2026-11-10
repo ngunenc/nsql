@@ -90,7 +90,11 @@ class ConnectOptionsTest extends TestCase
 
     public function test_mysql_tls_settings_become_pdo_options(): void
     {
-        if (! defined('PDO::MYSQL_ATTR_SSL_CA')) {
+        // PDO::MYSQL_ATTR_* PHP 8.5'te deprecated: sabit, kütüphanenin kullandığı çözücüyle alınır
+        $attribute = new \ReflectionMethod(Nsql::class, 'mysql_attribute');
+        $ssl_ca = $attribute->invoke(null, 'SSL_CA');
+        $ssl_verify = $attribute->invoke(null, 'SSL_VERIFY_SERVER_CERT');
+        if ($ssl_ca === null || $ssl_verify === null) {
             $this->markTestSkipped('pdo_mysql yüklü değil');
         }
 
@@ -104,8 +108,8 @@ class ConnectOptionsTest extends TestCase
             \nsql\database\Config::set('db_ssl_verify', null);
         }
 
-        $this->assertSame('/etc/nsql-ca.pem', $options[PDO::MYSQL_ATTR_SSL_CA] ?? null);
-        $this->assertTrue($options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] ?? null);
+        $this->assertSame('/etc/nsql-ca.pem', $options[$ssl_ca] ?? null);
+        $this->assertTrue($options[$ssl_verify] ?? null);
         $this->assertSame([], $method->invoke(null, 'pgsql'));
     }
 

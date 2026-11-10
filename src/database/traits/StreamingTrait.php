@@ -198,8 +198,10 @@ trait StreamingTrait
             return;
         }
 
-        $is_mysql = $this->get_driver_name() === 'mysql';
-        $previous_buffered = $is_mysql ? $pdo->getAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY) : null;
+        // Pdo\Mysql::ATTR_USE_BUFFERED_QUERY (8.4+) veya PDO::MYSQL_ATTR_USE_BUFFERED_QUERY (8.5'te deprecated)
+        $buffered_attribute = $this->get_driver_name() === 'mysql' ? self::mysql_attribute('USE_BUFFERED_QUERY') : null;
+        $is_mysql = $buffered_attribute !== null;
+        $previous_buffered = $is_mysql ? $pdo->getAttribute($buffered_attribute) : null;
 
         $this->prepare_query_context($query, $params);
         $this->validate_param_types($params);
@@ -207,7 +209,7 @@ trait StreamingTrait
         $stmt = null;
         try {
             if ($is_mysql) {
-                $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
+                $pdo->setAttribute($buffered_attribute, false);
             }
 
             // Statement cache'e alınmaz: unbuffered cursor kapanmadan aynı statement yeniden kullanılamaz
@@ -249,7 +251,7 @@ trait StreamingTrait
             }
             $stmt = null;
             if ($is_mysql && $this->pdo === $pdo) {
-                $pdo->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, $previous_buffered);
+                $pdo->setAttribute($buffered_attribute, $previous_buffered);
             }
         }
     }

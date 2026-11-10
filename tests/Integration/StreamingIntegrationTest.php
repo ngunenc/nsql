@@ -3,7 +3,7 @@
 namespace Tests\Integration;
 
 use nsql\database\Config;
-use PDO;
+use nsql\database\Nsql;
 use Tests\Support\DatabaseTestCase;
 
 /**
@@ -38,7 +38,9 @@ class StreamingIntegrationTest extends DatabaseTestCase
 
         $this->assertSame(
             1,
-            (int) $this->db->get_pdo()->getAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY),
+            (int) $this->db->get_pdo()->getAttribute(
+                (int) (new \ReflectionMethod(Nsql::class, 'mysql_attribute'))->invoke(null, 'USE_BUFFERED_QUERY')
+            ),
             'Akış bitince buffered mod geri yüklenmeli'
         );
         $this->assertSame(self::ROWS, (int) $this->db->get_row('SELECT COUNT(*) AS c FROM test_table')->c);

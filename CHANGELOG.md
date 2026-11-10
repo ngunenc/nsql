@@ -4,6 +4,12 @@ Tüm önemli değişiklikler bu dosyada belgelenecektir.
 
 Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
+## [Unreleased]
+
+### Fixed
+- `DB_PORT` / `DB_CHARSET` verilmediğinde PostgreSQL bağlantısı MySQL varsayılanlarını (3306, `utf8mb4`) alıyordu. Varsayılan artık sürücüye göre üretilir (mysql 3306/`utf8mb4`, pgsql 5432/`UTF8`). `Config::default_values()` bu iki anahtarı içermez; ayarlanmamışken `Config::get('db_port')` / `Config::get('db_charset')` `null` döner.
+- PHP 8.5: int aralığı dışındaki kimliklerde (unsigned bigint) `insert_id()` uyarı üretmez; unbuffered `get_yield()` deprecated `PDO::MYSQL_ATTR_*` sabitlerini kullanmaz.
+
 ## [2.7.0] - 2026-11-09
 
 Minor sürüm: ezSQL'den geçiş için çekirdek okuma/yazma yardımcıları. Geriye uyumlu. Geçiş: [UPGRADE.md](UPGRADE.md#260--270).

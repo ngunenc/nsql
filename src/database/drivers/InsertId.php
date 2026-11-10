@@ -18,6 +18,12 @@ final class InsertId
         }
         $id = (string) $id;
 
-        return preg_match('/^-?[1-9][0-9]*$|^0$/', $id) === 1 && (string) (int) $id === $id ? (int) $id : $id;
+        if (preg_match('/^-?[1-9][0-9]*$|^0$/D', $id) !== 1) {
+            return $id;
+        }
+        // Aralık dışı değerde (int) dönüşümü PHP 8.5'te uyarı üretir; filter_var sessizce false döner
+        $int = filter_var($id, FILTER_VALIDATE_INT);
+
+        return $int === false ? $id : $int;
     }
 }

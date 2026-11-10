@@ -562,12 +562,11 @@ class Config
     {
         return [
             // DB
+            // DB_PORT / DB_CHARSET burada yok: varsayılanı sürücü belirler (mysql 3306/utf8mb4, pgsql 5432/UTF8)
             'DB_HOST' => 'localhost',
-            'DB_PORT' => 3306,
             'DB_NAME' => 'nsql',
             'DB_USER' => 'root',
             'DB_PASS' => '',
-            'DB_CHARSET' => 'utf8mb4',
             'DB_DRIVER' => 'mysql',
 
             // PDO/options
