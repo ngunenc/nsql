@@ -189,4 +189,35 @@ class QueryCacheConsistencyTest extends TestCase
         $this->assertSame('fatma', $worker->get_row($sql)?->name, 'Süreç içi kayıt');
         $this->assertSame('fatma', $reader->get_row($sql)?->name, 'Paylaşılan kayıt');
     }
+
+    /**
+     * `WITH ... DELETE/UPDATE/INSERT` yazmadır: query() cache'i temizler ve rows_affected()'ı günceller.
+     */
+    public function test_cte_write_through_query_invalidates_cache_and_reports_rows(): void
+    {
+        $db = $this->connect();
+        $this->seed($db);
+        $count = 'SELECT COUNT(*) FROM users';
+
+        $this->assertSame(1, (int) $db->get_var($count));
+        $db->query('WITH old AS (SELECT id FROM users) DELETE FROM users WHERE id IN (SELECT id FROM old)');
+
+        $this->assertSame(1, $db->rows_affected());
+        $this->assertSame(0, (int) $db->get_var($count), 'CTE ile silme sonrası eski sayım cache\'ten dönmemeli');
+    }
+
+    public function test_cte_select_through_query_is_not_treated_as_write(): void
+    {
+        $db = $this->connect();
+        $this->seed($db);
+        $this->assertSame(1, $db->rows_affected());
+
+        $db->get_var('SELECT COUNT(*) FROM users');
+        $stmt = $db->query('WITH u AS (SELECT id FROM users) SELECT COUNT(*) FROM u');
+        $this->assertNotFalse($stmt);
+        $stmt->closeCursor();
+
+        // Okuma: rows_affected() son yazmanın (seed INSERT) değerinde kalır
+        $this->assertSame(1, $db->rows_affected());
+    }
 }

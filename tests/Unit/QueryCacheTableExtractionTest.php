@@ -54,6 +54,21 @@ class QueryCacheTableExtractionTest extends TestCase
             'derived table with function call' => ['SELECT * FROM (SELECT COUNT(id) AS c FROM u GROUP BY x) t', ['u']],
             'derived table without table' => ['SELECT * FROM (SELECT 1 AS x) t, v', []],
             'parenthesized from item' => ['SELECT * FROM (u) JOIN v ON 1 = 1', []],
+            'straight_join' => ['SELECT * FROM users STRAIGHT_JOIN orders ON orders.user_id = users.id', ['orders', 'users']],
+            'straight_join quoted' => ['SELECT * FROM `users` u STRAIGHT_JOIN `app`.`orders` o ON o.user_id = u.id', ['orders', 'users']],
+            'nested join' => [
+                'SELECT * FROM a LEFT JOIN (b JOIN c ON c.b_id = b.id) ON b.a_id = a.id',
+                ['a', 'b', 'c'],
+            ],
+            'doubly nested join' => [
+                'SELECT * FROM a JOIN ((b JOIN c ON c.b_id = b.id) JOIN d ON d.c_id = c.id) ON b.a_id = a.id',
+                ['a', 'b', 'c', 'd'],
+            ],
+            'nested join with subquery' => [
+                'SELECT * FROM a JOIN (b JOIN (SELECT id FROM c) x ON x.id = b.id) ON b.a_id = a.id',
+                ['a', 'b', 'c'],
+            ],
+            'unrecognized join target' => ['SELECT * FROM a JOIN [b] ON b.a_id = a.id', []],
             'insert' => ['INSERT INTO `logs` (a) VALUES (?)', ['logs']],
             'insert ignore' => ['INSERT IGNORE INTO logs (a) VALUES (1)', ['logs']],
             'replace' => ['REPLACE INTO logs (a) VALUES (1)', ['logs']],

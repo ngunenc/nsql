@@ -123,4 +123,41 @@ class StreamingPortableTest extends PortableTestCase
 
         $this->assertSame([10, 10], $sizes);
     }
+
+    /**
+     * Anahtar NULL ise imleç ilerlemez: aynı parça sonsuza dek dönüyordu.
+     */
+    public function test_chunk_by_id_rejects_null_key_instead_of_looping(): void
+    {
+        $this->create_table('p_null_keys', ['sort_key INT NULL']);
+        $this->db->batch_insert('p_null_keys', array_fill(0, 4, ['sort_key' => null]));
+
+        $chunks = 0;
+
+        try {
+            foreach ($this->db->chunk_by_id('SELECT id, sort_key FROM p_null_keys', [], 'sort_key', 2) as $chunk) {
+                if (++$chunks > 5) {
+                    $this->fail('chunk_by_id() NULL anahtarda aynı parçayı tekrar tekrar döndürüyor');
+                }
+            }
+            $this->fail('InvalidArgumentException bekleniyordu');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('NULL', $e->getMessage());
+        }
+
+        $this->assertLessThanOrEqual(1, $chunks);
+    }
+
+    public function test_chunk_by_id_allows_null_key_on_last_partial_chunk(): void
+    {
+        $this->create_table('p_null_keys', ['sort_key INT NULL']);
+        $this->db->batch_insert('p_null_keys', array_fill(0, 2, ['sort_key' => null]));
+
+        $rows = 0;
+        foreach ($this->db->chunk_by_id('SELECT id, sort_key FROM p_null_keys', [], 'sort_key', 5) as $chunk) {
+            $rows += count($chunk);
+        }
+
+        $this->assertSame(2, $rows);
+    }
 }

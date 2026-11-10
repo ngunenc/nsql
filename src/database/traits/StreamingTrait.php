@@ -288,13 +288,15 @@ trait StreamingTrait
         $base = "SELECT * FROM (\n" . rtrim(trim($query), ';') . "\n) nsql_chunk";
 
         $last = null;
+        // Ayrı bayrak: imleç değeri "henüz yok" ile karıştırılmaz
+        $has_cursor = false;
         while (true) {
             $sql = $base
-                . ($last === null ? '' : " WHERE nsql_chunk.{$quoted} > {$placeholder}")
+                . ($has_cursor ? " WHERE nsql_chunk.{$quoted} > {$placeholder}" : '')
                 . " ORDER BY nsql_chunk.{$quoted} LIMIT {$size}";
 
             $bound = $params;
-            if ($last !== null) {
+            if ($has_cursor) {
                 if ($positional) {
                     $bound[] = $last;
                 } else {
@@ -320,11 +322,17 @@ trait StreamingTrait
             if (! property_exists($tail, $column)) {
                 throw new \InvalidArgumentException("chunk_by_id(): sorgu sonucunda '{$column}' kolonu yok.");
             }
+            $more = count($rows) >= $size;
+            if ($more && $tail->{$column} === null) {
+                // NULL anahtarla imleç ilerlemez: aynı parça sonsuza dek dönerdi
+                throw new \InvalidArgumentException("chunk_by_id(): '{$column}' kolonu NULL değer içeriyor; NULL olmayan benzersiz bir kolon kullanın.");
+            }
             $last = $tail->{$column};
+            $has_cursor = true;
 
             yield $rows;
 
-            if (count($rows) < $size) {
+            if (! $more) {
                 return;
             }
         }

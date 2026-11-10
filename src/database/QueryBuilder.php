@@ -954,9 +954,11 @@ class QueryBuilder
 
         $property = $alias ?? $this->result_property($column);
         $last = null;
+        // Ayrı bayrak: imleç değeri "henüz yok" ile karıştırılmaz
+        $has_cursor = false;
         for ($page = 1;; $page++) {
             $query = clone $this;
-            if ($last !== null) {
+            if ($has_cursor) {
                 // Kısıt: kullanıcının or_where() koşulları imleci atlatıp sonsuz döngü üretmez
                 $query->constrain(fn (self $q) => $q->where($column, '>', $last));
             }
@@ -969,14 +971,20 @@ class QueryBuilder
             if (! property_exists($tail, $property)) {
                 throw new \InvalidArgumentException("chunk(): sonuçta '{$property}' kolonu yok; select() listesine ekleyin.");
             }
+            $more = count($rows) >= $size;
+            if ($more && $tail->{$property} === null) {
+                // NULL anahtarla imleç ilerlemez: aynı parça sonsuza dek dönerdi
+                throw new \InvalidArgumentException("chunk(): '{$property}' kolonu NULL değer içeriyor; NULL olmayan benzersiz bir kolon kullanın.");
+            }
 
             if ($callback($rows, $page) === false) {
                 return false;
             }
-            if (count($rows) < $size) {
+            if (! $more) {
                 return true;
             }
             $last = $tail->{$property};
+            $has_cursor = true;
         }
     }
 

@@ -6,8 +6,17 @@ Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
 ## [Unreleased]
 
+### Dikkat: davranış değişiklikleri
+- ORM `save()`: UPDATE hiçbir satırı etkilemediyse ve satır veritabanında yoksa `false` döner (önceden `true`); INSERT'e düşülmez. `ORM_TRACK_EXISTS=false` (varsayılan, değişmedi) iken var olmayan anahtarla kaydedilen yüklenmemiş modeli ve satırı arada silinmiş yüklenmiş modeli etkiler. Değeri değişmeyen satır başarı sayılmaya devam eder (ek bir `SELECT 1` ile ayırt edilir). Elle atanmış anahtarlı yeni kayıt için `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;` kullanın.
+
+### Docs
+- Kullanım kılavuzu: `memory` query cache sürücüsünün örnek başına çalıştığı ve çok süreçli kurulumda paylaşılan store (redis/memcached/PSR-16) gerektiği uyarısı.
+
 ### Fixed
 - `DB_PORT` / `DB_CHARSET` verilmediğinde PostgreSQL bağlantısı MySQL varsayılanlarını (3306, `utf8mb4`) alıyordu. Varsayılan artık sürücüye göre üretilir (mysql 3306/`utf8mb4`, pgsql 5432/`UTF8`). `Config::default_values()` bu iki anahtarı içermez; ayarlanmamışken `Config::get('db_port')` / `Config::get('db_charset')` `null` döner.
+- `chunk()` / `chunk_by_id()`: keyset kolonu NULL olduğunda aynı parça sonsuza dek dönüyordu. Devam edilmesi gereken parçanın son anahtarı NULL ise `InvalidArgumentException` fırlatılır.
+- `query()`: `WITH ... DELETE/UPDATE/INSERT` yazma sayılır; query cache temizlenir ve `rows_affected()` güncellenir.
+- Query cache tablo çıkarımı `STRAIGHT_JOIN` ve iç içe `JOIN (b JOIN c)` tablolarını yakalar; hedefi tanınmayan `JOIN` içeren sorgunun sonucu cache'lenmez (yazmada tüm cache temizlenir).
 - PHP 8.5: int aralığı dışındaki kimliklerde (unsigned bigint) `insert_id()` uyarı üretmez; unbuffered `get_yield()` deprecated `PDO::MYSQL_ATTR_*` sabitlerini kullanmaz.
 
 ## [2.7.0] - 2026-11-09

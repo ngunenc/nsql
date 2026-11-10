@@ -693,6 +693,11 @@ abstract class Model implements \JsonSerializable
                 $result = true;
             } else {
                 $result = $this->db->update($sql, $params) !== false;
+                // Hiçbir satır etkilenmediyse kayıt yok olabilir (MySQL değeri değişmeyen satırı da 0 sayar):
+                // satır gerçekten yoksa başarı bildirilmez, INSERT'e de düşülmez
+                if ($result && $this->db->rows_affected() === 0 && ! $this->row_exists($id)) {
+                    return false;
+                }
             }
 
             if ($result) {
@@ -830,6 +835,14 @@ abstract class Model implements \JsonSerializable
         $expected = $this->original[$column] ?? null;
 
         return $expected === null ? [" AND {$quoted} IS NULL", []] : [" AND {$quoted} = ?", [$expected]];
+    }
+
+    private function row_exists(mixed $id): bool
+    {
+        $table = $this->db->quote_identifier($this->table);
+        $primary_key = $this->db->quote_identifier($this->primary_key);
+
+        return $this->db->get_var("SELECT 1 FROM {$table} WHERE {$primary_key} = ? LIMIT 1", [$id]) !== null;
     }
 
     /**

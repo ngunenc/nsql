@@ -374,7 +374,12 @@ class Nsql
             throw $this->make_query_exception($query, []);
         }
 
-        if (! preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query)) {
+        $is_read = preg_match('/^\s*(SELECT|SHOW|DESCRIBE|DESC|EXPLAIN|WITH)\b/i', $query, $verb) === 1;
+        // WITH ... DELETE/UPDATE/INSERT yazmadır (read/write ayrımıyla aynı kural)
+        if ($is_read && strtoupper($verb[1]) === 'WITH' && ! self::is_read_query($query)) {
+            $is_read = false;
+        }
+        if (! $is_read) {
             $this->invalidate_cache_for_write($query);
             // ezSQL'den gelen kodlar yazmaları query() ile yapar; rows_affected() bunları da kapsar
             $this->last_rows_affected = $result->rowCount();

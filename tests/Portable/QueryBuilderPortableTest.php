@@ -364,6 +364,43 @@ class QueryBuilderPortableTest extends PortableTestCase
         $this->assertFalse($stopped);
     }
 
+    /**
+     * Anahtar NULL ise imleç ilerlemez: aynı parça sonsuza dek dönüyordu.
+     */
+    public function test_chunk_rejects_null_key_instead_of_looping(): void
+    {
+        $this->create_table('p_null_keys', ['sort_key INT NULL']);
+        $this->db->batch_insert('p_null_keys', array_fill(0, 4, ['sort_key' => null]));
+
+        $pages = 0;
+
+        try {
+            $this->db->table('p_null_keys')->chunk(2, function () use (&$pages) {
+                // Hata durumunda aynı sayfa sonsuza dek dönerdi
+                return ++$pages < 6;
+            }, 'sort_key');
+            $this->fail('InvalidArgumentException bekleniyordu');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('NULL', $e->getMessage());
+        }
+
+        $this->assertLessThanOrEqual(1, $pages);
+    }
+
+    public function test_chunk_allows_null_key_on_last_partial_page(): void
+    {
+        $this->create_table('p_null_keys', ['sort_key INT NULL']);
+        $this->db->batch_insert('p_null_keys', array_fill(0, 2, ['sort_key' => null]));
+
+        $rows = 0;
+        $done = $this->db->table('p_null_keys')->chunk(5, function (array $page) use (&$rows) {
+            $rows += count($page);
+        }, 'sort_key');
+
+        $this->assertTrue($done);
+        $this->assertSame(2, $rows);
+    }
+
     public function test_chunk_cursor_is_not_bypassed_by_or_where(): void
     {
         $seen = [];

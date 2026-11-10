@@ -195,6 +195,10 @@ $sonuc2 = $db->get_results("SELECT * FROM urunler WHERE kategori = 'elektronik'"
 $cache_stats = $db->get_all_cache_stats();
 ```
 
+> **Uyarı (`QUERY_CACHE_DRIVER=memory`, varsayılan):** önbellek her `Nsql` örneğinin kendi belleğinde tutulur. Bir örneğin (ya da başka bir PHP-FPM işçisinin / sunucunun) yaptığı yazma, diğer örneklerin önbelleğini temizlemez; onlar `QUERY_CACHE_TIMEOUT` dolana kadar eski sonucu döndürebilir. Birden çok süreç ya da sunucu aynı veritabanına yazıyorsa paylaşılan store kullanın: `QUERY_CACHE_DRIVER=redis` (önerilen) veya `memcached`, ya da `set_query_cache_store()` ile PSR-16 store. Paylaşılan store'da tablo sürüm token'ları tüm süreçlerde geçersiz kılmayı sağlar.
+>
+> Tabloları çıkarılamayan sorguların (tanınmayan `FROM` / `JOIN` yapısı) sonucu önbelleğe alınmaz. `WITH ... DELETE/UPDATE/INSERT` yazma sayılır ve ilgili önbelleği temizler.
+
 ### Connection Pool İstatistikleri
 
 ```php

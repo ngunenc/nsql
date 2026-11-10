@@ -186,6 +186,15 @@ class Voucher extends Model
     protected ?bool $track_exists = true;
 }
 
+/** Zaman damgasız, ORM_TRACK_EXISTS varsayılanını (false) kullanan model: anahtar doluysa UPDATE */
+class UntrackedVoucher extends Model
+{
+    protected string $table = 'p_vouchers';
+    protected string $primary_key = 'code';
+    protected array $fillable = ['code', 'label', 'amount'];
+    protected bool $timestamps = false;
+}
+
 class OrmPortableTest extends PortableTestCase
 {
     protected function setUp(): void
@@ -296,6 +305,41 @@ class OrmPortableTest extends PortableTestCase
         $this->assertTrue($author->save());
         $this->assertSame(1, $this->db->table('p_authors')->count());
         $this->assertSame('Elif', Author::find_or_fail($id, $this->db)->name);
+    }
+
+    /**
+     * Hiçbir satırı etkilemeyen UPDATE başarı sayılıyordu: kayıt yokken save() true dönüyordu.
+     */
+    public function test_unloaded_model_with_unknown_key_returns_false_without_insert(): void
+    {
+        $voucher = new UntrackedVoucher($this->db, ['code' => 'yok-boyle-kod', 'label' => 'x']);
+
+        $this->assertFalse($voucher->save());
+        $this->assertFalse($voucher->exists());
+        $this->assertSame(0, $this->db->table('p_vouchers')->count());
+    }
+
+    public function test_unloaded_model_with_unchanged_values_still_saves(): void
+    {
+        (new Voucher($this->db, ['code' => 'ayni-kod', 'label' => 'x']))->save();
+
+        // MySQL değeri değişmeyen satırı "etkilenmedi" sayar: satır varsa save() yine başarılıdır
+        $voucher = new UntrackedVoucher($this->db, ['code' => 'ayni-kod', 'label' => 'x']);
+
+        $this->assertTrue($voucher->save());
+        $this->assertSame(1, $this->db->table('p_vouchers')->count());
+    }
+
+    public function test_loaded_model_whose_row_was_deleted_returns_false(): void
+    {
+        (new Voucher($this->db, ['code' => 'silinen-kod', 'label' => 'x']))->save();
+        $voucher = UntrackedVoucher::find_or_fail('silinen-kod', $this->db);
+        $this->db->delete('DELETE FROM p_vouchers WHERE code = ?', ['silinen-kod']);
+
+        $voucher->label = 'y';
+
+        $this->assertFalse($voucher->save());
+        $this->assertSame(0, $this->db->table('p_vouchers')->count());
     }
 
     public function test_changed_primary_key_updates_original_row(): void

@@ -606,6 +606,8 @@ Yüklenmemiş, birincil anahtarı elle atanmış model (UUID, doğal anahtar):
 | `ORM_TRACK_EXISTS=false` (2.x varsayılanı) | Anahtar doluysa UPDATE (eski davranış) |
 | `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;` | INSERT (anahtar değeri korunur); `force_delete()` sonrası tekrar `save()` yeniden ekler |
 
+UPDATE hiçbir satırı etkilemediyse ve satır veritabanında yoksa `save()` `false` döner; INSERT'e düşülmez (önceki sürümlerde `true` dönüyordu). Bu, `ORM_TRACK_EXISTS=false` iken var olmayan bir anahtarla kaydedilen yüklenmemiş modeli ve satırı arada silinmiş yüklenmiş modeli kapsar. Değeri değişmeyen satır (MySQL'de "0 satır etkilendi") başarı sayılmaya devam eder. Elle atanmış anahtarlı yeni kayıt eklemek için `ORM_TRACK_EXISTS=true` kullanın.
+
 ### Model olayları (v2.4.0+)
 
 Alt sınıfta korumalı kancaları ezin. `on_saving`, `on_creating`, `on_updating`, `on_deleting` `false` döndürürse işlem yapılmaz ve `save()` / `delete()` `false` döner:

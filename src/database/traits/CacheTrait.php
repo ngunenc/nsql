@@ -120,8 +120,15 @@ trait CacheTrait
         }
 
         $ident = '[`"]?(?:\w+[`"]?\.[`"]?)?(\w+)[`"]?';
+        // STRAIGHT_JOIN: `_` kelime karakteri olduğundan \bJOIN ile yakalanmaz. `JOIN (b JOIN c)`: parantezli ilk tablo
+        $join = '(?:\bSTRAIGHT_|\b)JOIN\b';
+        $join_target = '/' . $join . '\s*(?:\(\s*)*' . $ident . '/i';
+        if (preg_match_all('/' . $join . '/i', $query) !== preg_match_all($join_target, $query)) {
+            // Hedefi tanınmayan JOIN: eksik tablo listesi stale cache üretir
+            return [];
+        }
         $patterns = [
-            '/\bJOIN\s+' . $ident . '/i',
+            $join_target,
             '/\bUPDATE\s+(?:(?:LOW_PRIORITY|IGNORE)\s+)*' . $ident . '/i',
             '/\bINTO\s+' . $ident . '/i',
             '/\bTABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?' . $ident . '/i',
