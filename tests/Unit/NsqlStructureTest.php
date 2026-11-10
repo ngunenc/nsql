@@ -44,4 +44,30 @@ class NsqlStructureTest extends TestCase
             $this->assertCount(1, $owners, "{$name}() birden fazla trait'te: " . implode(', ', $owners));
         }
     }
+
+    /**
+     * Hiçbir yerden çağrılmayan private debug şablon yolu kaldırıldı (debug() çıktıyı kendi üretir).
+     */
+    public function test_unused_debug_template_path_is_removed(): void
+    {
+        $class = new ReflectionClass(Nsql::class);
+
+        $this->assertFalse($class->hasMethod('render_debug_output'));
+        $this->assertFalse($class->hasMethod('handle_debug_error'));
+        $this->assertFileDoesNotExist(dirname((string) $class->getFileName()) . '/templates/debug_template.php');
+    }
+
+    /**
+     * Kütüphanenin kullanmadığı protected yardımcılar alt sınıflar çağırabileceği için silinmedi,
+     * kullanımdan kaldırıldı olarak işaretlendi.
+     */
+    public function test_unused_protected_error_helpers_are_deprecated(): void
+    {
+        $class = new ReflectionClass(Nsql::class);
+
+        foreach (['safe_execute_operation', 'execute_with_retry', 'is_recoverable_error'] as $name) {
+            $this->assertTrue($class->hasMethod($name), $name);
+            $this->assertStringContainsString('@deprecated', (string) $class->getMethod($name)->getDocComment(), $name);
+        }
+    }
 }

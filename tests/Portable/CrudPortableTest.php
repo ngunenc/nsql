@@ -80,6 +80,131 @@ class CrudPortableTest extends PortableTestCase
         $this->assertSame([100, 2, 300], $scores);
     }
 
+    /**
+     * @return list<string> Callback süresince çalışan UPDATE ifadeleri
+     */
+    private function captured_updates(callable $fn): array
+    {
+        $queries = [];
+        $this->db->on_query(function ($event) use (&$queries): void {
+            if (str_starts_with($event->sql, 'UPDATE')) {
+                $queries[] = $event->sql;
+            }
+        });
+        $fn();
+
+        return $queries;
+    }
+
+    /**
+     * Aynı kolonları güncelleyen satırlar tek ifadede (CASE WHEN) yazılır: satır başına gidiş-dönüş yok.
+     */
+    public function test_batch_update_uses_single_statement_for_same_columns(): void
+    {
+        $this->db->batch_insert('p_users', [
+            ['name' => 'a', 'score' => 1],
+            ['name' => 'b', 'score' => 2],
+            ['name' => 'c', 'score' => 3],
+            ['name' => 'd', 'score' => 4],
+        ]);
+
+        $updated = 0;
+        $queries = $this->captured_updates(function () use (&$updated): void {
+            $updated = $this->db->batch_update('p_users', [
+                ['id' => 1, 'name' => 'a2', 'score' => 100],
+                ['id' => 3, 'name' => 'c2', 'score' => 300],
+                ['id' => 4, 'name' => 'd2', 'score' => 400],
+            ]);
+        });
+
+        $this->assertCount(1, $queries);
+        $this->assertSame(3, $updated);
+        $this->assertSame(3, $this->db->rows_affected());
+
+        $rows = array_map(fn ($r) => $r->name . ':' . (int) $r->score, $this->db->get_results('SELECT name, score FROM p_users ORDER BY id'));
+        $this->assertSame(['a2:100', 'b:2', 'c2:300', 'd2:400'], $rows);
+    }
+
+    public function test_batch_update_generates_case_when_sql(): void
+    {
+        $this->db->batch_insert('p_users', [['name' => 'a', 'score' => 1], ['name' => 'b', 'score' => 2]]);
+
+        $queries = $this->captured_updates(fn () => $this->db->batch_update('p_users', [
+            ['id' => 1, 'score' => 10],
+            ['id' => 2, 'score' => 20],
+        ]));
+
+        $q = self::driver() === 'mysql' ? '`' : '"';
+        $this->assertSame(
+            ["UPDATE {$q}p_users{$q} SET {$q}score{$q} = CASE {$q}id{$q} WHEN ? THEN ? WHEN ? THEN ? ELSE {$q}score{$q} END"
+                . " WHERE {$q}id{$q} IN (?, ?)"],
+            $queries
+        );
+    }
+
+    /**
+     * Farklı kolon kümeleri ve yinelenen anahtarlar satır sırasıyla uygulanır (son yazan kazanır),
+     * NULL değerler ve anahtarı tabloda olmayan satırlar eski davranışla aynıdır.
+     */
+    public function test_batch_update_keeps_row_order_semantics(): void
+    {
+        $this->db->batch_insert('p_users', [
+            ['name' => 'a', 'score' => 1],
+            ['name' => 'b', 'score' => 2],
+            ['name' => 'c', 'score' => 3],
+        ]);
+        $this->db->statement("UPDATE p_users SET email = 'x@example.com'");
+
+        $updated = 0;
+        $queries = $this->captured_updates(function () use (&$updated): void {
+            $updated = $this->db->batch_update('p_users', [
+                ['id' => 1, 'score' => 10],
+                ['id' => 2, 'score' => 20],
+                ['id' => 2, 'email' => null],          // farklı kolon kümesi
+                ['id' => 3, 'email' => 'c@example.com'],
+                ['id' => 3, 'email' => 'son@example.com'], // yinelenen anahtar: son yazan kazanır
+                ['id' => 999, 'email' => 'yok@example.com'], // eşleşen satır yok
+                ['id' => 1],                            // güncellenecek kolon yok: atlanır
+            ]);
+        });
+
+        // [1,2 score] + [2,3 email] + [3,999 email]
+        $this->assertCount(3, $queries);
+        $this->assertSame(5, $updated);
+        $this->assertSame(5, $this->db->rows_affected());
+
+        $rows = array_map(
+            fn ($r) => (int) $r->score . ':' . ($r->email ?? 'NULL'),
+            $this->db->get_results('SELECT score, email FROM p_users ORDER BY id')
+        );
+        $this->assertSame(['10:x@example.com', '20:NULL', '3:son@example.com'], $rows);
+    }
+
+    public function test_batch_update_splits_over_driver_param_limit(): void
+    {
+        $count = 1200;
+        $rows = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $rows[] = ['name' => 'u' . $i, 'score' => 0];
+        }
+        $this->db->batch_insert('p_users', $rows);
+
+        $updates = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $updates[] = ['id' => $i, 'score' => $i];
+        }
+
+        $updated = 0;
+        $queries = $this->captured_updates(function () use (&$updated, $updates): void {
+            $updated = $this->db->batch_update('p_users', $updates);
+        });
+
+        $this->assertGreaterThan(1, count($queries));
+        $this->assertLessThan(10, count($queries));
+        $this->assertSame($count, $updated);
+        $this->assertSame($count * ($count + 1) / 2, (int) $this->db->get_var('SELECT SUM(score) FROM p_users'));
+    }
+
     public function test_batch_update_rejects_row_without_key_before_writing(): void
     {
         $this->db->batch_insert('p_users', [['name' => 'a', 'score' => 1], ['name' => 'b', 'score' => 2]]);

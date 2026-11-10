@@ -29,6 +29,7 @@ trait ErrorHandlingTrait
      * @param mixed $default_value Hata durumunda döndürülecek varsayılan değer
      * @param bool $throw_exception Exception fırlatılsın mı?
      * @return mixed
+     * @deprecated 2.8.0 Kütüphane kullanmıyor; `safe_execute()` kullanın. 3.0'da kaldırılacak.
      */
     protected function safe_execute_operation(
         callable $operation,
@@ -56,6 +57,8 @@ trait ErrorHandlingTrait
      * @param int $delay_ms Retry arası bekleme (milisaniye)
      * @return mixed
      * @throws Throwable
+     * @deprecated 2.8.0 Kütüphane kullanmıyor (bağlantı kopmasında yeniden deneme dahili olarak yapılır).
+     *             3.0'da kaldırılacak.
      */
     protected function execute_with_retry(
         callable $operation,
@@ -90,6 +93,8 @@ trait ErrorHandlingTrait
 
     /**
      * Hatanın recoverable (düzeltilebilir) olup olmadığını kontrol eder
+     *
+     * @deprecated 2.8.0 Yalnızca execute_with_retry() kullanır; 3.0'da kaldırılacak.
      */
     protected function is_recoverable_error(PDOException $e): bool
     {

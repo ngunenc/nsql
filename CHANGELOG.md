@@ -19,6 +19,13 @@ Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
 ### Deprecated
 - `SecurityManager::sanitize_sql_params()` ve `SecurityManager::prepare_safe_query()`: adları yanıltıcı (girdiyi değiştirmezler). Bağlı parametre ve `validate_sql_params()` kullanın. 3.0'da kaldırılacak; şimdilik davranışları aynı.
+- Kütüphanenin kullanmadığı protected `safe_execute_operation()`, `execute_with_retry()` ve `is_recoverable_error()` (`ErrorHandlingTrait`): alt sınıflar çağırabileceği için silinmedi, 3.0'da kaldırılacak.
+
+### Performance
+- `batch_update()`: aynı kolonları güncelleyen ardışık satırlar tek `UPDATE ... SET c = CASE k WHEN ? THEN ? ... ELSE c END WHERE k IN (...)` ifadesiyle yazılır (ifade başına en fazla 500 satır ve sürücünün parametre sınırı); önceden satır başına bir sorgu çalışıyordu. Dönüş değeri, `rows_affected()`, satır sırası (yinelenen anahtarda son yazan kazanır) ve transaction davranışı aynı. Sorgu dinleyicileri (`on_query`) artık satır başına değil grup başına olay alır.
+
+### Removed
+- Hiçbir yerden çağrılmayan private `DebugTrait::render_debug_output()` / `handle_debug_error()` ve yalnızca onların kullandığı `src/database/templates/debug_template.php`. `debug()` çıktısı etkilenmez.
 
 ### Docs
 - `.env` önceliğinin (`.env` > ortam değişkeni) güvenlik etkisi ve `ENV_OVERRIDES_DOTENV=true` önerisi belgelendi (öncelik değişmedi; 3.0 planı).

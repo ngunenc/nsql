@@ -52,7 +52,6 @@ Her bir bileşen kendi sorumluluğuna sahiptir ve birbirleriyle gevşek bağlıd
 | exceptions/          | Özel hata ve istisna sınıfları |
 | migrations/          | Veritabanı migration dosyaları |
 | seeds/               | Test/demo verisi üretimi |
-| templates/           | Debug ve özel çıktı şablonları |
 | security/            | Rate limiting, şifreleme, audit, veri filtreleme |
 ## 🔧 Temel Bileşenler
 
@@ -171,20 +170,6 @@ $userSeeder->run();
 **Best Practice:**
 - Seed dosyalarını test ortamında kullanın
 - Gerçek veriye benzer dummy data üretin
-
-### 7. Template Kullanımı (templates/)
-
-Özel çıktı ve debug işlemleri için template dosyaları kullanılır.
-
-```php
-require_once 'src/database/templates/debug_template.php';
-$template = new debug_template();
-echo $template->render($debugData);
-```
-
-**Best Practice:**
-- Debug ve hata çıktıları için ayrı template dosyaları oluşturun
-- Template'leri özelleştirilebilir yapıda tutun
 
 ## 🔒 Güvenlik Mekanizmaları
 

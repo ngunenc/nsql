@@ -505,7 +505,6 @@ nsql/
 │       ├── security/             # Çekirdek: SQL analizi ve log maskeleme
 │       │   ├── query_analyzer.php
 │       │   └── sensitive_data_filter.php # Hassas veri filtresi
-│       ├── templates/            # View şablonları
 │       └── traits/               # Trait sınıfları
 │           ├── cache_trait.php    # Önbellekleme işlemleri
 │           ├── connection_trait.php # Bağlantı yönetimi

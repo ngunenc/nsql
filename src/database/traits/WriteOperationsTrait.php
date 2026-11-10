@@ -11,6 +11,9 @@ use nsql\database\security\SensitiveDataFilter;
  */
 trait WriteOperationsTrait
 {
+    /** batch_update(): tek CASE WHEN ifadesindeki en fazla satır (ifade boyutunu sınırlar) */
+    private const BATCH_UPDATE_MAX_ROWS = 500;
+
     private int|string $last_insert_id = 0;
 
     /** INSERT ... RETURNING ile alınan id; insert_id() bunu lastval()'e tercih eder */
@@ -199,6 +202,12 @@ trait WriteOperationsTrait
                 $this->begin();
             }
 
+            // Aynı kolonları güncelleyen ardışık satırlar tek ifadede (CASE WHEN) yazılır. Kolon kümesi
+            // değişince, anahtar yinelenince (son yazan kazanır) veya parametre sınırına gelince grup
+            // kapatılır: sonuç, satırların sırayla tek tek güncellenmesiyle aynıdır.
+            $columns = [];
+            /** @var array<string, array{key: mixed, values: list<mixed>}> $group */
+            $group = [];
             foreach ($data as $row) {
                 $key_value = $row[$key_column];
                 unset($row[$key_column]);
@@ -207,24 +216,19 @@ trait WriteOperationsTrait
                     continue;
                 }
 
-                // SET clause oluştur
-                $set_parts = [];
-                $params = [];
-                foreach ($row as $column => $value) {
-                    $set_parts[] = $this->quote_identifier($column) . ' = ?';
-                    $params[] = $value;
+                $row_columns = array_map('strval', array_keys($row));
+                $group_key = (string) $key_value;
+                $limit = min(self::BATCH_UPDATE_MAX_ROWS, max(1, intdiv($this->max_bound_params(), 2 * count($row_columns) + 1)));
+                if ($group !== [] && ($row_columns !== $columns || isset($group[$group_key]) || count($group) >= $limit)) {
+                    $total_affected += $this->run_batch_update($table, $key_column, $columns, $group);
+                    $group = [];
                 }
 
-                $set_clause = implode(', ', $set_parts);
-                $params[] = $key_value;
-
-                $sql = "UPDATE {$this->quote_identifier($table)} SET {$set_clause} WHERE {$this->quote_identifier($key_column)} = ?";
-
-                $stmt = $this->execute_query($sql, $params);
-                if ($stmt === false) {
-                    throw $this->make_query_exception($sql, $params);
-                }
-                $total_affected += $stmt->rowCount();
+                $columns = $row_columns;
+                $group[$group_key] = ['key' => $key_value, 'values' => array_values($row)];
+            }
+            if ($group !== []) {
+                $total_affected += $this->run_batch_update($table, $key_column, $columns, $group);
             }
 
             $this->invalidate_cache_for_write("UPDATE {$this->quote_identifier($table)}");
@@ -247,6 +251,45 @@ trait WriteOperationsTrait
 
             throw new QueryException('Batch update hatası: ' . $e->getMessage(), '', [], 0, $e);
         }
+    }
+
+    /**
+     * Aynı kolonları güncelleyen satırları tek ifadede yazar:
+     * `UPDATE t SET c = CASE k WHEN ? THEN ? ... ELSE c END WHERE k IN (?, ...)`.
+     * `ELSE c`: WHERE zaten yalnızca listelenen anahtarları seçer; ELSE dalı PostgreSQL'in CASE sonucunun
+     * tipini kolondan çıkarması içindir (tüm dallar parametreyken tip `text` sayılırdı).
+     *
+     * @param list<string> $columns
+     * @param array<string, array{key: mixed, values: list<mixed>}> $rows
+     * @return int Etkilenen satır sayısı
+     * @throws QueryException
+     */
+    private function run_batch_update(string $table, string $key_column, array $columns, array $rows): int
+    {
+        $key = $this->quote_identifier($key_column);
+        $params = [];
+        $set_parts = [];
+        foreach ($columns as $index => $column) {
+            $quoted = $this->quote_identifier($column);
+            $set_parts[] = "{$quoted} = CASE {$key}" . str_repeat(' WHEN ? THEN ?', count($rows)) . " ELSE {$quoted} END";
+            foreach ($rows as $row) {
+                $params[] = $row['key'];
+                $params[] = $row['values'][$index];
+            }
+        }
+        foreach ($rows as $row) {
+            $params[] = $row['key'];
+        }
+
+        $sql = "UPDATE {$this->quote_identifier($table)} SET " . implode(', ', $set_parts)
+            . " WHERE {$key} IN (" . implode(', ', array_fill(0, count($rows), '?')) . ')';
+
+        $stmt = $this->execute_query($sql, $params);
+        if ($stmt === false) {
+            throw $this->make_query_exception($sql, $params);
+        }
+
+        return $stmt->rowCount();
     }
 
     /**

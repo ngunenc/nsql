@@ -252,39 +252,4 @@ HTML;
             $query
         );
     }
-
-    /**
-     * Debug çıktısını render eder
-     */
-    private function render_debug_output(string $query, string $params_json): void
-    {
-        if (! defined('NSQL_TEMPLATE')) {
-            define('NSQL_TEMPLATE', true);
-        }
-
-        $template_data = [
-            'method' => $this->last_called_method,
-            'query' => $query,
-            'params' => $params_json,
-            'error' => $this->last_error,
-            'results' => json_encode(
-                $this->last_results,
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
-            ),
-        ];
-        extract($template_data);
-
-        include __DIR__ . '/../templates/debug_template.php';
-    }
-
-    /**
-     * Debug hatalarını işler
-     */
-    private function handle_debug_error(Throwable $e): void
-    {
-        $this->last_error = $e->getMessage();
-        $query = $this->last_query . ' [Parametre dönüştürme hatası]';
-        $params_json = 'Parametreler görüntülenemedi: ' . $e->getMessage();
-        $this->render_debug_output($query, $params_json);
-    }
 }
