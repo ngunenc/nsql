@@ -6,6 +6,8 @@ Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-11-10
+
 ### Dikkat: davranış değişiklikleri
 - ORM `save()`: UPDATE hiçbir satırı etkilemediyse ve satır veritabanında yoksa `false` döner (önceden `true`); INSERT'e düşülmez. `ORM_TRACK_EXISTS=false` (varsayılan, değişmedi) iken var olmayan anahtarla kaydedilen yüklenmemiş modeli ve satırı arada silinmiş yüklenmiş modeli etkiler. Değeri değişmeyen satır başarı sayılmaya devam eder (ek bir `SELECT 1` ile ayırt edilir). Elle atanmış anahtarlı yeni kayıt için `ORM_TRACK_EXISTS=true` veya modelde `protected ?bool $track_exists = true;` kullanın.
 - Production kimlik bilgisi denetimi: ortam açıkça production ilan edildiyse (`ENV=production` / `prod`, `Config::set_environment('production')`; `ENV` verilmemişse `APP_ENV=production`) ve veritabanı kullanıcısı boşsa ya da `root` + boş parola ise `Nsql` bağlanmadan önce `ConnectionException` (kod `ErrorCodes::CONFIGURATION_ERROR`) fırlatır. Etkilenmeyenler: SQLite, parolasız ama adlandırılmış kullanıcı (PostgreSQL peer/trust), `ENV` hiç verilmemiş kurulumlar (örtük `production` varsayılanı). Eski davranış için `DB_ALLOW_INSECURE_CREDENTIALS=true`.

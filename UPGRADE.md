@@ -1,6 +1,6 @@
 # Yükseltme Rehberi
 
-## 2.7.0 → sonraki sürüm (yayımlanmadı)
+## 2.7.0 → 2.8.0
 
 Davranış değişikliği içerir (öneri: minor sürüm). Ayrıntı: [CHANGELOG.md](CHANGELOG.md).
 
