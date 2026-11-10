@@ -64,6 +64,43 @@ class QueryExecutionPortableTest extends PortableTestCase
         $this->assertCount(3, $db->get_results($sql));
     }
 
+    /**
+     * Port ve charset verilmeden kurulan bağlantı sürücü varsayılanlarını kullanır
+     * (PostgreSQL'e MySQL'in 3306 / utf8mb4 değerleri gitmez). CI'da DB_PORT / DB_CHARSET tanımlı değildir.
+     */
+    public function test_connects_with_driver_default_port_and_charset(): void
+    {
+        $driver = self::driver();
+        if ($driver === 'sqlite') {
+            // SQLite'ta port / charset yok
+            $this->assertStringStartsWith('sqlite:', (fn (): string => $this->dsn)->call($this->db));
+
+            return;
+        }
+
+        $db = new Nsql(
+            host: (string) Config::get('db_host', 'localhost'),
+            db: (string) Config::get('db_name', 'nsql_test_db'),
+            user: (string) Config::get('db_user', 'root'),
+            pass: (string) Config::get('db_pass', ''),
+            driver: $driver
+        );
+
+        try {
+            $this->assertSame(1, (int) $db->get_var('SELECT 1'));
+
+            $dsn = (fn (): string => $this->dsn)->call($db);
+            if (! Config::has('db_port')) {
+                $this->assertStringContainsString(';port=' . ($driver === 'pgsql' ? 5432 : 3306), $dsn);
+            }
+            if (! Config::has('db_charset')) {
+                $this->assertStringContainsString($driver === 'pgsql' ? '--client_encoding=UTF8' : ';charset=utf8mb4', $dsn);
+            }
+        } finally {
+            (fn () => $this->disconnect())->call($db);
+        }
+    }
+
     public function test_connect_passes_extra_dsn_params_to_server(): void
     {
         if (self::driver() !== 'pgsql') {

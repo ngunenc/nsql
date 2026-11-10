@@ -114,12 +114,16 @@ jobs:
 
   # Sürücüden bağımsız testler (tests/Portable) PostgreSQL ve SQLite üzerinde; MySQL'de test job'ı koşturur
   portable:
-    name: Portable (${{ matrix.driver }}, PHP 8.3)
+    name: Portable (${{ matrix.driver }}, PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         driver: ['pgsql', 'sqlite']
+        php: ['8.3']
+        include:
+          - driver: 'pgsql'
+            php: '8.5'
 
     services:
       postgres:
@@ -140,7 +144,7 @@ jobs:
       ENV: testing
       DB_DRIVER: ${{ matrix.driver }}
       DB_HOST: 127.0.0.1
-      DB_PORT: 5432
+      # DB_PORT / DB_CHARSET bilerek verilmez: varsayılanı sürücü belirlemeli (pgsql 5432 / UTF8)
       DB_NAME: nsql_test_db
       DB_USER: postgres
       DB_PASS: postgres
@@ -152,7 +156,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: ${{ matrix.php }}
           extensions: pdo_pgsql, pdo_sqlite
           coverage: none
 

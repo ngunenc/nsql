@@ -1,5 +1,22 @@
 # Yükseltme Rehberi
 
+## 2.7.0 → sonraki sürüm (yayımlanmadı)
+
+Davranış değişikliği içerir (öneri: minor sürüm). Ayrıntı: [CHANGELOG.md](CHANGELOG.md).
+
+| Değişiklik | Etkilenen | Yapılacak |
+|------------|-----------|-----------|
+| ORM `save()`: UPDATE 0 satır etkiler ve satır yoksa `false` (önceden `true`) | `ORM_TRACK_EXISTS=false` iken var olmayan anahtarla kaydedilen yüklenmemiş model; satırı arada silinmiş model | Dönüş değerini kontrol edin; yeni kayıt için `ORM_TRACK_EXISTS=true` veya `protected ?bool $track_exists = true;` |
+| Production kimlik bilgisi denetimi | `ENV=production` (veya `ENV` yokken `APP_ENV=production`) ile boş kullanıcı ya da `root` + boş parola kullanan kurulumlar | `DB_USER` / `DB_PASS` ayarlayın; bilinçli kullanım için `DB_ALLOW_INSECURE_CREDENTIALS=true` |
+| `Config::default_values()` artık `DB_PORT` / `DB_CHARSET` içermez | Ayarlanmamışken `Config::get('db_port')` / `Config::get('db_charset')` değerine güvenen kod (`null` döner) | Varsayılanı kendiniz verin: `Config::get('db_port', 3306)` |
+| QueryBuilder `join()` operatör kümesi daraldı | `join(..., 'LIKE' / 'IN' / 'IS' ...)` çağrıları | Closure biçimini kullanın |
+| `chunk()` / `chunk_by_id()` NULL anahtarda `InvalidArgumentException` | NULL içeren kolonla parçalama (önceden sonsuz döngü) | NULL olmayan benzersiz kolon seçin |
+| `batch_update()` satırları gruplayıp tek ifadede yazar | `on_query` dinleyicisinde satır başına UPDATE bekleyen kod | Olay sayısına değil sonuca güvenin |
+| `var_dump($db)` / `print_r($db)` parolayı maskeler | Dump çıktısını ayrıştıran kod | Gerek yok |
+| `ext-pdo`, `ext-openssl`, `ext-mbstring` Composer gereksinimi | Bu eklentiler olmadan kurulum yapan ortamlar | Eklentileri etkinleştirin |
+| Deprecated: `SecurityManager::sanitize_sql_params()`, `prepare_safe_query()`; protected `safe_execute_operation()`, `execute_with_retry()`, `is_recoverable_error()` | Bu metotları çağıran kod | Bağlı parametre / `validate_sql_params()` / `safe_execute()`; 3.0'da kaldırılacak |
+| `src/database/templates/debug_template.php` silindi | Dosyayı doğrudan `include` eden kod (kütüphane kullanmıyordu) | `$db->debug()` kullanın |
+
 ## 2.6.0 → 2.7.0
 
 Minor sürüm; geriye uyumlu, yalnızca yeni API eklendi. Kontrol edilecek noktalar:

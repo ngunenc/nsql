@@ -27,7 +27,13 @@ Bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanır.
 ### Removed
 - Hiçbir yerden çağrılmayan private `DebugTrait::render_debug_output()` / `handle_debug_error()` ve yalnızca onların kullandığı `src/database/templates/debug_template.php`. `debug()` çıktısı etkilenmez.
 
+### Changed
+- `composer.json`: `ext-pdo`, `ext-openssl`, `ext-mbstring` zorunlu bağımlılık olarak bildirildi (kod bunları zaten kullanıyordu); `version` alanı kaldırıldı (sürüm git etiketinden okunur).
+- CI: Portable PostgreSQL job'ı PHP 8.5'te de koşar; job `DB_PORT` / `DB_CHARSET` vermez (sürücü varsayılanları gerçek sunucuda sınanır).
+
 ### Docs
+- `docs/adr-0001-nsql-trait-ayrisimi.md`: `Nsql` trait'lerinin ayrı sınıflara bölünmesi için yol haritası (3.0; bu sürümde refaktör yok).
+- `UPGRADE.md`: sonraki sürüm için geçiş tablosu; kullanım kılavuzuna gereksinimler ve davranış notları.
 - `.env` önceliğinin (`.env` > ortam değişkeni) güvenlik etkisi ve `ENV_OVERRIDES_DOTENV=true` önerisi belgelendi (öncelik değişmedi; 3.0 planı).
 - Kullanım kılavuzu: `memory` query cache sürücüsünün örnek başına çalıştığı ve çok süreçli kurulumda paylaşılan store (redis/memcached/PSR-16) gerektiği uyarısı.
 

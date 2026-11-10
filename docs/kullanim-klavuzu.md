@@ -15,9 +15,12 @@
 
 ### Sistem Gereksinimleri
 - PHP 8.2 veya üstü
-- PDO PHP Eklentisi
+- PDO PHP Eklentisi (+ kullandığınız sürücü: `pdo_mysql`, `pdo_pgsql` veya `pdo_sqlite`)
 - JSON PHP Eklentisi 
 - OpenSSL PHP Eklentisi (şifreleme için)
+- mbstring PHP Eklentisi
+
+`ext-pdo`, `ext-openssl` ve `ext-mbstring` `composer.json` içinde zorunlu bağımlılıktır; eksikse Composer kurulumu durdurur.
 - MySQL 5.7.8+ veya MariaDB 10.2+
 
 ### Composer ile Kurulum
@@ -375,6 +378,14 @@ $result = $db->safe_execute(function() use ($db) {
     - try-catch bloklarını kullanın
     - Detaylı log tutun
     - Debug modunu geliştirme ortamında kullanın
+
+### Dikkat edilecek davranışlar (2.7.0 sonrası)
+
+- **ORM `save()` dönüşü:** UPDATE hiçbir satırı etkilemediyse ve satır veritabanında yoksa `save()` `false` döner; INSERT'e düşülmez. Dönüş değerini kontrol edin. Elle atanmış anahtarlı (UUID, doğal anahtar) yeni kayıt eklemek için `ORM_TRACK_EXISTS=true` ya da modelde `protected ?bool $track_exists = true;` kullanın. Ayrıntı: [API Referansı](api-reference.md).
+- **Production kimlik bilgisi denetimi:** bkz. [Yapılandırma](#yapılandırma).
+- **Kullanımdan kaldırılanlar (3.0'da silinecek):** `SecurityManager::sanitize_sql_params()` ve `SecurityManager::prepare_safe_query()` girdiyi değiştirmez; SQL injection koruması için bağlı parametre (`?` / `:ad`) ve QueryBuilder kullanın. `Nsql` alt sınıflarından çağrılabilen `safe_execute_operation()`, `execute_with_retry()` ve `is_recoverable_error()` da kullanımdan kaldırıldı (`safe_execute()` kullanın).
+- **`chunk()` / `chunk_by_id()`:** keyset kolonu NULL olmayan ve benzersiz olmalıdır; NULL anahtarla devam edilmesi gerekirse `InvalidArgumentException` fırlatılır.
+- **QueryBuilder `join()`:** yalnızca karşılaştırma operatörleri (`=`, `<>`, `!=`, `<`, `>`, `<=`, `>=`); başka koşul için closure biçimini kullanın.
 
 ## 📦 Sürüm Bilgisi ve Yol Haritası
 
